@@ -270,6 +270,17 @@ test('checkout is a labelled, guarded form with accessible payments and local su
   assert.doesNotMatch(checkout, /onclick=/);
 });
 
+test('checkout consults Restaurant accepting state and reports a local placement error safely', () => {
+  const checkout = read('customer_checkout.php');
+  const footer = read('components/customer_footer.php');
+
+  assert.match(footer, /js\/restaurant_state\.js/);
+  assert.match(checkout, /window\.SavoraRestaurantState\.load\(\)/);
+  assert.match(checkout, /SavoraState\.placeDemoOrder\([\s\S]*window\.SavoraRestaurantState\.load\(\)/);
+  assert.match(checkout, /showCheckoutToast\(error\.message/);
+  assert.doesNotMatch(checkout, /\balert\s*\(/);
+});
+
 test('checkout persists delivery notes and orders render them as text context', () => {
   const state = read('js/customer_state.js');
   const checkout = read('customer_checkout.php');

@@ -226,7 +226,7 @@
                     deliveryNote: document.getElementById('checkout-note').value,
                     paymentMethod: payment ? payment.value : 'cash',
                     promoCode: appliedPromoCode
-                });
+                }, window.SavoraRestaurantState ? window.SavoraRestaurantState.load() : null);
                 window.SavoraState.persist(result.state);
                 if (window.SavoraUI && typeof window.SavoraUI.refreshChrome === 'function') window.SavoraUI.refreshChrome();
 

@@ -72,3 +72,26 @@ test('Restaurant shell has local assets, accessible navigation, and named UI hel
     assert.match(css, new RegExp(`@media \\(max-width: ${breakpoint.replace('.', '\\.')}\\)`));
   }
 });
+
+test('Restaurant shell closes a mobile dialog from its scrim and keeps the trigger state in sync', () => {
+  const ui = read('js/restaurant_ui.js');
+
+  assert.match(ui, /event\.target\.closest\('\[data-close-dialog\]'\)/);
+  assert.match(ui, /function setDialogTrigger\(dialog, expanded\)/);
+  assert.match(ui, /setDialogTrigger\(dialog, true\)/);
+  assert.match(ui, /setDialogTrigger\(dialog, false\)/);
+  assert.match(ui, /\[aria-controls="\$\{dialog\.id\}"\]/);
+});
+
+test('Restaurant stylesheet supplies reusable responsive tables and accessible form controls', () => {
+  const css = read('css/restaurant_style.css');
+
+  assert.match(css, /\.restaurant-table-wrap\s*\{[^}]*overflow-x:\s*auto;/);
+  assert.match(css, /\.restaurant-table\s*\{[^}]*width:\s*100%;/);
+  assert.match(css, /\.restaurant-table th,\s*\.restaurant-table td/);
+  assert.match(css, /\.restaurant-form\s*\{/);
+  assert.match(css, /\.restaurant-field\s*\{/);
+  assert.match(css, /\.restaurant-field input,\s*\.restaurant-field select,\s*\.restaurant-field textarea/);
+  assert.match(css, /\.restaurant-field input:focus-visible/);
+  assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.restaurant-table th,\s*\.restaurant-table td/);
+});

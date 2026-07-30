@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const State = require('../js/customer_state.js');
+const RestaurantState = require('../js/restaurant_state.js');
 
 test('normalizes malformed persisted state without copying unsafe fields', () => {
   const state = State.normalize({
@@ -20,6 +21,16 @@ test('adds compatible cart lines and calculates a demo order once', () => {
   assert.equal(result.state.cart.length, 0);
   assert.equal(result.order.status, 'pending');
   assert.equal(result.order.total, 27);
+});
+
+test('rejects placement when the owning Restaurant has paused accepting orders', () => {
+  const customer = State.addCartLine(State.defaultState(), {
+    id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: 'Pasta', price: 12
+  }, 1, []);
+  const pausedRestaurant = RestaurantState.setOperations(RestaurantState.defaultState(), { acceptingOrders: false });
+
+  assert.throws(() => State.placeDemoOrder(customer, { address: '12 Food Street', paymentMethod: 'cash' }, pausedRestaurant), /not accepting orders/i);
+  assert.equal(customer.cart.length, 1);
 });
 
 test('customer cart rejects items from a second restaurant', () => {

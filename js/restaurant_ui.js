@@ -43,12 +43,18 @@
     return [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(node => !node.hidden);
   }
 
+  function setDialogTrigger(dialog, expanded) {
+    if (!dialog || !dialog.id || !documentRef) return;
+    documentRef.querySelectorAll(`[aria-controls="${dialog.id}"]`).forEach(trigger => trigger.setAttribute('aria-expanded', String(expanded)));
+  }
+
   function openDialog(dialogOrId, opener) {
     const dialog = typeof dialogOrId === 'string' ? get(dialogOrId) : dialogOrId;
     if (!dialog) return;
     returnFocus.set(dialog, opener || documentRef.activeElement);
     dialog.hidden = false;
     dialog.classList.add('is-open');
+    setDialogTrigger(dialog, true);
     const first = focusable(dialog)[0];
     if (first && root) root.requestAnimationFrame(() => first.focus());
   }
@@ -58,6 +64,7 @@
     if (!dialog || dialog.hidden) return;
     dialog.classList.remove('is-open');
     dialog.hidden = true;
+    setDialogTrigger(dialog, false);
     const opener = returnFocus.get(dialog);
     if (opener && typeof opener.focus === 'function') opener.focus();
   }
@@ -82,10 +89,11 @@
   function bindShell() {
     if (!documentRef) return;
     documentRef.addEventListener('click', event => {
+      const closeControl = event.target.closest && event.target.closest('[data-close-dialog]');
+      if (closeControl) { closeDialog(closeControl.dataset.closeDialog); return; }
       const target = event.target.closest ? event.target.closest('button, a') : null;
       if (!target) return;
       if (target.matches('.restaurant-mobile-menu-button')) { openDialog('restaurant-mobile-navigation', target); return; }
-      if (target.matches('[data-close-dialog]')) { closeDialog(target.dataset.closeDialog); return; }
       if (target.matches('[data-accepting-orders]')) {
         const api = restaurantState();
         if (!api) return;

@@ -20,6 +20,13 @@
       || (id === LEGACY_RESTAURANT_ID ? LEGACY_RESTAURANT_NAME : id);
     return { id, name };
   };
+  const restaurantAccepting = (restaurantConfig, restaurantId) => {
+    const source = restaurantConfig && typeof restaurantConfig === 'object' && !Array.isArray(restaurantConfig) ? restaurantConfig : {};
+    const profile = source.profile && typeof source.profile === 'object' ? source.profile : {};
+    if (text(profile.id).trim() !== text(restaurantId).trim()) return true;
+    const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
+    return operations.acceptingOrders !== false;
+  };
   const defaultState = () => ({
     version: 2,
     cart: [],
@@ -190,13 +197,14 @@
     next.favorites[kind] = list.includes(value) ? list.filter(item => item !== value) : [...list, value];
     return next;
   }
-  function placeDemoOrder(state, input) {
+  function placeDemoOrder(state, input, restaurantConfig) {
     const next = normalize(state);
     const source = input && typeof input === 'object' ? input : {};
     const address = text(source.address).trim();
     const normalizedDeliveryNote = deliveryNote(source.deliveryNote);
     if (!address) throw new Error('Delivery address is required');
     if (!next.cart.length) throw new Error('Cart is empty');
+    if (!restaurantAccepting(restaurantConfig, next.cart[0].restaurantId)) throw new Error('This restaurant is not accepting orders right now.');
     const subtotal = next.cart.reduce((sum, line) => sum + lineTotal(line), 0);
     const total = subtotal + DELIVERY_FEE;
     const paymentMethod = source.paymentMethod === 'wallet' ? 'wallet' : 'cash';
