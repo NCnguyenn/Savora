@@ -335,3 +335,39 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.doesNotMatch(controller, /innerHTML\s*=/);
   assert.doesNotMatch(controller, /permission granted/i, 'geolocation must not claim permission before a success callback');
 });
+
+test('Analytics and review routes provide accessible local insight and bounded reply controls', () => {
+  for (const file of ['restaurant_analytics.php', 'restaurant_reviews.php', 'js/restaurant_insights.js']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+  const analytics = read('restaurant_analytics.php');
+  const reviews = read('restaurant_reviews.php');
+  const controller = read('js/restaurant_insights.js');
+
+  for (const page of [analytics, reviews]) {
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+    assert.equal((page.match(/<main\b/gi) || []).length, 1, 'each insight route has one main landmark');
+    assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+  }
+
+  assert.match(analytics, /<h1[^>]*>\s*Business Analytics\s*<\/h1>/);
+  for (const hook of ['data-analytics-range', 'data-analytics-kpis', 'data-sales-chart', 'data-status-chart', 'data-ordering-heatmap', 'data-menu-performance', 'data-kitchen-performance', 'data-analytics-feedback']) assert.match(analytics, new RegExp(hook));
+  assert.match(analytics, /role="img"[^>]*aria-label="Sales and order volume chart"/);
+  assert.match(analytics, /data-sales-chart-summary/);
+  assert.match(analytics, /data-export-analytics/);
+
+  assert.match(reviews, /<h1[^>]*>\s*Ratings &amp; Feedback\s*<\/h1>/);
+  for (const hook of ['data-review-filters', 'data-review-list', 'data-review-context', 'data-review-reply', 'data-review-feedback', 'data-review-topics']) assert.match(reviews, new RegExp(hook));
+  assert.match(reviews, /<label[^>]*for="review-public-reply"/);
+  assert.match(reviews, /id="review-public-reply"[^>]*maxlength="300"/);
+  assert.match(reviews, /data-review-character-count/);
+  assert.match(reviews, /data-review-save-draft/);
+  assert.match(reviews, /data-review-publish/);
+  assert.match(reviews, /data-review-feedback[^>]*aria-live="polite"/);
+  assert.match(controller, /api\.deriveAnalytics/);
+  assert.match(controller, /api\.setReviewReply/);
+  assert.match(controller, /textContent/);
+  assert.doesNotMatch(controller, /innerHTML\s*=/);
+});

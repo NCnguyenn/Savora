@@ -314,3 +314,31 @@ test('Customer storefront availability respects accepting status, local hours, a
   assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours: { wednesday: { closed: true } }, specialHours: [{ date: '2026-06-02', open: '20:00', close: '02:00' }] }, new Date(2026, 5, 3, 1, 0)), { isOpen: true, status: 'Open for orders' });
   assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours, specialHours: [{ date: '2026-06-03', closed: true }, { date: '2026-06-02', open: '20:00', close: '02:00' }] }, new Date(2026, 5, 3, 1, 0)), { isOpen: false, status: 'Closed today' });
 });
+
+test('derives deterministic analytics with date, status, menu, kitchen, and empty fallbacks', () => {
+  const analytics = RestaurantState.deriveAnalytics({ orders: [
+    { id: 'a1', status: 'completed', total: 24, createdAt: '2026-07-30T12:15:00.000Z', items: [{ name: 'Noodles', quantity: 2 }], prepMinutes: 18 },
+    { id: 'a2', status: 'cancelled', total: 10, createdAt: '2026-07-29T18:40:00.000Z', items: [{ name: 'Tea', quantity: 1 }], prepMinutes: 25 }
+  ] });
+
+  assert.equal(analytics.totalOrders, 2);
+  assert.equal(analytics.completedOrders, 1);
+  assert.equal(analytics.averageOrderValue, 24);
+  assert.deepEqual(analytics.statusCounts.completed, 1);
+  assert.deepEqual(analytics.salesByDay.map(day => day.key), ['2026-07-30']);
+  assert.deepEqual(analytics.menuItems[0], { name: 'Noodles', quantity: 2, revenue: 24 });
+  assert.equal(analytics.orderingTimes['12'], 1);
+  assert.equal(analytics.kitchen.averagePrepMinutes, 21.5);
+  assert.deepEqual(RestaurantState.deriveAnalytics({}).salesByDay, []);
+  assert.deepEqual(RestaurantState.deriveAnalytics({}).menuItems, []);
+});
+
+test('stores bounded plain-text review replies by review id', () => {
+  const reply = `<strong>Thank you</strong>${'x'.repeat(400)}`;
+  const state = RestaurantState.setReviewReply(RestaurantState.defaultState(), 'review-7', reply);
+
+  assert.equal(state.reviews[0].id, 'review-7');
+  assert.equal(state.reviews[0].reply.length, 300);
+  assert.equal(state.reviews[0].reply.startsWith('<strong>'), true);
+  assert.match(state.reviews[0].repliedAt, /^\d{4}-\d{2}-\d{2}T/);
+});

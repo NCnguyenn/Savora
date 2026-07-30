@@ -19,6 +19,7 @@
   const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity', 'deliveryEnabled', 'pickupEnabled', 'pickupInstructions'];
   const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
+  const replyText = value => text(value).slice(0, 300);
   const nonNegative = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   const finiteNumber = value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
   const bounded = (value, minimum, maximum, fallback) => {
@@ -222,7 +223,7 @@
     const id = text(reviewId);
     if (!id) throw new Error('Review id is required');
     const index = next.reviews.findIndex(review => review.id === id);
-    const review = { id, reply: text(reply), repliedAt: new Date().toISOString() };
+    const review = { id, reply: replyText(reply), repliedAt: new Date().toISOString() };
     if (index >= 0) next.reviews[index] = review;
     else next.reviews.push(review);
     return next;
@@ -253,10 +254,50 @@
   }
   function deriveAnalytics(customerState) {
     const orders = ordersForMetrics(customerState);
-    const statusCounts = Object.fromEntries(Object.keys(ORDER_TRANSITIONS).map(status => [status, 0]));
+    const statusCounts = Object.fromEntries([...Object.keys(ORDER_TRANSITIONS), 'refunded'].map(status => [status, 0]));
     orders.forEach(order => { if (order && Object.hasOwn(statusCounts, order.status)) statusCounts[order.status] += 1; });
     const finance = deriveFinance(customerState);
-    return { totalOrders: orders.length, completedOrders: finance.completedOrders, grossSales: finance.grossSales, statusCounts };
+    const sales = new Map();
+    const menu = new Map();
+    const orderingTimes = Object.fromEntries(Array.from({ length: 24 }, (_, hour) => [String(hour), 0]));
+    const prepTimes = [];
+    const customers = new Map();
+    orders.forEach(order => {
+      if (!order || typeof order !== 'object') return;
+      const createdAt = text(order.createdAt);
+      const date = /^\d{4}-\d{2}-\d{2}/.test(createdAt) ? createdAt.slice(0, 10) : '';
+      const hour = new Date(createdAt).getUTCHours();
+      if (Number.isInteger(hour)) orderingTimes[String(hour)] += 1;
+      const prep = finiteNumber(order.prepMinutes);
+      if (prep !== null) prepTimes.push(nonNegative(prep));
+      const customer = text(order.customerName || order.customerEmail || order.customerId);
+      if (customer) customers.set(customer, (customers.get(customer) || 0) + 1);
+      if (order.status !== 'completed') return;
+      const total = nonNegative(order.total);
+      if (date) {
+        const day = sales.get(date) || { key: date, orders: 0, revenue: 0 };
+        day.orders += 1; day.revenue += total; sales.set(date, day);
+      }
+      const items = Array.isArray(order.items) ? order.items : Array.isArray(order.lines) ? order.lines : [];
+      const quantityTotal = items.reduce((sum, item) => sum + Math.max(1, nonNegative(item && item.quantity) || 1), 0) || 1;
+      items.forEach(item => {
+        const name = text(item && (item.name || item.productName || item.title));
+        if (!name) return;
+        const quantity = Math.max(1, nonNegative(item && item.quantity) || 1);
+        const current = menu.get(name) || { name, quantity: 0, revenue: 0 };
+        current.quantity += quantity;
+        current.revenue += total * (quantity / quantityTotal);
+        menu.set(name, current);
+      });
+    });
+    const salesByDay = [...sales.values()].sort((a, b) => a.key.localeCompare(b.key));
+    const menuItems = [...menu.values()].sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name));
+    return {
+      totalOrders: orders.length, completedOrders: finance.completedOrders, grossSales: finance.grossSales,
+      averageOrderValue: finance.averageOrderValue, statusCounts, salesByDay, menuItems, orderingTimes,
+      repeatCustomers: [...customers.values()].filter(count => count > 1).length,
+      kitchen: { averagePrepMinutes: prepTimes.length ? prepTimes.reduce((sum, value) => sum + value, 0) / prepTimes.length : 0 }
+    };
   }
   return { KEY, ORDER_TRANSITIONS, defaultState, normalize, load, persist, updateOrderStatus, setMenuItem, setItemAvailability, setProfile, setOperations, setReviewReply, deriveFinance, deriveAnalytics };
 }));
