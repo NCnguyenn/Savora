@@ -133,3 +133,20 @@ test('Delivery History exposes accessible filters, responsive records and detail
   assert.match(page, /<label[^>]*for="driver-history-status"/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
 });
+
+test('Driver Earnings exposes KPIs, chart, payout, COD and labelled recent records', () => {
+  const page = read('driver_earnings.php');
+  assert.equal((page.match(/<main\b/gi) || []).length, 1);
+  assert.match(page, /<h1[^>]*>\s*Earnings\s*<\/h1>/);
+  for (const hook of [
+    'data-earnings-kpis',
+    'data-earnings-chart',
+    'data-next-payout',
+    'data-cash-balance',
+    'data-earnings-records',
+    'data-download-statement'
+  ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /<caption[^>]*>Recent driver earnings<\/caption>/);
+  assert.match(page, /local preview/i);
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+});

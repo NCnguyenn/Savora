@@ -599,6 +599,56 @@ a { color: inherit; }
 .driver-history-detail-row > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; background: var(--driver-sage); color: var(--driver-forest); }
 .driver-history-detail-row > div { display: grid; }
 .driver-history-detail-row small { color: var(--driver-muted); }
+.driver-heading-actions { display: flex; align-items: end; gap: 10px; }
+.driver-date-filter input { min-width: 170px; }
+.driver-local-preview {
+  margin: -12px 0 20px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--driver-coral);
+  border-radius: 8px;
+  background: var(--driver-danger-bg);
+  color: var(--driver-muted);
+  font-size: 13px;
+}
+.driver-earnings-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.driver-earnings-kpis article { display: flex; align-items: center; gap: 13px; min-height: 122px; padding: 18px; }
+.driver-earnings-kpis article > span {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--driver-sage);
+  color: var(--driver-forest);
+}
+.driver-earnings-kpis p, .driver-earnings-kpis small { margin: 0; color: var(--driver-muted); }
+.driver-earnings-kpis strong { display: block; margin: 2px 0; font-size: 25px; }
+.driver-earnings-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.8fr); gap: 18px; margin-bottom: 20px; }
+.driver-earnings-chart-card { min-height: 430px; padding: 20px; }
+.driver-chart-legend { display: flex; gap: 14px; color: var(--driver-muted); font-size: 12px; }
+.driver-chart-legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 2px; background: var(--driver-forest); }
+.driver-chart-legend span:last-child::before { background: var(--driver-coral); }
+.driver-earnings-chart { height: 320px; display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; gap: 12px; padding: 34px 6px 0; border-bottom: 1px solid var(--driver-border); background: repeating-linear-gradient(to bottom, transparent 0 63px, rgba(223, 228, 218, 0.7) 64px 65px); }
+.driver-chart-day { height: 100%; min-width: 0; display: grid; grid-template-rows: 1fr auto auto; align-items: end; gap: 4px; text-align: center; }
+.driver-chart-bar { width: min(44px, 80%); height: 100%; display: flex; flex-direction: column-reverse; justify-self: center; overflow: hidden; border-radius: 6px 6px 0 0; }
+.driver-chart-bar span { display: block; min-height: 0; }
+.driver-chart-bar .is-base { background: var(--driver-forest); }
+.driver-chart-bar .is-bonus { background: var(--driver-coral); }
+.driver-chart-day strong { font-size: 12px; }
+.driver-chart-day small { overflow: hidden; color: var(--driver-muted); font-size: 10px; text-overflow: ellipsis; }
+.driver-earnings-side { display: grid; gap: 18px; }
+.driver-payout-card, .driver-cash-card { display: grid; gap: 10px; padding: 20px; }
+.driver-payout-card > p, .driver-payout-card > small { margin: 0; color: var(--driver-muted); }
+.driver-payout-card > strong { font-size: 32px; }
+.driver-payout-card > div { display: flex; align-items: center; gap: 9px; padding: 12px 0; border-top: 1px solid var(--driver-border); }
+.driver-cash-card > div { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.driver-cash-card > div span { display: grid; padding: 11px; border-radius: 10px; background: var(--driver-sage); }
+.driver-cash-card small { color: var(--driver-muted); }
+.driver-cash-card p { margin: 0; padding: 9px 11px; border-radius: 8px; background: var(--driver-danger-bg); color: var(--driver-warning); font-size: 13px; }
+.driver-recent-earnings { padding: 18px; }
+.driver-recent-earnings > header { margin-bottom: 12px; }
+.driver-recent-earnings > header a { color: var(--driver-focus); }
 
 .driver-footer {
   display: flex;
@@ -729,6 +779,8 @@ a { color: inherit; }
   .driver-route-map { min-height: 420px; }
   .driver-history-filters { grid-template-columns: 1fr 1fr; }
   .driver-history-filters .driver-field:first-child { grid-column: 1 / -1; }
+  .driver-earnings-kpis { grid-template-columns: repeat(2, 1fr); }
+  .driver-earnings-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -757,6 +809,18 @@ a { color: inherit; }
   .driver-history-cards header { display: flex; justify-content: space-between; gap: 12px; }
   .driver-history-cards h2, .driver-history-cards p { margin: 0 0 7px; }
   .driver-history-cards .driver-table-action { margin-top: 5px; }
+  .driver-heading-actions { width: 100%; display: grid; }
+  .driver-earnings-kpis { grid-template-columns: 1fr; }
+  .driver-earnings-chart-card { min-height: 380px; padding: 14px; }
+  .driver-earnings-chart { height: 270px; gap: 5px; }
+  .driver-chart-bar { width: min(28px, 82%); }
+}
+
+@media print {
+  .driver-sidebar, .driver-topbar, .driver-primary-nav, .driver-heading-actions, .driver-footer, .driver-toast-container { display: none !important; }
+  .driver-shell { display: block; }
+  .driver-main { max-width: none; padding: 0; }
+  .driver-card { box-shadow: none; break-inside: avoid; }
 }
 
 @media (prefers-reduced-motion: reduce) {
