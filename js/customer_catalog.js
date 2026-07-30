@@ -109,9 +109,10 @@
       Object.values(restaurants).forEach(restaurant => {
         restaurant.productIds = (Array.isArray(restaurant.productIds) ? restaurant.productIds : []).filter(id => String(id) !== override.id);
       });
-      if (!restaurants[owner.name]) restaurants[owner.name] = {
-        name: owner.name, cuisine: owner.cuisine || 'Local kitchen', rating: 0, prepTime: '', productIds: []
-      };
+      if (!Object.hasOwn(restaurants, owner.name)) Object.defineProperty(restaurants, owner.name, {
+        value: { name: owner.name, cuisine: owner.cuisine || 'Local kitchen', rating: 0, prepTime: '', productIds: [] },
+        enumerable: true, configurable: true, writable: true
+      });
       const ids = restaurants[owner.name].productIds;
       if (!ids.includes(override.id)) ids.push(override.id);
     });

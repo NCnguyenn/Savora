@@ -53,3 +53,14 @@ test('rejects non-canonical catalog image paths and keeps default ownership cons
   assert.equal(state.profile.id, state.menuItems[0].restaurantId);
   assert.equal(state.profile.name, state.menuItems[0].restaurantName);
 });
+
+test('creates own restaurant records for inherited profile names', () => {
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    const catalog = Catalog.applyRestaurantOverrides(Catalog.products, Catalog.restaurants, {
+      profile: { id: `id-${name}`, name },
+      menuItems: [{ id: `item-${name}`, name: 'Safe menu item' }]
+    });
+    assert.ok(Object.hasOwn(catalog.restaurants, name));
+    assert.ok(catalog.restaurants[name].productIds.includes(`item-${name}`));
+  }
+});
