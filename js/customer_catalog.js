@@ -59,6 +59,18 @@
     return /^assets\/images\/catalog\/[a-z0-9][a-z0-9-]*\.(?:jpg|jpeg|png|webp)$/.test(image) ? image : '';
   };
   const number = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const textList = value => Array.isArray(value) ? value.map(text).filter(Boolean).slice(0, 20) : [];
+  const menuOptions = value => Array.isArray(value) ? value.map(option => {
+    const source = option && typeof option === 'object' && !Array.isArray(option) ? option : {};
+    const label = text(source.label);
+    return label ? { label, price: number(source.price) } : null;
+  }).filter(Boolean).slice(0, 20) : [];
+  const menuOptionGroups = value => Array.isArray(value) ? value.map(group => {
+    const source = group && typeof group === 'object' && !Array.isArray(group) ? group : {};
+    const name = text(source.name);
+    return name ? { name, required: source.required === true, options: menuOptions(source.options) } : null;
+  }).filter(Boolean).slice(0, 8) : [];
+  const optionId = (itemId, kind, index) => `${itemId}-${kind}-${index + 1}`;
   const restaurantIdFor = name => text(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const storedRestaurantState = () => {
     if (!root) return {};
@@ -77,7 +89,8 @@
       id: text(source.id), restaurantId: owner.id, restaurantName: owner.name,
       name: text(source.name), description: text(source.description), category: text(source.category),
       image: localCatalogImage(source.image), price: number(source.price), available: source.available !== false,
-      status: source.status === 'draft' ? 'draft' : 'published'
+      status: source.status === 'draft' ? 'draft' : 'published', prepTime: number(source.prepTime),
+      dietaryTags: textList(source.dietaryTags), optionGroups: menuOptionGroups(source.optionGroups), addOns: menuOptions(source.addOns)
     };
   };
   function applyRestaurantOverrides(sourceProducts, sourceRestaurants, state) {
@@ -93,15 +106,26 @@
     const owner = ownerFor(source.profile);
     const overrides = Array.isArray(source.menuItems) ? source.menuItems.map(item => allowedOverride(item, owner)).filter(item => item.id) : [];
     overrides.filter(override => override.status !== 'draft').forEach(override => {
-      const product = products[override.id] || {
+      const existing = products[override.id];
+      const product = existing || {
         id: override.id, name: 'Menu item', description: '', category: 'menu', categories: ['menu'],
-        image: placeholderImage, price: 0, available: true, portions: [], addOns: []
+        image: placeholderImage, price: 0, available: true, prepTime: '20 min', calories: 0,
+        dietaryTags: [], allergens: [], ingredients: [], portions: [{ id: 'regular', label: 'Regular', price: 0 }], addOns: []
       };
       if (override.name) product.name = override.name;
       if (override.description) product.description = override.description;
       if (override.category) { product.category = override.category; product.categories = [override.category]; }
       if (override.image) product.image = override.image;
       if (Number.isFinite(Number(override.price)) && override.price > 0) product.price = override.price;
+      product.prepTime = `${override.prepTime || 20} min`;
+      product.calories = number(product.calories);
+      product.dietaryTags = override.dietaryTags;
+      product.allergens = textList(product.allergens);
+      product.ingredients = textList(product.ingredients);
+      const portionOptions = override.optionGroups.find(group => group.options.length)?.options || [];
+      if (portionOptions.length || !existing) product.portions = (portionOptions.length ? portionOptions : [{ label: 'Regular', price: 0 }]).map((option, index) => ({ id: optionId(override.id, 'portion', index), label: option.label, price: option.price }));
+      else product.portions = Array.isArray(product.portions) && product.portions.length ? product.portions : [{ id: optionId(override.id, 'portion', 0), label: 'Regular', price: 0 }];
+      product.addOns = override.addOns.map((option, index) => ({ id: optionId(override.id, 'addon', index), productId: override.id, label: option.label, price: option.price }));
       product.available = override.available;
       product.restaurantId = override.restaurantId;
       product.restaurant = override.restaurantName;
@@ -116,6 +140,7 @@
       });
       const ids = restaurants[owner.name].productIds;
       if (!ids.includes(override.id)) ids.push(override.id);
+      if (!restaurants[owner.name].prepTime) restaurants[owner.name].prepTime = product.prepTime;
     });
     return { products, restaurants };
   }

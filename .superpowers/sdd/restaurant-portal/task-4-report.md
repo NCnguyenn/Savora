@@ -45,3 +45,29 @@ PHP reported no syntax errors for both new routes and `git diff --check` reporte
 - No inline handlers, placeholder links, remote images, or backend claims: checked in route markup and controller.
 - Customer catalog bridge: tested for a published item’s price and availability; drafts are deliberately excluded.
 - Unrelated untracked Customer Address planning/specification files were not staged or changed.
+
+## Review follow-up
+
+### RED evidence
+
+After the Task 4 review, three focused regressions were added and run with:
+
+```powershell
+node --test tests\restaurant_state.test.js
+```
+
+The run failed in the expected places:
+
+- a newly published Restaurant item had no Customer `prepTime` or complete product-detail contract;
+- `Menu.ensureDraftId` did not exist, and draft submission still used publish validation;
+- `Menu.clearValidationState` did not exist, so stale `aria-invalid` markers could remain.
+
+### GREEN evidence
+
+Each regression was then run independently and passed after its minimal implementation. The combined Restaurant and Customer suites subsequently passed 74 tests:
+
+```powershell
+node --test tests\restaurant_state.test.js tests\restaurant_markup.test.js tests\customer_state.test.js tests\customer_markup.test.js
+```
+
+The bridge now supplies safe defaults for every field read unconditionally by `product_detail.php`, maps the first editor option group to Customer portions and editor add-ons to Customer add-ons, and keeps drafts excluded. Draft saves accept safe partial fields under a stable form-local ID, while Publish retains strict validation. Validation clears prior `aria-invalid` state before evaluating the current submission.

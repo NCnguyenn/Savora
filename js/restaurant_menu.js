@@ -44,6 +44,19 @@
     return { valid: Object.keys(errors).length === 0, errors };
   }
 
+  function validateMenuItemForStatus(draft, status) {
+    return status === 'draft' ? { valid: true, errors: {} } : validateMenuItem(draft);
+  }
+
+  function ensureDraftId(holder, now = () => Date.now()) {
+    if (!holder || !holder.dataset) return '';
+    const current = text(holder.dataset.menuItemId);
+    if (current) return current;
+    const stamp = Math.max(0, Number(now()) || 0).toString(36);
+    holder.dataset.menuItemId = `menu-${stamp}`;
+    return holder.dataset.menuItemId;
+  }
+
   function menuItemFromDraft(draft) {
     const source = draft && typeof draft === 'object' ? draft : {};
     return {
@@ -147,12 +160,19 @@
     else field.value = value == null ? '' : value;
   }
 
+  function clearValidationState(form) {
+    ['name', 'category', 'price', 'compareAtPrice'].forEach(key => {
+      const field = form && form.elements && form.elements.namedItem(editorFieldName(key));
+      if (field) field.removeAttribute('aria-invalid');
+    });
+  }
+
   function loadEditor(form) {
     const api = stateApi();
     if (!api) return;
     const id = new URLSearchParams(root.location.search).get('id');
     const item = id ? api.load().menuItems.find(entry => entry.id === id) : null;
-    if (!item) { form.optionGroups = []; form.addOns = []; return; }
+    if (!item) { ensureDraftId(form); form.optionGroups = []; form.addOns = []; return; }
     form.dataset.menuItemId = item.id;
     ['name', 'description', 'category', 'image', 'price', 'compareAtPrice', 'taxCategory', 'stock', 'prepTime'].forEach(key => setField(form, editorFieldName(key), item[key]));
     setField(form, 'menu-available', item.available !== false);
@@ -163,6 +183,7 @@
   }
 
   function showValidation(form, errors) {
+    clearValidationState(form);
     getAll('[data-menu-field-error]').forEach(node => { node.textContent = ''; });
     Object.entries(errors).forEach(([key, message]) => {
       const field = form.elements.namedItem(editorFieldName(key));
@@ -216,10 +237,12 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       const submitter = event.submitter || documentRef.activeElement;
-      const draft = collectDraft(form); const result = validateMenuItem(draft);
+      const draft = collectDraft(form);
+      draft.status = submitter && submitter.dataset.menuSave === 'draft' ? 'draft' : 'published';
+      const result = validateMenuItemForStatus(draft, draft.status);
+      clearValidationState(form);
       if (!result.valid) { showValidation(form, result.errors); return; }
       const api = stateApi(); if (!api) return;
-      draft.status = submitter && submitter.dataset.menuSave === 'draft' ? 'draft' : 'published';
       api.persist(api.setMenuItem(api.load(), menuItemFromDraft(draft)));
       const validation = get('[data-menu-validation]'); if (validation) validation.textContent = '';
       const status = get('[data-menu-status]'); if (status) status.textContent = draft.status === 'draft' ? 'Draft saved locally.' : 'Menu item published to the Customer catalog.';
@@ -232,5 +255,5 @@
     if (documentRef.readyState === 'loading') documentRef.addEventListener('DOMContentLoaded', initialize, { once: true }); else initialize();
   }
 
-  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, editorFieldName, validateMenuItem, menuItemFromDraft, renderMenu };
+  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, clearValidationState, editorFieldName, ensureDraftId, validateMenuItem, validateMenuItemForStatus, menuItemFromDraft, renderMenu };
 }));

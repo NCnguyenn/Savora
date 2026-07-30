@@ -122,3 +122,55 @@ test('menu editor creates labelled option groups and add-ons from their form val
   assert.deepEqual(groups, [{ name: 'Choose a size', required: true, options: [{ label: 'Large', price: 2 }] }]);
   assert.deepEqual(addOns, [{ label: 'Extra parmesan', price: 1.25 }]);
 });
+
+test('published Restaurant items expose the complete Customer product contract', () => {
+  const state = RestaurantState.setMenuItem(RestaurantState.defaultState(), {
+    id: 'customer-ready', name: 'Customer ready bowl', description: 'Safe and complete', category: 'lunch',
+    price: 14, prepTime: 12, dietaryTags: ['vegan'], status: 'published',
+    optionGroups: [{ name: 'Choose a size', required: true, options: [{ label: 'Regular', price: 0 }, { label: 'Large', price: 3 }] }],
+    addOns: [{ label: 'Extra herbs', price: 1.5 }]
+  });
+  const product = Catalog.applyRestaurantOverrides(Catalog.products, Catalog.restaurants, state).products['customer-ready'];
+
+  assert.deepEqual(product.categories, ['lunch']);
+  assert.equal(product.prepTime, '12 min');
+  assert.equal(product.calories, 0);
+  assert.deepEqual(product.dietaryTags, ['vegan']);
+  assert.deepEqual(product.allergens, []);
+  assert.deepEqual(product.ingredients, []);
+  assert.deepEqual(product.portions.map(({ label, price }) => ({ label, price })), [{ label: 'Regular', price: 0 }, { label: 'Large', price: 3 }]);
+  assert.deepEqual(product.addOns.map(({ productId, label, price }) => ({ productId, label, price })), [{ productId: 'customer-ready', label: 'Extra herbs', price: 1.5 }]);
+  assert.doesNotThrow(() => product.portions.map(portion => portion.id).concat(product.addOns.filter(option => option.productId === product.id), product.dietaryTags, product.allergens, product.ingredients));
+});
+
+test('draft validation allows safe partial items with a stable local id and keeps them out of Customer catalog', () => {
+  const holder = { dataset: {} };
+  const firstId = Menu.ensureDraftId(holder, () => 123456);
+  const secondId = Menu.ensureDraftId(holder, () => 999999);
+  assert.equal(firstId, secondId);
+
+  const partial = { id: firstId, description: 'Still writing this dish', status: 'draft' };
+  assert.equal(Menu.validateMenuItemForStatus(partial, 'draft').valid, true);
+  assert.equal(Menu.validateMenuItemForStatus(partial, 'published').valid, false);
+
+  const state = RestaurantState.setMenuItem(RestaurantState.defaultState(), Menu.menuItemFromDraft(partial));
+  assert.equal(state.menuItems.find(item => item.id === firstId).description, 'Still writing this dish');
+  const catalog = Catalog.applyRestaurantOverrides(Catalog.products, Catalog.restaurants, state);
+  assert.equal(Object.hasOwn(catalog.products, firstId), false);
+});
+
+test('menu validation clears stale aria-invalid state before reporting current errors', () => {
+  const fields = new Map(['name', 'category', 'price', 'compareAtPrice'].map(key => {
+    const field = {
+      invalid: true,
+      setAttribute(name) { if (name === 'aria-invalid') this.invalid = true; },
+      removeAttribute(name) { if (name === 'aria-invalid') this.invalid = false; }
+    };
+    return [Menu.editorFieldName(key), field];
+  }));
+  const form = { elements: { namedItem: name => fields.get(name) || null } };
+
+  Menu.clearValidationState(form);
+
+  assert.equal([...fields.values()].some(field => field.invalid), false);
+});
