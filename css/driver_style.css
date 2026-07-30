@@ -802,6 +802,7 @@ a { color: inherit; }
   .driver-shell { grid-template-columns: 228px minmax(0, 1fr); }
   .driver-sidebar { padding-inline: 12px; }
   .driver-overview-grid { grid-template-columns: 1fr; }
+  .driver-main.has-active-offer .driver-offer-card { order: -1; }
   .driver-offer-card { min-height: 0; }
   .driver-offer-empty { min-height: 300px; }
   .driver-delivery-layout { grid-template-columns: 1fr; }
@@ -873,6 +874,18 @@ a { color: inherit; }
   .driver-offer-actions { grid-template-columns: 1fr; }
   .driver-offer-payment { align-items: flex-start; flex-direction: column; }
   .driver-party-grid, .driver-delivery-meta-grid, .driver-delivery-actions { grid-template-columns: 1fr; }
+  [data-driver-page="delivery"],
+  [data-driver-page="overview"].has-active-offer { padding-bottom: 112px; }
+  [data-driver-page="delivery"] .driver-delivery-actions .driver-primary-action,
+  [data-driver-page="overview"].has-active-offer .driver-offer-actions .driver-primary-action {
+    position: fixed;
+    z-index: 950;
+    right: 18px;
+    bottom: 82px;
+    left: 18px;
+    min-height: 52px;
+    box-shadow: 0 10px 28px rgba(4, 41, 30, 0.24);
+  }
   .driver-route-map { min-height: 340px; }
   .driver-history-kpis, .driver-history-filters { grid-template-columns: 1fr; }
   .driver-history-filters .driver-field:first-child { grid-column: auto; }

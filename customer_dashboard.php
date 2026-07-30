@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const driverCopy = activeOrder.status === 'ready_for_pickup' && !delivery
             ? 'Searching for a nearby driver'
             : delivery
-                ? `${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`
+                ? `Driver assigned · ${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`
                 : '';
         const article = createElement('article', { className: 'active-order' }, [
             createElement('p', { className: 'status-chip', text: status }),

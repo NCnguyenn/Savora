@@ -106,14 +106,15 @@
     const content = doc.querySelector('[data-offer-content]');
     const offer = state.currentOffer;
     if (!empty || !content) return;
+    page.classList.toggle('has-active-offer', Boolean(offer));
     if (!offer) {
       const copy = emptyOfferCopy(state);
-      empty.replaceChildren(
+      empty.replaceChildren(...[
         ui.el('span', {}, ui.icon(state.online ? 'fa-satellite-dish' : 'fa-wifi')),
         ui.el('h2', { text: copy.title }),
         ui.el('p', { text: copy.copy }),
-        copy.action || null
-      );
+        copy.action
+      ].filter(Boolean));
       empty.hidden = false;
       content.hidden = true;
       if (countdownTimer) root.clearInterval(countdownTimer);
