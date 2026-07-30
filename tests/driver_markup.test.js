@@ -150,3 +150,31 @@ test('Driver Earnings exposes KPIs, chart, payout, COD and labelled recent recor
   assert.match(page, /local preview/i);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
 });
+
+test('Driver Profile exposes labelled personal, vehicle, document, location and preference controls', () => {
+  const page = read('driver_profile.php');
+  assert.equal((page.match(/<main\b/gi) || []).length, 1);
+  assert.match(page, /<h1[^>]*>\s*Profile &amp; settings\s*<\/h1>/);
+  for (const hook of [
+    'data-driver-profile-form',
+    'data-personal-information',
+    'data-driver-vehicle',
+    'data-driver-documents',
+    'data-driver-location-settings',
+    'data-profile-use-gps',
+    'data-profile-manual-address',
+    'data-driver-preferences',
+    'data-profile-save'
+  ]) assert.match(page, new RegExp(hook));
+  for (const id of [
+    'driver-profile-name',
+    'driver-profile-phone',
+    'driver-profile-email',
+    'driver-vehicle-model',
+    'driver-license-plate',
+    'driver-current-address',
+    'driver-service-radius'
+  ]) assert.match(page, new RegExp(`<label[^>]*for="${id}"`));
+  assert.match(page, /href="logout\.php"/);
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+});
