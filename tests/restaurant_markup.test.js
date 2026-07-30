@@ -216,3 +216,40 @@ test('Menu Management and Menu Item Editor use the shared shell with accessible 
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
+
+test('Store Profile and Operations routes provide accessible safe storefront controls', () => {
+  for (const file of ['restaurant_profile.php', 'restaurant_operations.php', 'js/restaurant_storefront.js']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+  const profile = read('restaurant_profile.php');
+  const operations = read('restaurant_operations.php');
+  const controller = read('js/restaurant_storefront.js');
+
+  for (const page of [profile, operations]) {
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+    assert.equal((page.match(/<main\b/gi) || []).length, 1, 'each storefront route has one main landmark');
+    assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+  }
+
+  assert.match(profile, /<h1[^>]*>\s*Store Profile\s*<\/h1>/);
+  for (const field of ['profile-name', 'profile-description', 'profile-phone', 'address-line1', 'address-line2', 'address-city', 'address-state', 'address-postal-code', 'address-country', 'delivery-radius']) assert.match(profile, new RegExp(`name="${field}"`));
+  assert.match(profile, /data-use-current-location/);
+  assert.match(profile, /data-address-feedback[^>]*aria-live="polite"/);
+  assert.match(profile, /data-map-fallback/);
+  assert.match(profile, /data-storefront-preview/);
+  assert.match(profile, /js\/restaurant_storefront\.js/);
+
+  assert.match(operations, /<h1[^>]*>\s*Operations &amp; Opening Hours\s*<\/h1>/);
+  for (const hook of ['data-store-status', 'data-weekly-hours', 'data-copy-hours', 'data-special-hours', 'data-capacity-warning', 'data-operations-preview']) assert.match(operations, new RegExp(hook));
+  for (const field of ['accepting-orders', 'prep-minutes', 'capacity', 'delivery-enabled', 'pickup-enabled', 'pickup-instructions']) assert.match(operations, new RegExp(`name="${field}"`));
+  assert.match(controller, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(controller, /data-address-feedback/);
+  assert.match(controller, /api\.setProfile/);
+  assert.match(controller, /api\.setOperations/);
+  assert.match(controller, /api\.persist/);
+  assert.match(controller, /textContent/);
+  assert.doesNotMatch(controller, /innerHTML\s*=/);
+  assert.doesNotMatch(controller, /permission granted/i, 'geolocation must not claim permission before a success callback');
+});

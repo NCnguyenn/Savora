@@ -15,10 +15,34 @@
     completed: [],
     cancelled: []
   };
-  const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image'];
-  const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'capacity'];
+  const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'locationMethod'];
+  const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'capacity', 'deliveryEnabled', 'pickupEnabled', 'pickupInstructions'];
+  const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const nonNegative = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const bounded = (value, minimum, maximum, fallback) => Number.isFinite(Number(value)) && Number(value) >= minimum && Number(value) <= maximum ? Number(value) : fallback;
+  const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(text(value)) ? text(value) : '';
+  const defaultDayHours = () => ({ open: '09:00', close: '17:00', closed: false });
+  const normalizeWeeklyHours = value => {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return Object.fromEntries(WEEK_DAYS.map(day => {
+      const entry = source[day] && typeof source[day] === 'object' ? source[day] : {};
+      if (entry.closed === true) return [day, { open: '', close: '', closed: true }];
+      const fallback = defaultDayHours();
+      const open = clock(entry.open) || fallback.open;
+      const close = clock(entry.close) || fallback.close;
+      return [day, { open, close, closed: false }];
+    }));
+  };
+  const normalizeSpecialHours = value => Array.isArray(value) ? value.map(entry => {
+    const source = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(text(source.date)) ? text(source.date) : '';
+    if (!date) return null;
+    const closed = source.closed === true;
+    return closed
+      ? { date, closed: true, note: text(source.note) }
+      : { date, open: clock(source.open) || '09:00', close: clock(source.close) || '17:00', closed: false, note: text(source.note) };
+  }).filter(Boolean).slice(0, 24) : [];
   const copy = value => JSON.parse(JSON.stringify(value));
   const localCatalogImage = value => {
     const image = text(value);
@@ -65,8 +89,8 @@
   };
   const defaultState = () => ({
     version: 1,
-    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '' },
-    operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 0, capacity: 0 },
+    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '', locationMethod: 'manual', latitude: null, longitude: null },
+    operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 0, minimumOrder: 0, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(), specialHours: [] },
     menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, compareAtPrice: 0, taxCategory: '', optionGroups: [], addOns: [], available: true, stockTracking: false, stock: 0, prepTime: 20, dietaryTags: [], status: 'published' }],
     reviews: []
   });
@@ -78,9 +102,17 @@
     PROFILE_KEYS.forEach(key => { state.profile[key] = key === 'image' ? localCatalogImage(profile[key]) : text(profile[key]); });
     state.profile.id = state.profile.id || 'savora-kitchen';
     state.profile.name = state.profile.name || 'Savora Kitchen';
+    state.profile.locationMethod = profile.locationMethod === 'current' ? 'current' : 'manual';
+    state.profile.latitude = bounded(profile.latitude, -90, 90, null);
+    state.profile.longitude = bounded(profile.longitude, -180, 180, null);
     const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
     state.operations.acceptingOrders = operations.acceptingOrders !== false;
-    ['prepMinutes', 'deliveryRadius', 'capacity'].forEach(key => { state.operations[key] = nonNegative(operations[key]); });
+    ['prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity'].forEach(key => { state.operations[key] = Object.hasOwn(operations, key) ? nonNegative(operations[key]) : state.operations[key]; });
+    state.operations.deliveryEnabled = operations.deliveryEnabled !== false;
+    state.operations.pickupEnabled = operations.pickupEnabled !== false;
+    state.operations.pickupInstructions = text(operations.pickupInstructions);
+    state.operations.weeklyHours = normalizeWeeklyHours(operations.weeklyHours);
+    state.operations.specialHours = normalizeSpecialHours(operations.specialHours);
     state.menuItems = Array.isArray(source.menuItems)
       ? source.menuItems.map(item => normalizeMenuItem(item, state.profile)).filter(item => item.id)
       : state.menuItems;
@@ -144,6 +176,9 @@
     });
     next.profile.id = next.profile.id || 'savora-kitchen';
     next.profile.name = next.profile.name || 'Savora Kitchen';
+    if (Object.hasOwn(source, 'locationMethod')) next.profile.locationMethod = source.locationMethod === 'current' ? 'current' : 'manual';
+    if (Object.hasOwn(source, 'latitude')) next.profile.latitude = bounded(source.latitude, -90, 90, null);
+    if (Object.hasOwn(source, 'longitude')) next.profile.longitude = bounded(source.longitude, -180, 180, null);
     next.menuItems = next.menuItems.map(item => normalizeMenuItem(item, next.profile));
     return next;
   }
@@ -151,9 +186,15 @@
     const next = normalize(state);
     const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
     if (Object.hasOwn(source, 'acceptingOrders')) next.operations.acceptingOrders = source.acceptingOrders !== false;
-    ['prepMinutes', 'deliveryRadius', 'capacity'].forEach(key => {
+    ['prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity'].forEach(key => {
       if (Object.hasOwn(source, key)) next.operations[key] = nonNegative(source[key]);
     });
+    ['deliveryEnabled', 'pickupEnabled'].forEach(key => {
+      if (Object.hasOwn(source, key)) next.operations[key] = source[key] !== false;
+    });
+    if (Object.hasOwn(source, 'pickupInstructions')) next.operations.pickupInstructions = text(source.pickupInstructions);
+    if (Object.hasOwn(source, 'weeklyHours')) next.operations.weeklyHours = normalizeWeeklyHours(source.weeklyHours);
+    if (Object.hasOwn(source, 'specialHours')) next.operations.specialHours = normalizeSpecialHours(source.specialHours);
     return next;
   }
   function setReviewReply(state, reviewId, reply) {

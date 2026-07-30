@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const RestaurantState = require('../js/restaurant_state.js');
 const Catalog = require('../js/customer_catalog.js');
 const Menu = require('../js/restaurant_menu.js');
+const Storefront = require('../js/restaurant_storefront.js');
 
 test('accepts only valid order transitions and records an audit event', () => {
   const customer = { orders: [{ id: 'SVR-1', status: 'pending', items: [], total: 20 }] };
@@ -173,4 +174,36 @@ test('menu validation clears stale aria-invalid state before reporting current e
   Menu.clearValidationState(form);
 
   assert.equal([...fields.values()].some(field => field.invalid), false);
+});
+
+test('storefront profile and operations retain safe manual and current-location settings', () => {
+  let state = RestaurantState.setProfile(RestaurantState.defaultState(), {
+    name: 'Savora <Kitchen>',
+    addressLine1: '123 Market Street', addressLine2: 'Suite 4', city: 'Bangkok', state: 'Bangkok', postalCode: '10110', country: 'Thailand',
+    latitude: 13.7563, longitude: 100.5018, locationMethod: 'current'
+  });
+  state = RestaurantState.setOperations(state, {
+    acceptingOrders: false, deliveryRadius: 8, capacity: 42, deliveryEnabled: true, pickupEnabled: true,
+    pickupInstructions: 'Ask for the host',
+    weeklyHours: { monday: { open: '09:00', close: '21:00', closed: false }, sunday: { closed: true } },
+    specialHours: [{ date: '2026-12-25', closed: true, note: 'Holiday' }]
+  });
+
+  assert.equal(state.profile.addressLine1, '123 Market Street');
+  assert.equal(state.profile.locationMethod, 'current');
+  assert.equal(state.profile.latitude, 13.7563);
+  assert.equal(state.operations.acceptingOrders, false);
+  assert.equal(state.operations.deliveryRadius, 8);
+  assert.equal(state.operations.capacity, 42);
+  assert.deepEqual(state.operations.weeklyHours.monday, { open: '09:00', close: '21:00', closed: false });
+  assert.equal(state.operations.weeklyHours.sunday.closed, true);
+  assert.deepEqual(state.operations.specialHours, [{ date: '2026-12-25', closed: true, note: 'Holiday' }]);
+});
+
+test('storefront helpers normalize weekly hours and reject invalid delivery settings', () => {
+  const hours = Storefront.normalizeWeeklyHours({ monday: { open: '8:00', close: '26:00' }, tuesday: { open: '10:30', close: '18:00' } });
+  assert.deepEqual(hours.monday, { open: '09:00', close: '17:00', closed: false });
+  assert.deepEqual(hours.tuesday, { open: '10:30', close: '18:00', closed: false });
+  assert.match(Storefront.validateOperations({ deliveryRadius: '-1', capacity: '0' }).errors.deliveryRadius, /between/i);
+  assert.match(Storefront.validateOperations({ deliveryRadius: '5', capacity: '0' }).errors.capacity, /between/i);
 });
