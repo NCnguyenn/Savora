@@ -67,3 +67,25 @@ test('Driver UI renders persisted values with DOM nodes and exposes dialog and t
   assert.match(ui, /textContent/);
   assert.match(ui, /Escape/);
 });
+
+test('Driver Overview exposes location, summary and exclusive offer controls', () => {
+  const page = read('driver_dashboard.php');
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
+  assert.equal((page.match(/<main\b/gi) || []).length, 1);
+  assert.match(page, /<h1[^>]*>[\s\S]*Good afternoon/);
+  for (const hook of [
+    'data-driver-availability',
+    'data-driver-location',
+    'data-use-driver-gps',
+    'data-enter-driver-address',
+    'data-driver-map',
+    'data-driver-summary',
+    'data-delivery-offer',
+    'data-offer-countdown',
+    'data-accept-offer',
+    'data-decline-offer'
+  ]) assert.match(page, new RegExp(hook));
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+  assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+});
