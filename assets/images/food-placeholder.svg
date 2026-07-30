@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-labelledby="title description">
+  <title id="title">Savora food image placeholder</title>
+  <desc id="description">A simple plate and leaf illustration used when a catalog image is unavailable.</desc>
+  <rect width="800" height="560" fill="#edf1e4"/>
+  <circle cx="400" cy="280" r="146" fill="#f8f8f2" stroke="#bfd0b5" stroke-width="18"/>
+  <circle cx="400" cy="280" r="76" fill="#dfe8d5"/>
+  <path d="M414 247c54-78 120-76 147-68-14 62-63 112-140 101" fill="#6f9c58"/>
+  <path d="M414 248c27 6 64-4 111-43" fill="none" stroke="#073b2b" stroke-linecap="round" stroke-width="12"/>
+  <path d="M281 172v216M251 172v91M311 172v91M519 172v216" fill="none" stroke="#073b2b" stroke-linecap="round" stroke-width="16"/>
+</svg>
