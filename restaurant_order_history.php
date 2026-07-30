@@ -27,9 +27,9 @@
         <header class="restaurant-card-header"><h2 id="history-details-title">Order details</h2><button type="button" data-close-history-details aria-label="Close order details"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
         <div data-history-detail-content></div>
         <ol data-status-timeline aria-label="Order status timeline"></ol>
-        <a class="restaurant-primary-action" data-history-invoice href="restaurant_invoices.php?order=">View invoice</a>
-        <a class="restaurant-primary-action" data-history-customer-order href="customer_history.php?order=">View customer order</a>
-        <a class="restaurant-primary-action" data-history-reorder href="customer_history.php?reorder=">Review reorder details</a>
+        <a class="restaurant-primary-action" data-history-invoice href="restaurant_order_history.php?order=&amp;view=invoice#history-details-title">View invoice preview</a>
+        <a class="restaurant-primary-action" data-history-order href="restaurant_order_history.php?order=&amp;view=order#history-details-title">View order details</a>
+        <a class="restaurant-primary-action" data-history-reorder href="restaurant_order_history.php?order=&amp;view=reorder#history-details-title">Review reorder details</a>
     </aside>
 </main>
 <script defer src="js/restaurant_orders.js"></script>

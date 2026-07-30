@@ -8,7 +8,7 @@
   const historyStatuses = ['completed', 'cancelled', 'refunded'];
   const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
   const HISTORY_PAGE_SIZE = 7;
-  const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '', historyPage: 1 };
+  const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '', historyPage: 1, historyView: 'order', requestedHistoryOrderId: '' };
   const text = value => typeof value === 'string' ? value : '';
   const ordersForRestaurant = () => {
     const restaurant = root.SavoraRestaurantState.load();
@@ -156,6 +156,11 @@
     const salesNode = doc.querySelector('[data-history-sales]');
     if (salesNode) salesNode.textContent = ui().formatMoney(sales);
     const records = filterHistory(all).sort((a, b) => text(b.createdAt).localeCompare(text(a.createdAt)));
+    const requestedIndex = records.findIndex(order => order.id === state.requestedHistoryOrderId);
+    if (requestedIndex >= 0) {
+      state.selectedHistoryId = records[requestedIndex].id;
+      state.historyPage = Math.floor(requestedIndex / HISTORY_PAGE_SIZE) + 1;
+    }
     const totalPages = Math.max(1, Math.ceil(records.length / HISTORY_PAGE_SIZE));
     state.historyPage = Math.min(Math.max(1, state.historyPage), totalPages);
     const pageStart = (state.historyPage - 1) * HISTORY_PAGE_SIZE;
@@ -174,6 +179,16 @@
     if (previous) previous.disabled = state.historyPage === 1;
     if (next) next.disabled = state.historyPage === totalPages;
     renderHistoryDetails(records.find(order => order.id === state.selectedHistoryId));
+    if (state.requestedHistoryOrderId) {
+      announce('[data-history-feedback]', requestedIndex >= 0
+        ? `${historyViewLabel()} opened for ${state.selectedHistoryId}.`
+        : 'The requested local order was not found.');
+      state.requestedHistoryOrderId = '';
+    }
+  }
+
+  function historyViewLabel() {
+    return { invoice: 'Local invoice preview', order: 'Order details', reorder: 'Reorder item details' }[state.historyView] || 'Order details';
   }
 
   function renderHistoryDetails(order) {
@@ -183,7 +198,16 @@
     if (!drawer || !content || !timeline) return;
     if (!order) { drawer.hidden = true; return; }
     drawer.hidden = false;
-    content.replaceChildren(heading('p', `${order.id} · ${formatDate(order.createdAt)}`), ui().el('p', {}, `${fulfillment(order)} · ${ui().formatMoney(order.total)}`));
+    content.replaceChildren(
+      heading('p', historyViewLabel()),
+      ui().el('p', {}, `${order.id} · ${formatDate(order.createdAt)}`),
+      ui().el('p', {}, `${fulfillment(order)} · ${ui().formatMoney(order.total)}`),
+      ui().el('p', { className: 'restaurant-empty' }, state.historyView === 'invoice'
+        ? 'Local order summary for review; no server-generated invoice is available.'
+        : state.historyView === 'reorder'
+          ? 'Review the saved item details before choosing any future reorder action.'
+          : 'Local order details for this selected record.')
+    );
     const itemList = ui().el('ul', { className: 'restaurant-queue-list', 'aria-label': 'Completed order items' });
     (order.items || []).forEach(item => itemList.append(ui().el('li', {}, `${item.quantity || 1} × ${text(item.name) || 'Menu item'}`)));
     content.append(itemList);
@@ -192,11 +216,11 @@
     events.forEach(event => timeline.append(ui().el('li', {}, `${labels[event.status] || event.status} · ${formatDate(event.createdAt)} · ${text(event.actor) || 'system'}`)));
     const id = encodeURIComponent(order.id);
     const invoice = doc.querySelector('[data-history-invoice]');
-    const customerOrder = doc.querySelector('[data-history-customer-order]');
+    const orderDetails = doc.querySelector('[data-history-order]');
     const reorder = doc.querySelector('[data-history-reorder]');
-    if (invoice) invoice.href = `restaurant_invoices.php?order=${id}`;
-    if (customerOrder) customerOrder.href = `customer_history.php?order=${id}`;
-    if (reorder) reorder.href = `customer_history.php?reorder=${id}`;
+    if (invoice) invoice.href = `restaurant_order_history.php?order=${id}&view=invoice#history-details-title`;
+    if (orderDetails) orderDetails.href = `restaurant_order_history.php?order=${id}&view=order#history-details-title`;
+    if (reorder) reorder.href = `restaurant_order_history.php?order=${id}&view=reorder#history-details-title`;
   }
 
   function bindLiveCenter() {
@@ -218,12 +242,16 @@
   function bindHistory() {
     const page = doc.querySelector('[data-order-history]');
     if (!page) return;
+    const historyParams = new URLSearchParams(root.location.search);
+    state.requestedHistoryOrderId = text(historyParams.get('order')).trim();
+    const requestedView = text(historyParams.get('view'));
+    state.historyView = ['invoice', 'order', 'reorder'].includes(requestedView) ? requestedView : 'order';
     page.addEventListener('input', event => { if (event.target.closest('[data-history-filters]')) { state.historyPage = 1; renderHistory(); } });
     page.addEventListener('change', event => { if (event.target.closest('[data-history-filters]')) { state.historyPage = 1; renderHistory(); } });
     page.addEventListener('click', event => {
       const select = event.target.closest('[data-history-select]');
       const pageControl = event.target.closest('[data-history-page]');
-      if (select) { state.selectedHistoryId = select.dataset.historySelect; renderHistory(); announce('[data-history-feedback]', `Showing details for ${state.selectedHistoryId}.`); }
+      if (select) { state.selectedHistoryId = select.dataset.historySelect; state.historyView = 'order'; renderHistory(); announce('[data-history-feedback]', `Showing details for ${state.selectedHistoryId}.`); }
       if (pageControl) { state.historyPage += pageControl.dataset.historyPage === 'next' ? 1 : -1; renderHistory(); }
       if (event.target.closest('[data-close-history-details]')) { const drawer = doc.querySelector('[data-history-details]'); if (drawer) drawer.hidden = true; }
     });

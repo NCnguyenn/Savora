@@ -144,19 +144,26 @@ test('Order History provides safe responsive records, audit detail, and real fol
   assert.match(page, /data-history-page="previous"/);
   assert.match(page, /data-history-page="next"/);
   assert.match(page, /data-history-invoice/);
-  assert.match(page, /data-history-customer-order/);
+  assert.match(page, /data-history-order/);
   assert.match(page, /data-history-reorder/);
   assert.match(page, /aria-live="polite"/);
-  assert.match(page, /href="restaurant_invoices\.php\?order=/);
-  assert.match(page, /href="customer_history\.php\?order=/);
-  assert.match(page, /href="customer_history\.php\?reorder=/);
+  for (const view of ['invoice', 'order', 'reorder']) {
+    assert.match(page, new RegExp(`href="restaurant_order_history\\.php\\?order=&amp;view=${view}#history-details-title"`));
+  }
+  assert.ok(fs.existsSync(path.join(root, 'restaurant_order_history.php')), 'follow-up route must exist');
   assert.match(controller, /historyPage:\s*1/);
   assert.match(controller, /HISTORY_PAGE_SIZE/);
   assert.match(controller, /records\.slice\(/);
   assert.match(controller, /data-history-page/);
-  assert.match(controller, /restaurant_invoices\.php\?order=/);
-  assert.match(controller, /customer_history\.php\?order=/);
-  assert.match(controller, /customer_history\.php\?reorder=/);
+  assert.match(controller, /new URLSearchParams\(root\.location\.search\)/);
+  assert.match(controller, /historyParams\.get\('order'\)/);
+  assert.match(controller, /historyParams\.get\('view'\)/);
+  assert.match(controller, /restaurant_order_history\.php\?order=/);
+  assert.match(controller, /view=invoice/);
+  assert.match(controller, /view=order/);
+  assert.match(controller, /view=reorder/);
+  assert.doesNotMatch(`${page}\n${controller}`, /customer_history\.php\?/i);
+  assert.doesNotMatch(`${page}\n${controller}`, /restaurant_invoices\.php\?/i);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\[data-history-table\]\s*\{\s*display:\s*none;/);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\[data-history-cards\]\s*\{\s*display:\s*grid;/);
   assert.match(css, /@media \(min-width: 769px\)[\s\S]*\[data-history-cards\]\s*\{\s*display:\s*none;/);
