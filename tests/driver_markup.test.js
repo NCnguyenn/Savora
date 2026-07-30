@@ -89,3 +89,24 @@ test('Driver Overview exposes location, summary and exclusive offer controls', (
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
 });
+
+test('Active Delivery exposes route, parties, order details and one milestone action', () => {
+  const page = read('driver_delivery.php');
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
+  assert.equal((page.match(/<main\b/gi) || []).length, 1);
+  assert.match(page, /<h1[^>]*>\s*Active delivery\s*<\/h1>/);
+  for (const hook of [
+    'data-active-delivery',
+    'data-delivery-map',
+    'data-delivery-timeline',
+    'data-pickup-details',
+    'data-customer-details',
+    'data-delivery-items',
+    'data-delivery-payment',
+    'data-delivery-primary-action',
+    'data-report-issue'
+  ]) assert.match(page, new RegExp(hook));
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+  assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+});
