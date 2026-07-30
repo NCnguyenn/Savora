@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const Finance = require('../js/restaurant_finance.js');
 
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
@@ -59,6 +60,15 @@ test('Invoice document tabs expose linked panels and keyboard roving activation'
   assert.match(controller, /next\.focus\(\)/);
   assert.match(history, /refunded:\s*\{\s*label:\s*'Refunded'/);
   assert.doesNotMatch(history, /statusDetails\[status\]\s*\|\|\s*statusDetails\.completed/);
+});
+
+test('an invoice search does not hide the payout statement after changing tabs', () => {
+  const statements = [{ id: 'STMT-LOCAL', kind: 'Payout statement preview', order: 'All local completed orders', issued: '', amount: 90, status: 'available' }];
+  const visible = Finance.filterDocumentsForTab(statements, 'statements', {
+    date: '2026-07-30', search: 'invoice-that-does-not-exist', status: 'available'
+  });
+
+  assert.deepEqual(visible, statements);
 });
 
 test('Restaurant Overview uses the shared authenticated shell and semantic data hooks', () => {

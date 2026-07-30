@@ -1,9 +1,23 @@
-(function attachRestaurantFinance(root) {
+(function attachRestaurantFinance(root, factory) {
+  const api = factory(root);
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.SavoraRestaurantFinance = api;
+}(typeof window === 'undefined' ? null : window, function createRestaurantFinance(root) {
   'use strict';
-  if (!root || !root.document) return;
+  const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
+
+  function filterDocumentsForTab(documents, tab, filters = {}) {
+    const records = Array.isArray(documents) ? documents : [];
+    if (tab !== 'invoices') return records.slice();
+    const query = text(filters.search).trim().toLowerCase();
+    return records.filter(item => !filters.date || !item.issued || text(item.issued).slice(0, 10) >= filters.date)
+      .filter(item => !filters.status || filters.status === 'all' || item.status === filters.status)
+      .filter(item => !query || `${item.id} ${item.order} ${item.kind}`.toLowerCase().includes(query));
+  }
+
+  if (!root || !root.document) return { filterDocumentsForTab };
 
   const doc = root.document;
-  const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const money = value => root.SavoraRestaurantUI.formatMoney(Number(value) || 0);
   const dateLabel = value => {
     const parsed = new Date(value);
@@ -109,10 +123,9 @@
     const date = doc.querySelector('[name="document-date-range"]');
     const search = doc.querySelector('[name="document-search"]');
     const status = doc.querySelector('[name="document-status"]');
-    const query = text(search && search.value).trim().toLowerCase();
-    return documentsFor(documentState.tab).filter(item => !date || !date.value || !item.issued || text(item.issued).slice(0, 10) >= date.value)
-      .filter(item => !status || status.value === 'all' || item.status === status.value)
-      .filter(item => !query || `${item.id} ${item.order} ${item.kind}`.toLowerCase().includes(query));
+    return filterDocumentsForTab(documentsFor(documentState.tab), documentState.tab, {
+      date: date && date.value, search: search && search.value, status: status && status.value
+    });
   }
 
   function documentRow(item) {
@@ -211,4 +224,5 @@
     bindFinance(); bindDocuments();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', initialize, { once: true }); else initialize();
-}(typeof window === 'undefined' ? null : window));
+  return { filterDocumentsForTab };
+}));
