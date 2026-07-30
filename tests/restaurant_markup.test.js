@@ -375,3 +375,16 @@ test('Analytics and review routes provide accessible local insight and bounded r
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
+
+test('Restaurant Live Orders loads Driver state and stops at ready for pickup', () => {
+  const footer = read('components/restaurant_footer.php');
+  const controller = read('js/restaurant_orders.js');
+
+  assert.match(footer, /js\/driver_state\.js/);
+  assert.match(controller, /SavoraDriverState/);
+  assert.match(controller, /deliveryForOrder/);
+  assert.match(controller, /Driver dispatch/);
+  assert.match(controller, /Searching for an available driver/);
+  assert.doesNotMatch(controller, /Hand off order|Complete handoff/);
+  assert.doesNotMatch(controller, /dispatch:\s*['"]on_the_way['"]|complete:\s*['"]completed['"]/);
+});

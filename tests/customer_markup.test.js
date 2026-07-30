@@ -509,3 +509,18 @@ test('Customer discovery uses the menu image fallback and explicit fulfillment c
   assert.match(dashboard, /Pickup available/);
   assert.match(dashboard, /Delivery and pickup unavailable/);
 });
+
+test('Customer tracking loads Driver state and renders dispatch visibility safely', () => {
+  const footer = read('components/customer_footer.php');
+  const dashboard = read('customer_dashboard.php');
+  const history = read('customer_history.php');
+
+  assert.match(footer, /js\/driver_state\.js/);
+  assert.match(dashboard, /SavoraDriverState/);
+  assert.match(dashboard, /deliveryForOrder/);
+  assert.match(history, /SavoraDriverState/);
+  assert.match(history, /deliveryForOrder/);
+  assert.match(history, /Searching for a nearby driver/);
+  assert.match(history, /Driver assigned/);
+  assert.doesNotMatch(`${dashboard}\n${history}`, /innerHTML\s*=/);
+});

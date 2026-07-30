@@ -4,6 +4,7 @@
   if (!root || !root.document) return;
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
+  const driverState = () => root.SavoraDriverState;
   const liveStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'];
   const historyStatuses = ['completed', 'cancelled', 'refunded'];
   const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
@@ -81,11 +82,24 @@
     );
     if (order.status === 'confirmed') {
       actions.append(button('Start preparing', 'prepare', false));
-    } else if (order.status === 'ready_for_pickup') {
-      actions.append(button('Hand off order', 'dispatch', false));
-    } else if (order.status === 'on_the_way') {
-      actions.append(button('Complete handoff', 'complete', false));
     }
+    const delivery = driverState()
+      ? driverState().deliveryForOrder(driverState().load(), order.id)
+      : null;
+    const dispatchCopy = delivery
+      ? `${delivery.driverName || 'Assigned driver'} · ${delivery.status.replace(/_/g, ' ')}`
+      : order.status === 'ready_for_pickup'
+        ? 'Searching for an available driver'
+        : 'Driver assignment begins when this order is ready for pickup';
+    const dispatch = ui().el('section', { className: 'restaurant-dispatch-status' }, [
+      heading('h3', 'Driver dispatch'),
+      ui().el('p', {}, dispatchCopy),
+      delivery ? ui().el('dl', {}, [
+        ui().el('div', {}, [ui().el('dt', {}, 'Driver'), ui().el('dd', {}, delivery.driverName || 'Assigned driver')]),
+        ui().el('div', {}, [ui().el('dt', {}, 'Vehicle'), ui().el('dd', {}, delivery.vehicle || 'Vehicle details unavailable')]),
+        ui().el('div', {}, [ui().el('dt', {}, 'Delivery status'), ui().el('dd', {}, delivery.status.replace(/_/g, ' '))])
+      ]) : null
+    ].filter(Boolean));
     panel.append(
       ui().el('p', {}, [heading('strong', order.id), ' ', labels[order.status] || 'New']),
       ui().el('p', {}, `Customer delivery address: ${text(order.address) || 'Pickup at restaurant'}`),
@@ -93,6 +107,7 @@
       items,
       ui().el('p', {}, `Total: ${ui().formatMoney(order.total)}`),
       ui().el('label', { className: 'restaurant-field', for: 'prep-minutes' }, ['Preparation time', prep]),
+      dispatch,
       actions
     );
   }
@@ -100,7 +115,7 @@
   function updateSelectedOrder(action) {
     const order = ordersForRestaurant().find(item => item.id === state.selectedLiveId);
     if (!order) return;
-    const target = { accept: 'confirmed', reject: 'cancelled', prepare: 'preparing', ready: 'ready_for_pickup', dispatch: 'on_the_way', complete: 'completed' }[action];
+    const target = { accept: 'confirmed', reject: 'cancelled', prepare: 'preparing', ready: 'ready_for_pickup' }[action];
     if (!target) return;
     const prep = doc.querySelector('[name="prep-minutes"]');
     try {
@@ -262,6 +277,10 @@
     if (!root.SavoraRestaurantState || !root.SavoraState || !ui()) return;
     bindLiveCenter();
     bindHistory();
+    root.addEventListener('storage', () => {
+      renderLiveList();
+      renderHistory();
+    });
   }
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', initialize, { once: true });

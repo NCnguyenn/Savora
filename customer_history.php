@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const stateApi = window.SavoraState;
     const catalog = window.SavoraCatalog;
     const ui = window.SavoraUI;
+    const driverStateApi = window.SavoraDriverState;
     if (!stateApi || !catalog || !ui) return;
 
     const historyList = document.getElementById('order-history-list');
@@ -78,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const productForLine = line => catalog.products[String(line.id)] || null;
+    const driverForOrder = order => driverStateApi
+        ? driverStateApi.deliveryForOrder(driverStateApi.load(), order.id)
+        : null;
     const restaurantForOrder = order => {
         const product = order.items.map(productForLine).find(Boolean);
         return product ? product.restaurant : 'Savora order';
@@ -226,11 +230,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const deliveryNote = activeOrder.deliveryNote
             ? ui.el('p', { className: 'active-order-delivery-note' }, [icon('fa-message'), 'Delivery note: ', activeOrder.deliveryNote])
             : null;
+        const delivery = driverForOrder(activeOrder);
+        const dispatchStatus = activeOrder.status === 'ready_for_pickup' && !delivery
+            ? ui.el('section', { className: 'active-order-driver' }, [
+                icon('fa-satellite-dish'),
+                ui.el('div', {}, [
+                    ui.el('strong', {}, 'Searching for a nearby driver'),
+                    ui.el('p', {}, 'The restaurant is ready and Savora is sending the delivery to eligible drivers.')
+                ])
+            ])
+            : delivery
+                ? ui.el('section', { className: 'active-order-driver' }, [
+                    icon('fa-motorcycle'),
+                    ui.el('div', {}, [
+                        ui.el('strong', {}, 'Driver assigned'),
+                        ui.el('p', {}, `${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`),
+                        ui.el('small', {}, delivery.status === 'picked_up' ? 'Your order is on the way.' : `Delivery status: ${delivery.status.replace(/_/g, ' ')}`)
+                    ])
+                ])
+                : null;
         activeDetails.replaceChildren(ui.el('article', { className: 'active-order-summary' }, [
             statusChip(activeOrder.status),
             ui.el('h3', {}, `Order ${activeOrder.id}`),
             ui.el('p', {}, `${itemCount(activeOrder)} ${itemCount(activeOrder) === 1 ? 'item' : 'items'} · ${money(activeOrder.total)}`),
             progress,
+            dispatchStatus,
             address,
             deliveryNote,
             ui.el('a', { className: 'primary-action', href: '#order-history-title' }, [

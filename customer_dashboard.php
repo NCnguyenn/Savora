@@ -289,7 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const customerLocation = [10.7769, 106.7009];
-        const driverLocation = [10.7812, 106.6945];
+        const driverState = window.SavoraDriverState ? window.SavoraDriverState.load() : null;
+        const savedLocation = driverState && driverState.location && driverState.location.method === 'gps'
+            ? [driverState.location.latitude, driverState.location.longitude]
+            : null;
+        const driverLocation = savedLocation && savedLocation.every(Number.isFinite) ? savedLocation : [10.7812, 106.6945];
         const map = L.map('order-map', { zoomControl: false, scrollWheelZoom: false }).setView(customerLocation, 14);
         let tileFailed = false;
         const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -334,11 +338,20 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const status = statusLabels[activeOrder.status] || 'Order update';
         const itemCount = activeOrder.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+        const delivery = window.SavoraDriverState
+            ? window.SavoraDriverState.deliveryForOrder(window.SavoraDriverState.load(), activeOrder.id)
+            : null;
+        const driverCopy = activeOrder.status === 'ready_for_pickup' && !delivery
+            ? 'Searching for a nearby driver'
+            : delivery
+                ? `${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`
+                : '';
         const article = createElement('article', { className: 'active-order' }, [
             createElement('p', { className: 'status-chip', text: status }),
             createElement('h3', { text: `Order ${activeOrder.id}` }),
             createElement('p', { text: `${itemCount} ${itemCount === 1 ? 'item' : 'items'} · ${money(activeOrder.total)}` }),
             createElement('p', { className: 'tracking-estimate', text: 'Estimated arrival: 10–20 minutes' }),
+            driverCopy ? createElement('p', { className: 'tracking-driver', text: driverCopy }) : null,
             activeOrder.deliveryNote ? createElement('p', { className: 'tracking-delivery-note', text: `Delivery note: ${activeOrder.deliveryNote}` }) : null,
             createElement('div', { id: 'order-map', className: 'order-map', role: 'img', 'aria-label': 'Map showing the demo delivery route', 'data-map-status': 'loading' }, [
                 createElement('p', { className: 'map-fallback-message', text: 'Map tiles unavailable — delivery markers remain visible.' })
