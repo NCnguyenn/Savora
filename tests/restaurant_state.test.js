@@ -64,3 +64,25 @@ test('creates own restaurant records for inherited profile names', () => {
     assert.ok(catalog.restaurants[name].productIds.includes(`item-${name}`));
   }
 });
+
+test('permits every Live Order Center transition and rejects terminal or skipped states', () => {
+  const permitted = [
+    ['pending', 'confirmed'], ['pending', 'cancelled'],
+    ['confirmed', 'preparing'], ['confirmed', 'cancelled'],
+    ['preparing', 'ready_for_pickup'], ['preparing', 'cancelled'],
+    ['ready_for_pickup', 'on_the_way'], ['ready_for_pickup', 'completed'],
+    ['on_the_way', 'completed']
+  ];
+
+  permitted.forEach(([from, to]) => {
+    const customer = { orders: [{ id: `${from}-${to}`, status: from, items: [], total: 20 }] };
+    const next = RestaurantState.updateOrderStatus(customer, `${from}-${to}`, to, { prepMinutes: 15 });
+    assert.equal(next.orders[0].status, to, `${from} can move to ${to}`);
+    assert.equal(next.orders[0].statusHistory.at(-1).actor, 'restaurant');
+  });
+
+  for (const [from, to] of [['pending', 'preparing'], ['confirmed', 'ready_for_pickup'], ['preparing', 'completed'], ['completed', 'confirmed'], ['cancelled', 'confirmed']]) {
+    const customer = { orders: [{ id: `${from}-${to}`, status: from, items: [], total: 20 }] };
+    assert.throws(() => RestaurantState.updateOrderStatus(customer, `${from}-${to}`, to), /transition/i);
+  }
+});

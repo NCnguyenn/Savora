@@ -95,3 +95,54 @@ test('Restaurant stylesheet supplies reusable responsive tables and accessible f
   assert.match(css, /\.restaurant-field input:focus-visible/);
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.restaurant-table th,\s*\.restaurant-table td/);
 });
+
+test('Live Order Center uses the shared shell and exposes accessible order-operation hooks', () => {
+  for (const file of ['restaurant_orders.php', 'js/restaurant_orders.js']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+
+  const page = read('restaurant_orders.php');
+  const controller = read('js/restaurant_orders.js');
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+  assert.equal((page.match(/<main\b/gi) || []).length, 1, 'Live Orders has one main landmark');
+  assert.match(page, /<h1[^>]*>\s*Live Order Center\s*<\/h1>/);
+  assert.match(page, /data-live-order-counts/);
+  assert.match(page, /role="tablist"/);
+  assert.match(page, /data-live-order-filter/);
+  assert.match(page, /data-live-order-list/);
+  assert.match(page, /data-order-details/);
+  assert.match(page, /name="prep-minutes"/);
+  for (const action of ['accept', 'reject', 'ready']) assert.match(page, new RegExp(`data-order-action="${action}"`));
+  assert.match(page, /data-order-feedback[^>]*aria-live="polite"/);
+  assert.match(page, /js\/restaurant_orders\.js/);
+  assert.match(controller, /SavoraRestaurantState\.updateOrderStatus/);
+  assert.match(controller, /SavoraState\.persist/);
+  assert.match(controller, /textContent/);
+  assert.doesNotMatch(`${page}\n${controller}`, /innerHTML\s*=/);
+  assert.doesNotMatch(`${page}\n${controller}`, /\son[a-z]+\s*=/i);
+  assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+});
+
+test('Order History provides safe responsive records, audit detail, and real follow-up links', () => {
+  assert.ok(fs.existsSync(path.join(root, 'restaurant_order_history.php')), 'restaurant_order_history.php must exist');
+  const page = read('restaurant_order_history.php');
+
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+  assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+  assert.equal((page.match(/<main\b/gi) || []).length, 1, 'Order History has one main landmark');
+  assert.match(page, /<h1[^>]*>\s*Order History\s*<\/h1>/);
+  assert.match(page, /data-history-summary/);
+  for (const control of ['history-date', 'history-search', 'history-status', 'history-fulfillment']) assert.match(page, new RegExp(`name="${control}"`));
+  assert.match(page, /data-history-table/);
+  assert.match(page, /data-history-cards/);
+  assert.match(page, /data-history-details/);
+  assert.match(page, /data-status-timeline/);
+  assert.match(page, /data-history-pagination/);
+  assert.match(page, /data-history-invoice/);
+  assert.match(page, /data-history-reorder/);
+  assert.match(page, /aria-live="polite"/);
+  assert.match(page, /href="customer_history\.php\?order=/);
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+  assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+});
