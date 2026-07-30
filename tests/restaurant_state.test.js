@@ -207,3 +207,58 @@ test('storefront helpers normalize weekly hours and reject invalid delivery sett
   assert.match(Storefront.validateOperations({ deliveryRadius: '-1', capacity: '0' }).errors.deliveryRadius, /between/i);
   assert.match(Storefront.validateOperations({ deliveryRadius: '5', capacity: '0' }).errors.capacity, /between/i);
 });
+
+test('storefront coordinates require a complete valid pair and manual address mode clears it', () => {
+  const initial = RestaurantState.defaultState();
+  assert.equal(initial.profile.latitude, null);
+  assert.equal(initial.profile.longitude, null);
+
+  const incomplete = RestaurantState.setProfile(initial, { locationMethod: 'current', latitude: 13.7 });
+  assert.equal(incomplete.profile.latitude, null);
+  assert.equal(incomplete.profile.longitude, null);
+  assert.equal(incomplete.profile.locationMethod, 'manual');
+
+  const located = RestaurantState.setProfile(initial, { locationMethod: 'current', latitude: 13.7563, longitude: 100.5018 });
+  assert.equal(located.profile.locationMethod, 'current');
+  const profileEdit = RestaurantState.setProfile(located, { locationMethod: 'current', description: 'Nearby lunch' });
+  assert.equal(profileEdit.profile.latitude, 13.7563);
+  assert.equal(profileEdit.profile.longitude, 100.5018);
+  const manual = RestaurantState.setProfile(located, { locationMethod: 'manual', addressLine1: '12 Safe Street' });
+  assert.equal(manual.profile.locationMethod, 'manual');
+  assert.equal(manual.profile.latitude, null);
+  assert.equal(manual.profile.longitude, null);
+});
+
+test('storefront operations clamp persisted values and preserve timed special hours', () => {
+  const state = RestaurantState.normalize({
+    operations: {
+      deliveryRadius: 999, capacity: -2, prepMinutes: 999,
+      specialHours: [{ date: '2026-12-31', open: '11:00', close: '15:30', note: 'New Year menu' }]
+    }
+  });
+  assert.equal(state.operations.deliveryRadius, 50);
+  assert.equal(state.operations.capacity, 1);
+  assert.equal(state.operations.prepMinutes, 180);
+  assert.deepEqual(state.operations.specialHours, [{ date: '2026-12-31', open: '11:00', close: '15:30', closed: false, note: 'New Year menu' }]);
+  assert.match(Storefront.validateOperations({ deliveryRadius: 5, capacity: 20, prepMinutes: 0 }).errors.prepMinutes, /between/i);
+});
+
+test('Customer catalog receives only safe storefront profile and operations fields', () => {
+  const state = RestaurantState.setOperations(RestaurantState.setProfile(RestaurantState.defaultState(), {
+    name: 'Savora Kitchen', description: '<b>Fresh bowls</b>', address: '123 Market Street', image: 'assets/images/catalog/mega-burger-feast-combo.jpg'
+  }), {
+    acceptingOrders: false, deliveryEnabled: true, pickupEnabled: false, deliveryRadius: 6, prepMinutes: 25,
+    weeklyHours: { monday: { open: '10:00', close: '20:00' } }, specialHours: [{ date: '2026-12-31', open: '11:00', close: '15:00' }]
+  });
+  const catalog = Catalog.applyRestaurantOverrides(Catalog.products, Catalog.restaurants, state);
+  const restaurant = catalog.restaurants['Savora Kitchen'];
+  assert.equal(restaurant.image, 'assets/images/catalog/mega-burger-feast-combo.jpg');
+  assert.equal(restaurant.description, '<b>Fresh bowls</b>');
+  assert.equal(restaurant.address, '123 Market Street');
+  assert.equal(restaurant.acceptingOrders, false);
+  assert.equal(restaurant.deliveryRadius, 6);
+  assert.equal(restaurant.pickupEnabled, false);
+  assert.deepEqual(restaurant.weeklyHours.monday, { open: '10:00', close: '20:00', closed: false });
+  assert.equal(restaurant.specialHours[0].open, '11:00');
+  assert.equal(Object.hasOwn(restaurant, 'onerror'), false);
+});

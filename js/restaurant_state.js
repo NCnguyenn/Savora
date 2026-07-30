@@ -16,11 +16,19 @@
     cancelled: []
   };
   const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'locationMethod'];
-  const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'capacity', 'deliveryEnabled', 'pickupEnabled', 'pickupInstructions'];
+  const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity', 'deliveryEnabled', 'pickupEnabled', 'pickupInstructions'];
   const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const nonNegative = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  const bounded = (value, minimum, maximum, fallback) => Number.isFinite(Number(value)) && Number(value) >= minimum && Number(value) <= maximum ? Number(value) : fallback;
+  const finiteNumber = value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+  const bounded = (value, minimum, maximum, fallback) => {
+    const number = finiteNumber(value);
+    return number === null ? fallback : Math.min(maximum, Math.max(minimum, number));
+  };
+  const coordinatePair = (latitude, longitude) => {
+    const lat = finiteNumber(latitude); const lng = finiteNumber(longitude);
+    return lat !== null && lng !== null && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { latitude: lat, longitude: lng } : null;
+  };
   const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(text(value)) ? text(value) : '';
   const defaultDayHours = () => ({ open: '09:00', close: '17:00', closed: false });
   const normalizeWeeklyHours = value => {
@@ -90,7 +98,7 @@
   const defaultState = () => ({
     version: 1,
     profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '', locationMethod: 'manual', latitude: null, longitude: null },
-    operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 0, minimumOrder: 0, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(), specialHours: [] },
+    operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 5, minimumOrder: 0, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(), specialHours: [] },
     menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, compareAtPrice: 0, taxCategory: '', optionGroups: [], addOns: [], available: true, stockTracking: false, stock: 0, prepTime: 20, dietaryTags: [], status: 'published' }],
     reviews: []
   });
@@ -102,12 +110,16 @@
     PROFILE_KEYS.forEach(key => { state.profile[key] = key === 'image' ? localCatalogImage(profile[key]) : text(profile[key]); });
     state.profile.id = state.profile.id || 'savora-kitchen';
     state.profile.name = state.profile.name || 'Savora Kitchen';
-    state.profile.locationMethod = profile.locationMethod === 'current' ? 'current' : 'manual';
-    state.profile.latitude = bounded(profile.latitude, -90, 90, null);
-    state.profile.longitude = bounded(profile.longitude, -180, 180, null);
+    const coordinates = coordinatePair(profile.latitude, profile.longitude);
+    state.profile.locationMethod = profile.locationMethod === 'current' && coordinates ? 'current' : 'manual';
+    state.profile.latitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.latitude : null;
+    state.profile.longitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.longitude : null;
     const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
     state.operations.acceptingOrders = operations.acceptingOrders !== false;
-    ['prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity'].forEach(key => { state.operations[key] = Object.hasOwn(operations, key) ? nonNegative(operations[key]) : state.operations[key]; });
+    state.operations.prepMinutes = bounded(operations.prepMinutes, 1, 180, state.operations.prepMinutes);
+    state.operations.deliveryRadius = bounded(operations.deliveryRadius, 0.1, 50, state.operations.deliveryRadius);
+    state.operations.minimumOrder = Object.hasOwn(operations, 'minimumOrder') ? nonNegative(operations.minimumOrder) : state.operations.minimumOrder;
+    state.operations.capacity = bounded(operations.capacity, 1, 500, state.operations.capacity);
     state.operations.deliveryEnabled = operations.deliveryEnabled !== false;
     state.operations.pickupEnabled = operations.pickupEnabled !== false;
     state.operations.pickupInstructions = text(operations.pickupInstructions);
@@ -176,9 +188,16 @@
     });
     next.profile.id = next.profile.id || 'savora-kitchen';
     next.profile.name = next.profile.name || 'Savora Kitchen';
-    if (Object.hasOwn(source, 'locationMethod')) next.profile.locationMethod = source.locationMethod === 'current' ? 'current' : 'manual';
-    if (Object.hasOwn(source, 'latitude')) next.profile.latitude = bounded(source.latitude, -90, 90, null);
-    if (Object.hasOwn(source, 'longitude')) next.profile.longitude = bounded(source.longitude, -180, 180, null);
+    const locationChanged = Object.hasOwn(source, 'locationMethod') || Object.hasOwn(source, 'latitude') || Object.hasOwn(source, 'longitude');
+    if (locationChanged) {
+      const hasLatitude = Object.hasOwn(source, 'latitude'); const hasLongitude = Object.hasOwn(source, 'longitude');
+      const coordinates = source.locationMethod === 'current' && !hasLatitude && !hasLongitude && next.profile.locationMethod === 'current'
+        ? coordinatePair(next.profile.latitude, next.profile.longitude)
+        : source.locationMethod === 'current' ? coordinatePair(source.latitude, source.longitude) : null;
+      next.profile.locationMethod = coordinates ? 'current' : 'manual';
+      next.profile.latitude = coordinates ? coordinates.latitude : null;
+      next.profile.longitude = coordinates ? coordinates.longitude : null;
+    }
     next.menuItems = next.menuItems.map(item => normalizeMenuItem(item, next.profile));
     return next;
   }
@@ -186,9 +205,10 @@
     const next = normalize(state);
     const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
     if (Object.hasOwn(source, 'acceptingOrders')) next.operations.acceptingOrders = source.acceptingOrders !== false;
-    ['prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity'].forEach(key => {
-      if (Object.hasOwn(source, key)) next.operations[key] = nonNegative(source[key]);
-    });
+    if (Object.hasOwn(source, 'prepMinutes')) next.operations.prepMinutes = bounded(source.prepMinutes, 1, 180, next.operations.prepMinutes);
+    if (Object.hasOwn(source, 'deliveryRadius')) next.operations.deliveryRadius = bounded(source.deliveryRadius, 0.1, 50, next.operations.deliveryRadius);
+    if (Object.hasOwn(source, 'minimumOrder')) next.operations.minimumOrder = nonNegative(source.minimumOrder);
+    if (Object.hasOwn(source, 'capacity')) next.operations.capacity = bounded(source.capacity, 1, 500, next.operations.capacity);
     ['deliveryEnabled', 'pickupEnabled'].forEach(key => {
       if (Object.hasOwn(source, key)) next.operations[key] = source[key] !== false;
     });

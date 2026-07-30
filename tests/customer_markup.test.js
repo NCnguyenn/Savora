@@ -484,3 +484,18 @@ test('wallet uses event-driven safe rendering and an accessible top-up form', ()
   assert.doesNotMatch(wallet, /\balert\s*\(/);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.wallet-layout\s*\{\s*grid-template-columns:\s*1fr;/);
 });
+
+test('Customer discovery renders bridged restaurant storefront and accepting status safely', () => {
+  const dashboard = read('customer_dashboard.php');
+  const catalog = read('js/customer_catalog.js');
+
+  assert.match(catalog, /description:\s*text\(source\.description\)/);
+  assert.match(catalog, /acceptingOrders/);
+  assert.match(catalog, /weeklyHours/);
+  assert.match(catalog, /specialHours/);
+  assert.match(dashboard, /restaurant\.acceptingOrders === false/);
+  assert.match(dashboard, /restaurant\.description/);
+  assert.match(dashboard, /restaurant\.address/);
+  assert.match(dashboard, /text:\s*restaurant\.status/);
+  assert.doesNotMatch(dashboard, /innerHTML\s*=/);
+});

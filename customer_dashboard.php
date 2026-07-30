@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             ...restaurant,
             categories: [...new Set(menu.flatMap(item => item.categories))],
-            image: SavoraCatalog.imageFor(menu[0])
+            image: SavoraCatalog.imageFor({ image: restaurant.image }) || SavoraCatalog.imageFor(menu[0])
         };
     });
     const searchInput = document.getElementById('search-input');
@@ -182,12 +182,20 @@ document.addEventListener('DOMContentLoaded', () => {
             className: 'food-card-meta',
             text: `★ ${restaurant.rating} · ${restaurant.cuisine} · ${restaurant.prepTime}`
         });
+        const status = createElement('p', {
+            className: 'food-card-meta',
+            text: restaurant.status || (restaurant.acceptingOrders === false ? 'Orders paused' : 'Open for orders')
+        });
+        const storefront = createElement('p', {
+            className: 'food-card-meta',
+            text: restaurant.description || restaurant.address || (restaurant.deliveryEnabled === false ? 'Pickup available' : `${restaurant.deliveryRadius || 0} mi delivery`)
+        });
         const action = createElement('span', { className: 'restaurant-card-action', text: 'View menu →' });
         const card = createElement('button', {
             className: 'food-card discovery-card restaurant-discovery-card',
             type: 'button',
             'aria-label': `Open ${restaurant.name} menu`
-        }, [image, title, meta, action]);
+        }, [image, title, meta, status, storefront, action]);
         card.addEventListener('click', () => SavoraUI.openMenuModal(restaurant.name));
         return createElement('article', { className: 'discovery-card-shell' }, [
             card,

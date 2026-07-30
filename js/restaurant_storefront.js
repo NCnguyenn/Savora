@@ -36,9 +36,11 @@
     const source = value && typeof value === 'object' ? value : {};
     const radius = Number(source.deliveryRadius);
     const capacity = Number(source.capacity);
+    const prepMinutes = Number(source.prepMinutes);
     const errors = {};
     if (!Number.isFinite(radius) || radius <= 0 || radius > 50) errors.deliveryRadius = 'Delivery radius must be between 0.1 and 50 miles.';
     if (!Number.isFinite(capacity) || capacity < 1 || capacity > 500) errors.capacity = 'Kitchen capacity must be between 1 and 500 orders.';
+    if (!Number.isFinite(prepMinutes) || prepMinutes < 1 || prepMinutes > 180) errors.prepMinutes = 'Prep time must be between 1 and 180 minutes.';
     return { valid: Object.keys(errors).length === 0, errors };
   }
 
@@ -98,7 +100,7 @@
     if (host._savoraMap) { host._savoraMap.remove(); host._savoraMap = null; }
     host.replaceChildren();
     host.style.minHeight = '160px';
-    const hasCoordinates = Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude));
+    const hasCoordinates = profile.locationMethod === 'current' && profile.latitude !== null && profile.longitude !== null && Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude));
     if (root.L && hasCoordinates) {
       if (!root.document.querySelector('link[data-local-leaflet]')) root.document.head.append(create('link', { rel: 'stylesheet', href: 'assets/vendor/leaflet/leaflet.css', 'data-local-leaflet': 'true' }));
       const map = root.L.map(host, { zoomControl: true, attributionControl: false }).setView([profile.latitude, profile.longitude], 13);
@@ -129,15 +131,15 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       const patch = profilePatch(form); const deliveryRadius = Number(fields(form)('delivery-radius').value); const minimumOrder = Number(fields(form)('minimum-order').value); const prepMinutes = Number(fields(form)('profile-prep-minutes').value);
-      const validation = validateOperations({ deliveryRadius, capacity: state.operations.capacity || 1 });
+      const validation = validateOperations({ deliveryRadius, capacity: state.operations.capacity || 1, prepMinutes });
       if (!patch.name) { setMessage(feedback, 'Restaurant name is required.'); fields(form)('profile-name').setAttribute('aria-invalid', 'true'); return; }
-      if (!validation.valid) { setMessage(feedback, validation.errors.deliveryRadius); return; }
+      if (!validation.valid) { setMessage(feedback, validation.errors.deliveryRadius || validation.errors.prepMinutes); return; }
       state = api.setProfile(state, patch);
       state = api.setOperations(state, { deliveryRadius, minimumOrder, prepMinutes });
       state = api.persist(state); if (ui) ui.refreshShell(); hydrate(); setMessage(feedback, 'Store profile saved locally.'); if (ui) ui.showToast('Store profile saved locally.');
     });
     const manual = root.document.querySelector('[data-manual-address]');
-    if (manual) manual.addEventListener('click', () => { form.dataset.locationMethod = 'manual'; setMessage(addressFeedback, 'Enter the address manually, then save your profile.'); fields(form)('address-line1').focus(); });
+    if (manual) manual.addEventListener('click', () => { form.dataset.locationMethod = 'manual'; state = api.persist(api.setProfile(state, { locationMethod: 'manual' })); renderMap(state.profile); setMessage(addressFeedback, 'Enter the address manually, then save your profile.'); fields(form)('address-line1').focus(); });
     const locate = root.document.querySelector('[data-use-current-location]');
     if (locate) locate.addEventListener('click', () => {
       if (!root.navigator || !navigator.geolocation) { setMessage(addressFeedback, 'Current location is unavailable in this browser. You can enter the address manually.'); return; }
@@ -154,17 +156,21 @@
     container.replaceChildren();
     specialHours.forEach((entry, index) => {
       const row = create('div', { className: 'restaurant-form-three-column', 'data-special-row': String(index) });
-      const date = create('input', { type: 'date', value: entry.date, 'aria-label': 'Special hours date' });
-      const closed = create('input', { type: 'checkbox', 'aria-label': 'Closed on this date' }); closed.checked = entry.closed === true;
-      const note = create('input', { type: 'text', value: entry.note || '', maxlength: '100', 'aria-label': 'Special hours note' });
-      row.append(create('label', { className: 'restaurant-field' }, ['Date', date]), create('label', { className: 'restaurant-check-field' }, [closed, 'Closed']), create('label', { className: 'restaurant-field' }, ['Note', note]));
+      const date = create('input', { type: 'date', value: entry.date, 'data-special-date': '', 'aria-label': 'Special hours date' });
+      const open = create('input', { type: 'time', value: entry.open || '09:00', 'data-special-open': '', 'aria-label': 'Special hours opening time' });
+      const close = create('input', { type: 'time', value: entry.close || '17:00', 'data-special-close': '', 'aria-label': 'Special hours closing time' });
+      const closed = create('input', { type: 'checkbox', 'data-special-closed': '', 'aria-label': 'Closed on this date' }); closed.checked = entry.closed === true;
+      const note = create('input', { type: 'text', value: entry.note || '', maxlength: '100', 'data-special-note': '', 'aria-label': 'Special hours note' });
+      const setTimedInputs = () => { open.disabled = closed.checked; close.disabled = closed.checked; };
+      closed.addEventListener('change', setTimedInputs); setTimedInputs();
+      row.append(create('label', { className: 'restaurant-field' }, ['Date', date]), create('label', { className: 'restaurant-field' }, ['Open', open]), create('label', { className: 'restaurant-field' }, ['Close', close]), create('label', { className: 'restaurant-check-field' }, [closed, 'Closed']), create('label', { className: 'restaurant-field' }, ['Note', note]));
       container.append(row);
     });
   }
   function readSpecialHours(container) {
     return [...container.querySelectorAll('[data-special-row]')].map(row => {
-      const [date, closed, note] = row.querySelectorAll('input');
-      return { date: text(date.value), closed: closed.checked, note: text(note.value) };
+      const date = row.querySelector('[data-special-date]'); const open = row.querySelector('[data-special-open]'); const close = row.querySelector('[data-special-close]'); const closed = row.querySelector('[data-special-closed]'); const note = row.querySelector('[data-special-note]');
+      return { date: text(date.value), open: text(open.value), close: text(close.value), closed: closed.checked, note: text(note.value) };
     }).filter(item => /^\d{4}-\d{2}-\d{2}$/.test(item.date));
   }
   function weeklyRows(container, weeklyHours) {
@@ -196,11 +202,11 @@
     const hydrate = () => { const operations = state.operations || {}; setInput(form, 'accepting-orders', '', operations.acceptingOrders !== false); setInput(form, 'prep-minutes', operations.prepMinutes); setInput(form, 'capacity', operations.capacity); setInput(form, 'delivery-enabled', '', operations.deliveryEnabled !== false); setInput(form, 'pickup-enabled', '', operations.pickupEnabled !== false); setInput(form, 'pickup-instructions', operations.pickupInstructions); weeklyRows(weekly, normalizeWeeklyHours(operations.weeklyHours)); specialRows(specials, operations.specialHours || []); updateWarning(); renderOperationsPreview(preview, state); };
     field('capacity').addEventListener('input', updateWarning);
     root.document.querySelector('[data-copy-hours]').addEventListener('click', () => { const monday = weekly.querySelector('[data-weekday="monday"]'); const [open, close, closed] = monday.querySelectorAll('input'); weeklyRows(weekly, Object.fromEntries(DAYS.map(day => [day, { open: open.value, close: close.value, closed: closed.checked }]))); });
-    root.document.querySelector('[data-add-special-hours]').addEventListener('click', () => { specialRows(specials, [...readSpecialHours(specials), { date: '', closed: false, note: '' }]); });
+    root.document.querySelector('[data-add-special-hours]').addEventListener('click', () => { specialRows(specials, [...readSpecialHours(specials), { date: '', open: '09:00', close: '17:00', closed: false, note: '' }]); });
     form.addEventListener('submit', event => {
-      event.preventDefault(); const deliveryRadius = state.operations.deliveryRadius || 0; const capacity = Number(field('capacity').value); const validation = validateOperations({ deliveryRadius: deliveryRadius || 0.1, capacity });
-      if (!validation.valid) { setMessage(feedback, validation.errors.capacity || validation.errors.deliveryRadius); return; }
-      state = api.setOperations(state, { acceptingOrders: field('accepting-orders').checked, prepMinutes: Number(field('prep-minutes').value), capacity, deliveryEnabled: field('delivery-enabled').checked, pickupEnabled: field('pickup-enabled').checked, pickupInstructions: text(field('pickup-instructions').value), weeklyHours: readWeeklyHours(weekly), specialHours: readSpecialHours(specials) });
+      event.preventDefault(); const deliveryRadius = state.operations.deliveryRadius || 0; const capacity = Number(field('capacity').value); const prepMinutes = Number(field('prep-minutes').value); const validation = validateOperations({ deliveryRadius: deliveryRadius || 0.1, capacity, prepMinutes });
+      if (!validation.valid) { setMessage(feedback, validation.errors.capacity || validation.errors.prepMinutes || validation.errors.deliveryRadius); return; }
+      state = api.setOperations(state, { acceptingOrders: field('accepting-orders').checked, prepMinutes, capacity, deliveryEnabled: field('delivery-enabled').checked, pickupEnabled: field('pickup-enabled').checked, pickupInstructions: text(field('pickup-instructions').value), weeklyHours: readWeeklyHours(weekly), specialHours: readSpecialHours(specials) });
       state = api.persist(state); if (ui) ui.refreshShell(); renderOperationsPreview(preview, state); updateWarning(); setMessage(feedback, 'Operations and opening hours saved locally.'); if (ui) ui.showToast('Operations saved locally.');
     });
     hydrate();

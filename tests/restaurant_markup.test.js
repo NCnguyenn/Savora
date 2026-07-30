@@ -217,6 +217,14 @@ test('Menu Management and Menu Item Editor use the shared shell with accessible 
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
 
+test('Operations special-hour controls expose labelled timed inputs when open', () => {
+  const controller = read('js/restaurant_storefront.js');
+  assert.match(controller, /type: 'time'[\s\S]{0,150}data-special-open/);
+  assert.match(controller, /type: 'time'[\s\S]{0,150}data-special-close/);
+  assert.match(controller, /Special hours opening time/);
+  assert.match(controller, /Special hours closing time/);
+});
+
 test('Store Profile and Operations routes provide accessible safe storefront controls', () => {
   for (const file of ['restaurant_profile.php', 'restaurant_operations.php', 'js/restaurant_storefront.js']) {
     assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
@@ -249,6 +257,9 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(controller, /api\.setProfile/);
   assert.match(controller, /api\.setOperations/);
   assert.match(controller, /api\.persist/);
+  assert.match(controller, /data-special-open/);
+  assert.match(controller, /data-special-close/);
+  assert.match(controller, /prepMinutes/);
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
   assert.doesNotMatch(controller, /permission granted/i, 'geolocation must not claim permission before a success callback');

@@ -72,17 +72,43 @@
   }).filter(Boolean).slice(0, 8) : [];
   const optionId = (itemId, kind, index) => `${itemId}-${kind}-${index + 1}`;
   const restaurantIdFor = name => text(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(text(value)) ? text(value) : '';
+  const bounded = (value, minimum, maximum, fallback) => {
+    const parsed = value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+    return parsed === null ? fallback : Math.min(maximum, Math.max(minimum, parsed));
+  };
+  const weeklyHours = value => {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return Object.fromEntries(WEEK_DAYS.map(day => {
+      const entry = source[day] && typeof source[day] === 'object' ? source[day] : {};
+      return entry.closed === true ? [day, { open: '', close: '', closed: true }] : [day, { open: clock(entry.open) || '09:00', close: clock(entry.close) || '17:00', closed: false }];
+    }));
+  };
+  const specialHours = value => Array.isArray(value) ? value.map(entry => {
+    const source = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(text(source.date)) ? text(source.date) : '';
+    if (!date) return null;
+    return source.closed === true ? { date, closed: true, note: text(source.note) } : { date, open: clock(source.open) || '09:00', close: clock(source.close) || '17:00', closed: false, note: text(source.note) };
+  }).filter(Boolean).slice(0, 24) : [];
   const storedRestaurantState = () => {
     if (!root) return {};
     if (root.SavoraRestaurantState && typeof root.SavoraRestaurantState.load === 'function') return root.SavoraRestaurantState.load();
     try { return JSON.parse(root.localStorage.getItem(restaurantStateKey) || '{}'); } catch (_) { return {}; }
   };
   const copy = value => JSON.parse(JSON.stringify(value));
-  const ownerFor = profile => ({
-    id: text(profile && profile.id).trim() || 'savora-kitchen',
-    name: text(profile && profile.name).trim() || 'Savora Kitchen',
-    cuisine: text(profile && profile.cuisine).trim()
-  });
+  const ownerFor = (profile, operations) => {
+    const source = profile && typeof profile === 'object' ? profile : {};
+    const settings = operations && typeof operations === 'object' ? operations : {};
+    const acceptingOrders = settings.acceptingOrders !== false;
+    return {
+      id: text(source.id).trim() || 'savora-kitchen', name: text(source.name).trim() || 'Savora Kitchen', cuisine: text(source.cuisine).trim(),
+      image: localCatalogImage(source.image) || placeholderImage, description: text(source.description), address: text(source.address),
+      deliveryEnabled: settings.deliveryEnabled !== false, pickupEnabled: settings.pickupEnabled !== false,
+      deliveryRadius: bounded(settings.deliveryRadius, 0.1, 50, 5), prepMinutes: bounded(settings.prepMinutes, 1, 180, 20),
+      acceptingOrders, status: acceptingOrders ? 'Open for orders' : 'Orders paused', weeklyHours: weeklyHours(settings.weeklyHours), specialHours: specialHours(settings.specialHours)
+    };
+  };
   const allowedOverride = (item, owner) => {
     const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
     return {
@@ -103,7 +129,14 @@
       product.image = localCatalogImage(product.image) || placeholderImage;
     });
     const source = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
-    const owner = ownerFor(source.profile);
+    const owner = ownerFor(source.profile, source.operations);
+    if (!Object.hasOwn(restaurants, owner.name)) Object.defineProperty(restaurants, owner.name, {
+      value: { name: owner.name, cuisine: owner.cuisine || 'Local kitchen', rating: 0, productIds: [] },
+      enumerable: true, configurable: true, writable: true
+    });
+    const ownerRestaurant = restaurants[owner.name];
+    Object.assign(ownerRestaurant, owner, { productIds: Array.isArray(ownerRestaurant.productIds) ? ownerRestaurant.productIds : [] });
+    ownerRestaurant.prepTime = `${owner.prepMinutes} min`;
     const overrides = Array.isArray(source.menuItems) ? source.menuItems.map(item => allowedOverride(item, owner)).filter(item => item.id) : [];
     overrides.filter(override => override.status !== 'draft').forEach(override => {
       const existing = products[override.id];
@@ -134,13 +167,9 @@
       Object.values(restaurants).forEach(restaurant => {
         restaurant.productIds = (Array.isArray(restaurant.productIds) ? restaurant.productIds : []).filter(id => String(id) !== override.id);
       });
-      if (!Object.hasOwn(restaurants, owner.name)) Object.defineProperty(restaurants, owner.name, {
-        value: { name: owner.name, cuisine: owner.cuisine || 'Local kitchen', rating: 0, prepTime: '', productIds: [] },
-        enumerable: true, configurable: true, writable: true
-      });
       const ids = restaurants[owner.name].productIds;
       if (!ids.includes(override.id)) ids.push(override.id);
-      if (!restaurants[owner.name].prepTime) restaurants[owner.name].prepTime = product.prepTime;
+      restaurants[owner.name].prepTime = `${owner.prepMinutes} min`;
     });
     return { products, restaurants };
   }
