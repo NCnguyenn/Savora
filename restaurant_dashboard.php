@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function () {
     queue.replaceChildren();
     const active = orders.filter(order => !['completed', 'cancelled'].includes(order.status)).slice(0, 3);
     if (!active.length) queue.append(SavoraRestaurantUI.el('li', { className: 'restaurant-empty' }, 'No live orders yet.'));
-    active.forEach(order => queue.append(SavoraRestaurantUI.el('li', {}, [ui.statusChip(order.status), SavoraRestaurantUI.el('div', {}, [SavoraRestaurantUI.el('strong', {}, order.id), SavoraRestaurantUI.el('div', { className: 'restaurant-queue-meta' }, `${(order.items || []).length} item${(order.items || []).length === 1 ? '' : 's'} · ${order.address ? 'Delivery' : 'Pickup'}`)]), SavoraRestaurantUI.el('a', { href: 'restaurant_orders.php', 'aria-label': `Open ${order.id}` }, '›')]));
+    active.forEach(order => queue.append(SavoraRestaurantUI.el('li', {}, [ui.statusChip(order.status), SavoraRestaurantUI.el('div', {}, [SavoraRestaurantUI.el('strong', {}, order.id), SavoraRestaurantUI.el('div', { className: 'restaurant-queue-meta' }, `${(order.items || []).length} item${(order.items || []).length === 1 ? '' : 's'} · ${order.address ? 'Delivery' : 'Pickup'}`)]), SavoraRestaurantUI.el('a', { href: 'restaurant_orders.php', 'aria-label': `Open ${order.id}` }, '›')])));
 
     const counts = new Map();
     orders.forEach(order => (order.items || []).forEach(item => { const name = String(item.name || 'Menu item'); counts.set(name, (counts.get(name) || 0) + Number(item.quantity || 1)); }));

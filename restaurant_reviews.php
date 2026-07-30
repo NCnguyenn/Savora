@@ -1,6 +1,6 @@
 <?php require_once __DIR__ . '/components/restaurant_header.php'; ?>
 <main id="restaurant-main" class="restaurant-main" data-reviews-page>
-    <header class="restaurant-page-heading"><div><p class="restaurant-eyebrow">Customer experience</p><h1>Ratings &amp; Feedback</h1><p>Review verified local feedback and respond with care.</p></div><button type="button" data-export-reviews>Export feedback</button></header>
+    <header class="restaurant-page-heading"><div><p class="restaurant-eyebrow">Customer experience</p><h1>Ratings &amp; Feedback</h1><p>Review verified local feedback and respond with care.</p></div><button type="button" class="restaurant-secondary-action" data-export-reviews>Export feedback</button></header>
     <p class="restaurant-form-summary" data-review-feedback aria-live="polite" aria-atomic="true"></p>
     <section class="restaurant-kpi-grid" data-review-summary aria-label="Rating summary">
         <article class="restaurant-card restaurant-kpi"><i class="fa-solid fa-star restaurant-kpi-icon" aria-hidden="true"></i><div><p>Overall rating</p><h2 data-review-average>—</h2><small data-review-count>No verified reviews</small></div></article>

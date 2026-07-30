@@ -187,6 +187,10 @@
   function addCatalogProduct(product, quantity = 1) {
     const api = stateApi();
     if (!api || !product) return;
+    if (product.available === false) {
+      announce(`${product.name || 'This item'} is currently unavailable.`);
+      return;
+    }
     const state = api.addCartLine(load(), product, quantity, []);
     persist(state);
     refreshChrome();
@@ -240,7 +244,14 @@
     const fragment = documentRef.createDocumentFragment();
     if (!entries.length) fragment.append(el('p', { className: 'empty-state' }, 'No menu items are available yet.'));
     entries.forEach(product => {
-      const add = el('button', { className: 'primary-action', type: 'button', onclick: () => addCatalogProduct(product) }, 'Add to cart');
+      const unavailable = product.available === false;
+      const add = el('button', {
+        className: 'primary-action',
+        type: 'button',
+        disabled: unavailable,
+        'aria-label': unavailable ? `${product.name} is currently unavailable` : `Add ${product.name} to cart`,
+        onclick: () => addCatalogProduct(product)
+      }, unavailable ? 'Unavailable' : 'Add to cart');
       const image = el('img', { className: 'food-card-img', src: productImage(product), alt: '' });
       fragment.append(el('article', { className: 'food-card' }, [image, el('h3', { className: 'food-card-title' }, product.name), el('p', { className: 'food-card-meta' }, product.description), el('div', { className: 'card-action-row' }, [el('strong', {}, money(product.price)), add])]));
     });
