@@ -101,13 +101,11 @@ test('creates own restaurant records for inherited profile names', () => {
   }
 });
 
-test('permits every Live Order Center transition and rejects terminal or skipped states', () => {
+test('permits Restaurant-owned preparation transitions and rejects Driver-owned delivery transitions', () => {
   const permitted = [
     ['pending', 'confirmed'], ['pending', 'cancelled'],
     ['confirmed', 'preparing'], ['confirmed', 'cancelled'],
-    ['preparing', 'ready_for_pickup'], ['preparing', 'cancelled'],
-    ['ready_for_pickup', 'on_the_way'], ['ready_for_pickup', 'completed'],
-    ['on_the_way', 'completed']
+    ['preparing', 'ready_for_pickup'], ['preparing', 'cancelled']
   ];
 
   permitted.forEach(([from, to]) => {
@@ -117,7 +115,16 @@ test('permits every Live Order Center transition and rejects terminal or skipped
     assert.equal(next.orders[0].statusHistory.at(-1).actor, 'restaurant');
   });
 
-  for (const [from, to] of [['pending', 'preparing'], ['confirmed', 'ready_for_pickup'], ['preparing', 'completed'], ['completed', 'confirmed'], ['cancelled', 'confirmed']]) {
+  for (const [from, to] of [
+    ['pending', 'preparing'],
+    ['confirmed', 'ready_for_pickup'],
+    ['preparing', 'completed'],
+    ['ready_for_pickup', 'on_the_way'],
+    ['ready_for_pickup', 'completed'],
+    ['on_the_way', 'completed'],
+    ['completed', 'confirmed'],
+    ['cancelled', 'confirmed']
+  ]) {
     const customer = { orders: [{ id: `${from}-${to}`, status: from, items: [], total: 20 }] };
     assert.throws(() => RestaurantState.updateOrderStatus(customer, `${from}-${to}`, to), /transition/i);
   }

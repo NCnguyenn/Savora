@@ -10,8 +10,8 @@
     pending: ['confirmed', 'cancelled'],
     confirmed: ['preparing', 'cancelled'],
     preparing: ['ready_for_pickup', 'cancelled'],
-    ready_for_pickup: ['on_the_way', 'completed'],
-    on_the_way: ['completed'],
+    ready_for_pickup: [],
+    on_the_way: [],
     completed: [],
     cancelled: []
   };
