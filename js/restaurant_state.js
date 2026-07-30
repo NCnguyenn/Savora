@@ -233,8 +233,23 @@
   function deriveFinance(customerState) {
     const orders = ordersForMetrics(customerState);
     const completed = orders.filter(order => order && order.status === 'completed');
+    const refunded = orders.filter(order => order && order.status === 'refunded');
     const grossSales = completed.reduce((sum, order) => sum + nonNegative(order.total), 0);
-    return { grossSales, completedOrders: completed.length, averageOrderValue: completed.length ? grossSales / completed.length : 0, orders: completed };
+    const platformFees = completed.reduce((sum, order) => sum + (nonNegative(order.total) * 0.1), 0);
+    const refundTotal = refunded.reduce((sum, order) => sum - nonNegative(order.total), 0);
+    const transactions = [...completed.map(order => ({
+      orderId: text(order.id), type: 'sale', amount: nonNegative(order.total), fee: nonNegative(order.total) * 0.1,
+      net: nonNegative(order.total) * 0.9, createdAt: text(order.createdAt), status: 'paid'
+    })), ...refunded.map(order => ({
+      orderId: text(order.id), type: 'refund', amount: -nonNegative(order.total), fee: 0,
+      net: -nonNegative(order.total), createdAt: text(order.createdAt), status: 'refunded'
+    }))];
+    const netRevenue = grossSales - platformFees + refundTotal;
+    return {
+      grossSales, platformFees, refundTotal, netRevenue, completedOrders: completed.length,
+      refundedOrders: refunded.length, averageOrderValue: completed.length ? grossSales / completed.length : 0,
+      orders: [...completed, ...refunded], transactions
+    };
   }
   function deriveAnalytics(customerState) {
     const orders = ordersForMetrics(customerState);

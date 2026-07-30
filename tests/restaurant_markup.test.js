@@ -6,6 +6,40 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
+test('Revenue and finance document routes use safe, labelled local-demo finance controls', () => {
+  for (const file of ['restaurant_finance.php', 'restaurant_invoices.php', 'js/restaurant_finance.js']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+  const finance = read('restaurant_finance.php');
+  const invoices = read('restaurant_invoices.php');
+  const controller = read('js/restaurant_finance.js');
+
+  for (const page of [finance, invoices]) {
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+    assert.equal((page.match(/<main\b/gi) || []).length, 1, 'each finance route has one main landmark');
+    assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+    assert.doesNotMatch(page, /real payment|bank transfer complete|generated PDF/i);
+  }
+
+  assert.match(finance, /<h1[^>]*>\s*Revenue &amp; Payouts\s*<\/h1>/);
+  for (const hook of ['data-finance-kpis', 'data-finance-chart', 'data-transaction-filters', 'data-finance-transactions', 'data-payout-preview', 'data-payout-account', 'data-finance-feedback']) assert.match(finance, new RegExp(hook));
+  assert.match(finance, /<caption[^>]*>Local demo transactions<\/caption>/);
+  assert.match(finance, /<label[^>]*for="finance-date-range"/);
+  assert.match(finance, /<label[^>]*for="finance-transaction-search"/);
+
+  assert.match(invoices, /<h1[^>]*>\s*Invoices &amp; Statements\s*<\/h1>/);
+  for (const hook of ['data-document-tabs', 'data-document-filters', 'data-document-table', 'data-document-preview', 'data-document-feedback']) assert.match(invoices, new RegExp(hook));
+  assert.match(invoices, /<caption[^>]*>Local demo financial documents<\/caption>/);
+  assert.match(invoices, /<label[^>]*for="document-date-range"/);
+  assert.match(invoices, /<label[^>]*for="document-search"/);
+  assert.match(invoices, /<label[^>]*for="document-status"/);
+  assert.match(controller, /window\.print\(\)/);
+  assert.match(controller, /not a server-generated accounting document/i);
+  assert.doesNotMatch(controller, /innerHTML\s*=/);
+});
+
 test('Restaurant Overview uses the shared authenticated shell and semantic data hooks', () => {
   for (const file of [
     'components/restaurant_header.php',

@@ -5,6 +5,25 @@ const Catalog = require('../js/customer_catalog.js');
 const Menu = require('../js/restaurant_menu.js');
 const Storefront = require('../js/restaurant_storefront.js');
 
+test('derives finance only from completed sales and one negative refund per refunded order', () => {
+  const finance = RestaurantState.deriveFinance({ orders: [
+    { id: 'complete-1', status: 'completed', total: 100, createdAt: '2026-07-30T08:00:00.000Z' },
+    { id: 'complete-2', status: 'completed', total: 40, createdAt: '2026-07-30T09:00:00.000Z' },
+    { id: 'refund-1', status: 'refunded', total: 25, createdAt: '2026-07-30T10:00:00.000Z' },
+    { id: 'pending-1', status: 'pending', total: 999 },
+    { id: 'cancelled-1', status: 'cancelled', total: 999 }
+  ] });
+
+  assert.equal(finance.grossSales, 140);
+  assert.equal(finance.refundTotal, -25);
+  assert.equal(finance.netRevenue, 101);
+  assert.equal(finance.completedOrders, 2);
+  assert.equal(finance.refundedOrders, 1);
+  assert.deepEqual(finance.transactions.map(transaction => [transaction.orderId, transaction.type, transaction.amount]), [
+    ['complete-1', 'sale', 100], ['complete-2', 'sale', 40], ['refund-1', 'refund', -25]
+  ]);
+});
+
 test('accepts only valid order transitions and records an audit event', () => {
   const customer = { orders: [{ id: 'SVR-1', status: 'pending', items: [], total: 20 }] };
   const next = RestaurantState.updateOrderStatus(customer, 'SVR-1', 'confirmed', { prepMinutes: 20 });
