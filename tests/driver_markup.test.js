@@ -110,3 +110,26 @@ test('Active Delivery exposes route, parties, order details and one milestone ac
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
 });
+
+test('Delivery History exposes accessible filters, responsive records and detail drawer', () => {
+  const page = read('driver_history.php');
+  assert.equal((page.match(/<main\b/gi) || []).length, 1);
+  assert.match(page, /<h1[^>]*>\s*Delivery history\s*<\/h1>/);
+  for (const hook of [
+    'data-history-summary',
+    'data-history-search',
+    'data-history-date',
+    'data-history-status',
+    'data-history-results',
+    'data-history-cards',
+    'data-history-export',
+    'data-history-drawer',
+    'data-history-detail',
+    'data-history-close'
+  ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /<caption[^>]*>Driver delivery records<\/caption>/);
+  assert.match(page, /<label[^>]*for="driver-history-search"/);
+  assert.match(page, /<label[^>]*for="driver-history-date"/);
+  assert.match(page, /<label[^>]*for="driver-history-status"/);
+  assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+});
