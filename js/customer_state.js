@@ -6,7 +6,7 @@
   const KEY = 'savora_customer_state_v2';
   const DELIVERY_FEE = 2;
   const profileKeys = ['fullName', 'email', 'address', 'phone'];
-  const orderStatuses = ['confirmed', 'preparing', 'on_the_way', 'completed', 'cancelled'];
+  const orderStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed', 'cancelled'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const deliveryNote = value => text(value).trim().slice(0, 120);
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -30,6 +30,8 @@
     return {
       lineId: text(line && line.lineId) || (id ? `legacy-${id}-${index}` : ''),
       id,
+      restaurantId: text(line && line.restaurantId),
+      restaurantName: text(line && (line.restaurantName || line.restaurant)),
       name: text(line && line.name),
       image: text(line && line.image),
       unitPrice: Math.max(0, number(line && line.unitPrice)),
@@ -59,21 +61,32 @@
     state.cart = Array.isArray(source.cart)
       ? source.cart.map(normalizeCartLine).filter(line => line.lineId && line.id)
       : [];
-    state.orders = Array.isArray(source.orders) ? source.orders.map(order => ({
+    state.orders = Array.isArray(source.orders) ? source.orders.map(order => {
+      const items = Array.isArray(order && order.items)
+        ? order.items.map(normalizeCartLine).filter(line => line.lineId && line.id)
+        : [];
+      const status = orderStatuses.includes(order && order.status) ? order.status : 'completed';
+      const history = Array.isArray(order && order.statusHistory) ? order.statusHistory.map(entry => ({
+        status: orderStatuses.includes(entry && entry.status) ? entry.status : '',
+        createdAt: text(entry && entry.createdAt),
+        actor: text(entry && entry.actor)
+      })).filter(entry => entry.status) : [];
+      return {
       id: text(order && order.id),
-      status: orderStatuses.includes(order && order.status) ? order.status : 'completed',
+      status,
+      statusHistory: history,
+      restaurantId: text(order && order.restaurantId) || (items[0] && items[0].restaurantId) || '',
+      restaurantName: text(order && (order.restaurantName || order.restaurant)) || (items[0] && items[0].restaurantName) || '',
       address: text(order && order.address),
       deliveryNote: deliveryNote(order && order.deliveryNote),
       paymentMethod: order && order.paymentMethod === 'wallet' ? 'wallet' : 'cash',
       promoCode: text(order && order.promoCode),
-      items: Array.isArray(order && order.items)
-        ? order.items.map(normalizeCartLine).filter(line => line.lineId && line.id)
-        : [],
+      items,
       subtotal: Math.max(0, number(order && order.subtotal)),
       deliveryFee: Math.max(0, number(order && order.deliveryFee)),
       total: Math.max(0, number(order && order.total)),
       createdAt: text(order && order.createdAt)
-    })).filter(order => order.id) : [];
+    }; }).filter(order => order.id) : [];
     return state;
   }
   function load() {
@@ -94,6 +107,10 @@
     const qty = Math.max(1, Math.floor(number(quantity)));
     const productId = product && product.id != null ? text(String(product.id)) : '';
     if (!productId) throw new Error('Product id is required');
+    const restaurantId = text(product && product.restaurantId);
+    const restaurantName = text(product && (product.restaurantName || product.restaurant));
+    const cartRestaurantId = next.cart.find(line => line.restaurantId)?.restaurantId || '';
+    if (restaurantId && cartRestaurantId && restaurantId !== cartRestaurantId) throw new Error('A cart can contain items from one restaurant only');
     const normalizedOptions = Array.isArray(options) ? options.map(normalizeOption) : [];
     const unitPrice = Math.max(0, number(product && product.price))
       + normalizedOptions.reduce((sum, option) => sum + option.price, 0);
@@ -104,6 +121,8 @@
     else next.cart.push({
       lineId: `${productId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       id: productId,
+      restaurantId,
+      restaurantName,
       name: text(product && product.name),
       image: text(product && (product.image || product.img)),
       unitPrice,
@@ -167,7 +186,10 @@
     const createdAt = new Date().toISOString();
     const order = {
       id: `SVR-${Date.now()}`,
-      status: 'preparing',
+      status: 'pending',
+      statusHistory: [{ status: 'pending', createdAt, actor: 'customer' }],
+      restaurantId: next.cart[0].restaurantId || '',
+      restaurantName: next.cart[0].restaurantName || '',
       address,
       deliveryNote: normalizedDeliveryNote,
       paymentMethod,
@@ -193,7 +215,7 @@
     return { state: next, order };
   }
   function getActiveOrder(state) {
-    return normalize(state).orders.find(order => ['confirmed', 'preparing', 'on_the_way'].includes(order.status)) || null;
+    return normalize(state).orders.find(order => ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'].includes(order.status)) || null;
   }
   return { KEY, DELIVERY_FEE, defaultState, normalize, load, persist, addCartLine, removeCartLine, updateCartQuantity, topUpWallet, setProfile, toggleFavorite, getActiveOrder, placeDemoOrder };
 }));

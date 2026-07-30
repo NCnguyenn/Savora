@@ -59,12 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyList = document.getElementById('order-history-list');
     const activeDetails = document.getElementById('active-order-details');
     const resultCount = document.getElementById('order-result-count');
-    const activeStatuses = new Set(['confirmed', 'preparing', 'on_the_way']);
+    const activeStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way']);
     let selectedFilter = 'all';
 
     const statusDetails = {
+        pending: { label: 'Pending confirmation', icon: 'fa-hourglass-half' },
         confirmed: { label: 'Confirmed', icon: 'fa-circle-check' },
         preparing: { label: 'Preparing', icon: 'fa-kitchen-set' },
+        ready_for_pickup: { label: 'Ready for pickup', icon: 'fa-bag-shopping' },
         on_the_way: { label: 'On the way', icon: 'fa-bicycle' },
         completed: { label: 'Completed', icon: 'fa-circle-check' },
         cancelled: { label: 'Cancelled', icon: 'fa-circle-xmark' }
@@ -190,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const steps = ['confirmed', 'preparing', 'on_the_way', 'completed'];
+        const steps = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed'];
         const currentIndex = steps.indexOf(activeOrder.status);
         const progress = ui.el('ol', { className: 'order-progress', 'aria-label': 'Order progress' },
             steps.map((status, index) => {

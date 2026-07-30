@@ -1,8 +1,8 @@
 (function attachCatalog(root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.SavoraCatalog = api;
-}(typeof window === 'undefined' ? null : window, function createCatalog() {
+}(typeof window === 'undefined' ? null : window, function createCatalog(root) {
   const products = {
     '1': {
       id: '1', restaurant: 'Burger King', category: 'burger', categories: ['burger', 'combo'],
@@ -52,6 +52,54 @@
     { id: 'sushi', label: 'Sushi' }, { id: 'boba', label: 'Boba' }
   ];
   const placeholderImage = 'assets/images/food-placeholder.svg';
+  const restaurantStateKey = 'savora_restaurant_state_v1';
+  const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
+  const localCatalogImage = value => {
+    const image = text(value);
+    return image.startsWith('assets/images/catalog/') ? image : '';
+  };
+  const number = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const restaurantIdFor = name => text(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const storedRestaurantState = () => {
+    if (!root) return {};
+    if (root.SavoraRestaurantState && typeof root.SavoraRestaurantState.load === 'function') return root.SavoraRestaurantState.load();
+    try { return JSON.parse(root.localStorage.getItem(restaurantStateKey) || '{}'); } catch (_) { return {}; }
+  };
+  const allowedOverride = item => {
+    const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+    return {
+      id: text(source.id), restaurantId: text(source.restaurantId), restaurantName: text(source.restaurantName),
+      name: text(source.name), description: text(source.description), category: text(source.category),
+      image: localCatalogImage(source.image), price: number(source.price), available: source.available !== false
+    };
+  };
+  const mergeRestaurantOverrides = () => {
+    const state = storedRestaurantState();
+    const profile = state && state.profile && typeof state.profile === 'object' ? state.profile : {};
+    const overrides = Array.isArray(state && state.menuItems) ? state.menuItems.map(allowedOverride).filter(item => item.id) : [];
+    overrides.forEach(override => {
+      const product = products[override.id];
+      if (!product) return;
+      if (override.name) product.name = override.name;
+      if (override.description) product.description = override.description;
+      if (override.category) { product.category = override.category; product.categories = [override.category]; }
+      if (override.image) product.image = override.image;
+      if (Number.isFinite(Number(override.price)) && override.price > 0) product.price = override.price;
+      product.available = override.available;
+      if (override.restaurantId) product.restaurantId = override.restaurantId;
+      if (override.restaurantName) { product.restaurant = override.restaurantName; product.restaurantName = override.restaurantName; }
+      if (override.restaurantId && override.restaurantId === text(profile.id) && text(profile.name)) {
+        product.restaurant = text(profile.name);
+        product.restaurantName = text(profile.name);
+      }
+    });
+  };
+  Object.values(products).forEach(product => {
+    product.restaurantId = restaurantIdFor(product.restaurant);
+    product.restaurantName = product.restaurant;
+    product.available = true;
+  });
+  mergeRestaurantOverrides();
   const imageFor = product => product && typeof product.image === 'string' && product.image.startsWith('assets/images/catalog/')
     ? product.image
     : placeholderImage;

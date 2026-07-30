@@ -18,8 +18,17 @@ test('adds compatible cart lines and calculates a demo order once', () => {
   state = State.addCartLine(state, { id: '1', name: 'Pasta', price: 12.5 }, 2, []);
   const result = State.placeDemoOrder(state, { address: '12 Food Street', paymentMethod: 'cash' });
   assert.equal(result.state.cart.length, 0);
-  assert.equal(result.order.status, 'preparing');
+  assert.equal(result.order.status, 'pending');
   assert.equal(result.order.total, 27);
+});
+
+test('customer cart rejects items from a second restaurant', () => {
+  let state = State.addCartLine(State.defaultState(), {
+    id: '1', restaurantId: 'savora-kitchen', restaurant: 'Savora Kitchen', name: 'Pasta', price: 12
+  }, 1);
+  assert.throws(() => State.addCartLine(state, {
+    id: '2', restaurantId: 'pizza-hut', restaurant: 'Pizza Hut', name: 'Pizza', price: 10
+  }, 1), /one restaurant/i);
 });
 
 test('rejects an empty delivery address and insufficient wallet payment', () => {

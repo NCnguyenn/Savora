@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTracking() {
         const tracking = document.getElementById('active-order-content');
         const activeOrder = SavoraState.load().orders.find(order =>
-            ['confirmed', 'preparing', 'on_the_way'].includes(order.status)
+            ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'].includes(order.status)
         );
         if (!activeOrder) {
             const empty = createElement('div', { className: 'empty-state tracking-empty' }, [
@@ -306,7 +306,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const status = activeOrder.status.replaceAll('_', ' ');
+        const statusLabels = {
+            pending: 'Pending restaurant confirmation',
+            confirmed: 'Confirmed',
+            preparing: 'Preparing',
+            ready_for_pickup: 'Ready for pickup',
+            on_the_way: 'On the way'
+        };
+        const status = statusLabels[activeOrder.status] || 'Order update';
         const itemCount = activeOrder.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
         const article = createElement('article', { className: 'active-order' }, [
             createElement('p', { className: 'status-chip', text: status }),
