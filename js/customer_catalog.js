@@ -101,20 +101,35 @@
     const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(text(value));
     return match ? Number(match[1]) * 60 + Number(match[2]) : null;
   };
+  const dateBefore = date => new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
+  const scheduleForDate = (date, weekly, specials) => {
+    const special = specials.find(entry => entry.date === localDateKey(date));
+    return { hours: special || weekly[WEEK_DAYS[(date.getDay() + 6) % 7]], special: Boolean(special) };
+  };
+  const opensDuringDate = (hours, current) => {
+    if (!hours || hours.closed) return false;
+    const open = minutes(hours.open); const close = minutes(hours.close);
+    if (open === null || close === null) return false;
+    return close > open ? current >= open && current < close : current >= open;
+  };
+  const spillsFromPreviousDate = (hours, current) => {
+    if (!hours || hours.closed) return false;
+    const open = minutes(hours.open); const close = minutes(hours.close);
+    return open !== null && close !== null && close <= open && current < close;
+  };
   function storefrontStatus(operations, now = new Date()) {
     const settings = operations && typeof operations === 'object' && !Array.isArray(operations) ? operations : {};
     if (settings.acceptingOrders === false) return { isOpen: false, status: 'Orders paused' };
     const date = now instanceof Date ? now : new Date(now);
     if (Number.isNaN(date.getTime())) return { isOpen: false, status: 'Closed now' };
-    const dateKey = localDateKey(date);
-    const special = specialHours(settings.specialHours).find(entry => entry.date === dateKey);
-    const day = WEEK_DAYS[(date.getDay() + 6) % 7];
-    const hours = special || weeklyHours(settings.weeklyHours)[day];
-    if (!hours || hours.closed) return { isOpen: false, status: special ? 'Closed today' : 'Closed now' };
-    const open = minutes(hours.open); const close = minutes(hours.close); const current = date.getHours() * 60 + date.getMinutes();
-    if (open === null || close === null) return { isOpen: false, status: 'Closed now' };
-    const isOpen = close > open ? current >= open && current < close : current >= open || current < close;
-    return { isOpen, status: isOpen ? 'Open for orders' : 'Closed now' };
+    const weekly = weeklyHours(settings.weeklyHours); const specials = specialHours(settings.specialHours); const current = date.getHours() * 60 + date.getMinutes();
+    const today = scheduleForDate(date, weekly, specials);
+    if (today.special && today.hours.closed) return { isOpen: false, status: 'Closed today' };
+    if (opensDuringDate(today.hours, current)) return { isOpen: true, status: 'Open for orders' };
+    if (today.special) return { isOpen: false, status: 'Closed now' };
+    const previous = scheduleForDate(dateBefore(date), weekly, specials);
+    if (spillsFromPreviousDate(previous.hours, current)) return { isOpen: true, status: 'Open for orders' };
+    return { isOpen: false, status: 'Closed now' };
   }
   const storedRestaurantState = () => {
     if (!root) return {};
@@ -129,7 +144,7 @@
     const availability = storefrontStatus(settings);
     return {
       id: text(source.id).trim() || 'savora-kitchen', name: text(source.name).trim() || 'Savora Kitchen', cuisine: text(source.cuisine).trim(),
-      image: localCatalogImage(source.image) || placeholderImage, description: text(source.description), address: text(source.address),
+      image: localCatalogImage(source.image), description: text(source.description), address: text(source.address),
       deliveryEnabled: settings.deliveryEnabled !== false, pickupEnabled: settings.pickupEnabled !== false,
       deliveryRadius: bounded(settings.deliveryRadius, 0.1, 50, 5), prepMinutes: bounded(settings.prepMinutes, 1, 180, 20),
       acceptingOrders, isOpen: availability.isOpen, status: availability.status, weeklyHours: weeklyHours(settings.weeklyHours), specialHours: specialHours(settings.specialHours)
