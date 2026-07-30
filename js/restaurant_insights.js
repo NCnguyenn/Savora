@@ -42,13 +42,19 @@
   }
 
   function ordersInDateRange(orders, days) {
-    const dated = (Array.isArray(orders) ? orders : []).filter(order => /^\d{4}-\d{2}-\d{2}/.test(text(order && order.createdAt)));
+    const validDateKey = value => {
+      const key = text(value).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return '';
+      const date = new Date(`${key}T00:00:00.000Z`);
+      return Number.isFinite(date.valueOf()) && date.toISOString().slice(0, 10) === key ? key : '';
+    };
+    const dated = (Array.isArray(orders) ? orders : []).map(order => ({ order, key: validDateKey(order && order.createdAt) })).filter(entry => entry.key);
     if (!dated.length) return [];
-    const latestKey = dated.map(order => text(order.createdAt).slice(0, 10)).sort().at(-1);
+    const latestKey = dated.map(entry => entry.key).sort().at(-1);
     const cutoff = new Date(`${latestKey}T00:00:00.000Z`);
     cutoff.setUTCDate(cutoff.getUTCDate() - (Math.max(1, Number(days) || 1) - 1));
     const cutoffKey = cutoff.toISOString().slice(0, 10);
-    return dated.filter(order => text(order.createdAt).slice(0, 10) >= cutoffKey && text(order.createdAt).slice(0, 10) <= latestKey);
+    return dated.filter(entry => entry.key >= cutoffKey && entry.key <= latestKey).map(entry => entry.order);
   }
 
   if (!root || !root.document) return { verifiedReviews, filterReviews, ordersInDateRange };

@@ -53,6 +53,20 @@ test('preserves bounded customer identity and verified review data for restauran
   });
 });
 
+test('places normal checkout orders with a stable customer identity for repeat analytics', () => {
+  let state = State.setProfile(State.defaultState(), { fullName: 'Alex Diner', email: 'alex@example.test' });
+  state = State.addCartLine(state, { id: 'dish-repeat', name: 'Noodles', price: 12 }, 1);
+  const first = State.placeDemoOrder(state, { address: '1 Main Street' });
+
+  let again = State.addCartLine(first.state, { id: 'dish-repeat', name: 'Noodles', price: 12 }, 1);
+  const second = State.placeDemoOrder(again, { address: '1 Main Street' });
+
+  assert.equal(first.order.customerName, 'Alex Diner');
+  assert.equal(first.order.customerEmail, 'alex@example.test');
+  assert.equal(second.order.customerEmail, 'alex@example.test');
+  assert.equal(RestaurantState.deriveAnalytics(second.state).repeatCustomers, 1);
+});
+
 test('adds compatible cart lines and calculates a demo order once', () => {
   let state = State.defaultState();
   state = State.addCartLine(state, { id: '1', name: 'Pasta', price: 12.5 }, 2, []);

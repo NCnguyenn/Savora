@@ -379,3 +379,13 @@ test('analytics use net revenue, customer identities, item prices, and full cale
   ]);
   assert.equal(Insights.verifiedReviews(normalized, RestaurantState.defaultState()).length, 1);
 });
+
+test('analytics date ranges ignore malformed persisted dates without crashing', () => {
+  const ranged = Insights.ordersInDateRange([
+    { id: 'bad-month', createdAt: '9999-99-99T10:00:00.000Z' },
+    { id: 'bad-day', createdAt: '2026-02-30T10:00:00.000Z' },
+    { id: 'valid', createdAt: '2026-07-30T10:00:00.000Z' }
+  ], 7);
+
+  assert.deepEqual(ranged.map(order => order.id), ['valid']);
+});

@@ -279,7 +279,7 @@
       if (Number.isInteger(hour)) orderingTimes[String(hour)] += 1;
       const prep = finiteNumber(order.prepMinutes);
       if (prep !== null) prepTimes.push(nonNegative(prep));
-      const customer = text(order.customerName || order.customerEmail || order.customerId);
+      const customer = text(order.customerId || order.customerEmail || order.customerName);
       if (customer) customers.set(customer, (customers.get(customer) || 0) + 1);
       if (order.status !== 'completed') return;
       const total = nonNegative(order.total);
