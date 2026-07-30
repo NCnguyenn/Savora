@@ -95,6 +95,16 @@
   }
 
   const documentState = { tab: 'invoices', selected: '' };
+
+  function activateDocumentTab(tabName, focusTab) {
+    const next = doc.querySelector(`[data-document-tab="${tabName}"]`);
+    if (!next) return;
+    documentState.tab = tabName;
+    documentState.selected = '';
+    renderDocuments();
+    if (focusTab) next.focus();
+  }
+
   function filteredDocuments() {
     const date = doc.querySelector('[name="document-date-range"]');
     const search = doc.querySelector('[name="document-search"]');
@@ -133,16 +143,24 @@
     const all = documentsFor('invoices');
     const count = doc.querySelector('[data-document-count]'); if (count) count.textContent = String(all.length + 1);
     const total = doc.querySelector('[data-document-total]'); if (total) total.textContent = money(result.grossSales + result.refundTotal);
-    const taxEmpty = doc.querySelector('[data-tax-document-empty]'); if (taxEmpty) taxEmpty.hidden = documentState.tab !== 'tax';
-    doc.querySelectorAll('[data-document-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.documentTab === documentState.tab)));
+    doc.querySelectorAll('[data-document-tab]').forEach(button => {
+      const selected = button.dataset.documentTab === documentState.tab;
+      button.setAttribute('aria-selected', String(selected));
+      button.setAttribute('tabindex', selected ? '0' : '-1');
+    });
+    doc.querySelectorAll('[data-document-panel]').forEach(panel => { panel.hidden = panel.dataset.documentPanel !== documentState.tab; });
     const records = filteredDocuments();
     if (!documentState.selected || !records.some(item => item.id === documentState.selected)) documentState.selected = records[0] ? records[0].id : '';
     const body = doc.querySelector('[data-document-table-body]'); const cards = doc.querySelector('[data-document-cards]');
-    if (body) body.replaceChildren(); if (cards) cards.replaceChildren();
-    if (!records.length && documentState.tab !== 'tax') {
+    const statementDocuments = doc.querySelector('[data-statement-documents]');
+    if (body) body.replaceChildren(); if (cards) cards.replaceChildren(); if (statementDocuments) statementDocuments.replaceChildren();
+    if (documentState.tab === 'statements' && statementDocuments) {
+      if (records.length) records.forEach(item => statementDocuments.append(documentCard(item)));
+      else statementDocuments.append(ui().el('p', { className: 'restaurant-empty' }, 'No local payout statement is available yet.'));
+    } else if (!records.length && documentState.tab !== 'tax') {
       const empty = ui().el('p', { className: 'restaurant-empty' }, 'No local documents match these filters.');
       if (cards) cards.append(empty); if (body) body.append(ui().el('tr', {}, [ui().el('td', { colspan: 6 }, 'No local documents match these filters.')]));
-    } else records.forEach(item => { if (body) body.append(documentRow(item)); if (cards) cards.append(documentCard(item)); });
+    } else if (documentState.tab === 'invoices') records.forEach(item => { if (body) body.append(documentRow(item)); if (cards) cards.append(documentCard(item)); });
     renderDocumentPreview(records.find(item => item.id === documentState.selected));
   }
 
@@ -166,11 +184,24 @@
     page.addEventListener('click', event => {
       const tab = event.target.closest('[data-document-tab]'); const select = event.target.closest('[data-document-select]');
       const download = event.target.closest('[data-document-download]'); const print = event.target.closest('[data-document-print]');
-      if (tab) { documentState.tab = tab.dataset.documentTab; documentState.selected = ''; renderDocuments(); }
+      if (tab) activateDocumentTab(tab.dataset.documentTab, false);
       if (select) { documentState.selected = select.dataset.documentSelect; renderDocuments(); }
       if (download) say('[data-document-feedback]', 'Demo download requested. This is not a server-generated accounting document.');
       if (print) window.print();
       if (event.target.closest('[data-monthly-statement]')) say('[data-document-feedback]', 'Monthly statement preview selected. This local demo does not create an accounting document.');
+    });
+    page.addEventListener('keydown', event => {
+      const current = event.target.closest('[data-document-tab]');
+      if (!current) return;
+      const tabs = [...page.querySelectorAll('[data-document-tab]')];
+      const index = tabs.indexOf(current);
+      const destination = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+        : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+          : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+      if (destination < 0) return;
+      event.preventDefault();
+      const next = tabs[destination];
+      activateDocumentTab(next.dataset.documentTab, true);
     });
     renderDocuments();
   }

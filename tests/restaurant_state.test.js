@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const RestaurantState = require('../js/restaurant_state.js');
+const CustomerState = require('../js/customer_state.js');
 const Catalog = require('../js/customer_catalog.js');
 const Menu = require('../js/restaurant_menu.js');
 const Storefront = require('../js/restaurant_storefront.js');
@@ -22,6 +23,19 @@ test('derives finance only from completed sales and one negative refund per refu
   assert.deepEqual(finance.transactions.map(transaction => [transaction.orderId, transaction.type, transaction.amount]), [
     ['complete-1', 'sale', 100], ['complete-2', 'sale', 40], ['refund-1', 'refund', -25]
   ]);
+});
+
+test('preserves a refunded Customer order through normalization for one negative finance transaction', () => {
+  const customer = CustomerState.normalize({ orders: [{
+    id: 'refund-through-load', status: 'refunded', total: 48, createdAt: '2026-07-30T11:00:00.000Z'
+  }] });
+  const finance = RestaurantState.deriveFinance(customer);
+
+  assert.equal(customer.orders[0].status, 'refunded');
+  assert.equal(CustomerState.getActiveOrder(customer), null);
+  assert.deepEqual(finance.transactions.map(transaction => [transaction.type, transaction.amount]), [['refund', -48]]);
+  assert.equal(finance.grossSales, 0);
+  assert.equal(finance.refundTotal, -48);
 });
 
 test('accepts only valid order transitions and records an audit event', () => {

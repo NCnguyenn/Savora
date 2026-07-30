@@ -40,6 +40,27 @@ test('Revenue and finance document routes use safe, labelled local-demo finance 
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
 
+test('Invoice document tabs expose linked panels and keyboard roving activation', () => {
+  const invoices = read('restaurant_invoices.php');
+  const controller = read('js/restaurant_finance.js');
+  const history = read('customer_history.php');
+
+  for (const tab of ['invoices', 'statements', 'tax']) {
+    assert.match(invoices, new RegExp(`id="document-tab-${tab}"[^>]*role="tab"[^>]*aria-controls="document-panel-${tab}"`));
+    assert.match(invoices, new RegExp(`id="document-panel-${tab}"[^>]*role="tabpanel"[^>]*aria-labelledby="document-tab-${tab}"`));
+  }
+  assert.match(invoices, /document-panel-statements[^>]*hidden/);
+  assert.match(invoices, /document-panel-tax[^>]*hidden/);
+  assert.match(controller, /setAttribute\('tabindex'/);
+  assert.match(controller, /event\.key === 'ArrowRight'/);
+  assert.match(controller, /event\.key === 'ArrowLeft'/);
+  assert.match(controller, /event\.key === 'Home'/);
+  assert.match(controller, /event\.key === 'End'/);
+  assert.match(controller, /next\.focus\(\)/);
+  assert.match(history, /refunded:\s*\{\s*label:\s*'Refunded'/);
+  assert.doesNotMatch(history, /statusDetails\[status\]\s*\|\|\s*statusDetails\.completed/);
+});
+
 test('Restaurant Overview uses the shared authenticated shell and semantic data hooks', () => {
   for (const file of [
     'components/restaurant_header.php',

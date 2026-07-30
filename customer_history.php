@@ -72,7 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ready_for_pickup: { label: 'Ready for pickup', icon: 'fa-bag-shopping' },
         on_the_way: { label: 'On the way', icon: 'fa-bicycle' },
         completed: { label: 'Completed', icon: 'fa-circle-check' },
-        cancelled: { label: 'Cancelled', icon: 'fa-circle-xmark' }
+        cancelled: { label: 'Cancelled', icon: 'fa-circle-xmark' },
+        refunded: { label: 'Refunded', icon: 'fa-rotate-left' }
     };
 
     const money = value => `$${Number(value || 0).toFixed(2)}`;
@@ -90,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const icon = className => ui.el('i', { className: `fa-solid ${className}`, 'aria-hidden': 'true' });
     const statusChip = status => {
-        const details = statusDetails[status] || statusDetails.completed;
+        const details = statusDetails[status] || { label: 'Order update unavailable', icon: 'fa-circle-info' };
         return ui.el('span', { className: `order-status-chip is-${status}` }, [icon(details.icon), details.label]);
     };
     const emptyState = (title, message) => ui.el('div', { className: 'orders-empty-state', role: 'status' }, [

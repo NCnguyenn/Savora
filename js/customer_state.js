@@ -8,7 +8,7 @@
   const LEGACY_RESTAURANT_ID = 'savora-kitchen';
   const LEGACY_RESTAURANT_NAME = 'Savora Kitchen';
   const profileKeys = ['fullName', 'email', 'address', 'phone'];
-  const orderStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed', 'cancelled'];
+  const orderStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed', 'cancelled', 'refunded'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const deliveryNote = value => text(value).trim().slice(0, 120);
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
