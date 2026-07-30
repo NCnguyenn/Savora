@@ -5,6 +5,7 @@ const CustomerState = require('../js/customer_state.js');
 const Catalog = require('../js/customer_catalog.js');
 const Menu = require('../js/restaurant_menu.js');
 const Storefront = require('../js/restaurant_storefront.js');
+const Insights = require('../js/restaurant_insights.js');
 
 test('derives finance only from completed sales and one negative refund per refunded order', () => {
   const finance = RestaurantState.deriveFinance({ orders: [
@@ -335,10 +336,46 @@ test('derives deterministic analytics with date, status, menu, kitchen, and empt
 
 test('stores bounded plain-text review replies by review id', () => {
   const reply = `<strong>Thank you</strong>${'x'.repeat(400)}`;
-  const state = RestaurantState.setReviewReply(RestaurantState.defaultState(), 'review-7', reply);
+  const state = RestaurantState.setReviewReply(RestaurantState.defaultState(), 'review-7', reply, 'draft');
 
   assert.equal(state.reviews[0].id, 'review-7');
   assert.equal(state.reviews[0].reply.length, 300);
   assert.equal(state.reviews[0].reply.startsWith('<strong>'), true);
-  assert.match(state.reviews[0].repliedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(state.reviews[0].status, 'draft');
+  assert.equal(state.reviews[0].repliedAt, '');
+
+  const published = RestaurantState.setReviewReply(state, 'review-7', 'Published thanks', 'published');
+  assert.equal(published.reviews[0].status, 'published');
+  assert.match(published.reviews[0].repliedAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('analytics use net revenue, customer identities, item prices, and full calendar-day ranges', () => {
+  const normalized = CustomerState.normalize({ orders: [
+    {
+      id: 'insight-1', status: 'completed', total: 32, deliveryFee: 2, customerId: 'repeat-1',
+      createdAt: '2026-07-24T08:00:00.000Z',
+      items: [
+        { lineId: 'i1', id: 'entree', name: 'Entree', unitPrice: 20, quantity: 1 },
+        { lineId: 'i2', id: 'tea', name: 'Tea', unitPrice: 10, quantity: 1 }
+      ],
+      review: { id: 'rv-1', rating: 5, comment: 'Great' }
+    },
+    {
+      id: 'insight-2', status: 'completed', total: 12, customerId: 'repeat-1',
+      createdAt: '2026-07-30T12:00:00.000Z',
+      items: [{ lineId: 'i3', id: 'tea', name: 'Tea', unitPrice: 10, quantity: 1 }]
+    },
+    { id: 'insight-refund', status: 'refunded', total: 10, createdAt: '2026-07-30T13:00:00.000Z', items: [] }
+  ] });
+
+  const ranged = Insights.ordersInDateRange(normalized.orders, 7);
+  assert.deepEqual(ranged.map(order => order.id), ['insight-1', 'insight-2', 'insight-refund']);
+  const analytics = RestaurantState.deriveAnalytics({ orders: ranged });
+  assert.equal(analytics.netRevenue, 29.6);
+  assert.equal(analytics.repeatCustomers, 1);
+  assert.deepEqual(analytics.menuItems, [
+    { name: 'Entree', quantity: 1, revenue: 20 },
+    { name: 'Tea', quantity: 2, revenue: 20 }
+  ]);
+  assert.equal(Insights.verifiedReviews(normalized, RestaurantState.defaultState()).length, 1);
 });

@@ -132,7 +132,10 @@
     if (!state.menuItems.length) state.menuItems = defaultState().menuItems;
     state.reviews = Array.isArray(source.reviews) ? source.reviews.map(review => {
       const id = text(review && review.id);
-      return id ? { id, reply: text(review && review.reply), repliedAt: text(review && review.repliedAt) } : null;
+      if (!id) return null;
+      const reply = replyText(review && review.reply);
+      const status = review && review.status === 'draft' ? 'draft' : 'published';
+      return { id, reply, status, repliedAt: status === 'published' && reply ? text(review && review.repliedAt) : '' };
     }).filter(Boolean) : [];
     return state;
   }
@@ -218,12 +221,18 @@
     if (Object.hasOwn(source, 'specialHours')) next.operations.specialHours = normalizeSpecialHours(source.specialHours);
     return next;
   }
-  function setReviewReply(state, reviewId, reply) {
+  function setReviewReply(state, reviewId, reply, status = 'published') {
     const next = normalize(state);
     const id = text(reviewId);
     if (!id) throw new Error('Review id is required');
     const index = next.reviews.findIndex(review => review.id === id);
-    const review = { id, reply: replyText(reply), repliedAt: new Date().toISOString() };
+    const replyStatus = status === 'draft' ? 'draft' : 'published';
+    const review = {
+      id,
+      reply: replyText(reply),
+      status: replyStatus,
+      repliedAt: replyStatus === 'published' ? new Date().toISOString() : ''
+    };
     if (index >= 0) next.reviews[index] = review;
     else next.reviews.push(review);
     return next;
@@ -286,14 +295,15 @@
         const quantity = Math.max(1, nonNegative(item && item.quantity) || 1);
         const current = menu.get(name) || { name, quantity: 0, revenue: 0 };
         current.quantity += quantity;
-        current.revenue += total * (quantity / quantityTotal);
+        const hasUnitPrice = item && Object.hasOwn(item, 'unitPrice') && finiteNumber(item.unitPrice) !== null;
+        current.revenue += hasUnitPrice ? nonNegative(item.unitPrice) * quantity : total * (quantity / quantityTotal);
         menu.set(name, current);
       });
     });
     const salesByDay = [...sales.values()].sort((a, b) => a.key.localeCompare(b.key));
     const menuItems = [...menu.values()].sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name));
     return {
-      totalOrders: orders.length, completedOrders: finance.completedOrders, grossSales: finance.grossSales,
+      totalOrders: orders.length, completedOrders: finance.completedOrders, grossSales: finance.grossSales, netRevenue: finance.netRevenue,
       averageOrderValue: finance.averageOrderValue, statusCounts, salesByDay, menuItems, orderingTimes,
       repeatCustomers: [...customers.values()].filter(count => count > 1).length,
       kitchen: { averagePrepMinutes: prepTimes.length ? prepTimes.reduce((sum, value) => sum + value, 0) / prepTimes.length : 0 }

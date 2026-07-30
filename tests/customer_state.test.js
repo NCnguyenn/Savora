@@ -14,6 +14,45 @@ test('normalizes malformed persisted state without copying unsafe fields', () =>
   assert.equal(Object.hasOwn(state.cart[0], 'onerror'), false);
 });
 
+test('preserves bounded customer identity and verified review data for restaurant insights', () => {
+  const state = State.normalize({
+    orders: [{
+      id: 'review-order',
+      status: 'completed',
+      customerId: 'customer-7',
+      customerName: 'Alex Diner',
+      customerEmail: 'alex@example.test',
+      review: {
+        id: 'review-7',
+        rating: 5,
+        comment: 'Loved it',
+        createdAt: '2026-07-30T09:00:00.000Z',
+        topics: ['Fresh', 'Fast'],
+        food: 5,
+        packaging: 4,
+        preparation: 5
+      },
+      items: [{ lineId: 'line-review', id: 'dish-1', name: 'Noodles', unitPrice: 12, quantity: 1 }]
+    }]
+  });
+
+  const order = state.orders[0];
+  assert.equal(order.customerId, 'customer-7');
+  assert.equal(order.customerName, 'Alex Diner');
+  assert.equal(order.customerEmail, 'alex@example.test');
+  assert.deepEqual(order.review, {
+    id: 'review-7',
+    rating: 5,
+    comment: 'Loved it',
+    createdAt: '2026-07-30T09:00:00.000Z',
+    customer: '',
+    topics: ['Fresh', 'Fast'],
+    food: 5,
+    packaging: 4,
+    preparation: 5
+  });
+});
+
 test('adds compatible cart lines and calculates a demo order once', () => {
   let state = State.defaultState();
   state = State.addCartLine(state, { id: '1', name: 'Pasta', price: 12.5 }, 2, []);

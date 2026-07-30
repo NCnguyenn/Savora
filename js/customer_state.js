@@ -12,6 +12,7 @@
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const deliveryNote = value => text(value).trim().slice(0, 120);
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const boundedRating = value => Math.min(5, Math.max(1, number(value) || 1));
   const copy = value => JSON.parse(JSON.stringify(value));
   const restaurantIdentity = (source, fallback = {}) => {
     const id = text(source && source.restaurantId).trim() || text(fallback.id).trim() || LEGACY_RESTAURANT_ID;
@@ -67,6 +68,22 @@
       }))
     };
   };
+  const normalizeReview = review => {
+    if (!review || typeof review !== 'object' || Array.isArray(review)) return null;
+    const id = text(review.id);
+    if (!id) return null;
+    return {
+      id,
+      rating: boundedRating(review.rating),
+      comment: text(review.comment),
+      createdAt: text(review.createdAt),
+      customer: text(review.customer),
+      topics: Array.isArray(review.topics) ? review.topics.map(text).filter(Boolean).slice(0, 4) : [],
+      food: boundedRating(review.food || review.rating),
+      packaging: boundedRating(review.packaging || review.rating),
+      preparation: boundedRating(review.preparation || review.rating)
+    };
+  };
   function normalize(raw) {
     const state = defaultState();
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -101,6 +118,10 @@
       statusHistory: history,
       restaurantId: ownedItems.owner.id,
       restaurantName: ownedItems.owner.name,
+      customerId: text(order && order.customerId),
+      customerName: text(order && order.customerName),
+      customerEmail: text(order && order.customerEmail),
+      review: normalizeReview(order && order.review),
       address: text(order && order.address),
       deliveryNote: deliveryNote(order && order.deliveryNote),
       prepMinutes: Math.max(0, Math.floor(number(order && order.prepMinutes))),

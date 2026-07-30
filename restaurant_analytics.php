@@ -21,7 +21,7 @@
     </div>
     <div class="restaurant-overview-grid">
         <section class="restaurant-card" data-ordering-heatmap aria-labelledby="ordering-times-title"><h2 id="ordering-times-title">Popular ordering times</h2><p class="restaurant-field-hint" data-ordering-heatmap-summary>No local ordering-time data in this range.</p><div data-ordering-heatmap-grid aria-label="Ordering time distribution"></div></section>
-        <section class="restaurant-card" data-menu-performance aria-labelledby="menu-performance-title"><h2 id="menu-performance-title">Top menu performance</h2><p class="restaurant-field-hint">Completed local orders only.</p><ul class="restaurant-top-items" data-menu-performance-list></ul></section>
+        <section class="restaurant-card" data-menu-performance aria-labelledby="menu-performance-title"><h2 id="menu-performance-title">Top menu performance</h2><p class="restaurant-field-hint">Completed local orders only.</p><ul class="restaurant-insight-items" data-menu-performance-list></ul></section>
         <section class="restaurant-card" data-kitchen-performance aria-labelledby="kitchen-performance-title"><h2 id="kitchen-performance-title">Kitchen performance</h2><p class="restaurant-finance-amount" data-kitchen-prep>0 min</p><p class="restaurant-field-hint" data-kitchen-performance-summary>No local prep-time data in this range.</p></section>
     </div>
     <section class="restaurant-card restaurant-low-stock" data-analytics-insight aria-labelledby="analytics-insight-title"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><div><h2 id="analytics-insight-title">Local insight</h2><p data-analytics-insight-copy>Complete local orders to surface a practical insight.</p></div></section>

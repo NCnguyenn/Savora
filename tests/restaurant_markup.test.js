@@ -368,6 +368,10 @@ test('Analytics and review routes provide accessible local insight and bounded r
   assert.match(reviews, /data-review-feedback[^>]*aria-live="polite"/);
   assert.match(controller, /api\.deriveAnalytics/);
   assert.match(controller, /api\.setReviewReply/);
+  assert.match(controller, /publish \? 'published' : 'draft'/);
+  assert.match(controller, /visible\.find\(review => review\.id === selectedReviewId\)/);
+  assert.match(analytics, /restaurant-insight-items/);
+  assert.doesNotMatch(analytics, /class="restaurant-top-items" data-menu-performance-list/);
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
