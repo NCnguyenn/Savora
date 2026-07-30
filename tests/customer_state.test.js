@@ -31,6 +31,43 @@ test('customer cart rejects items from a second restaurant', () => {
   }, 1), /one restaurant/i);
 });
 
+test('normalizes persisted carts and orders to one restaurant owner', () => {
+  const state = State.normalize({
+    cart: [
+      { id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen' },
+      { id: '2', restaurantId: 'pizza-hut', restaurantName: 'Pizza Hut' }
+    ],
+    orders: [{
+      id: 'SVR-1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen',
+      items: [
+        { id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen' },
+        { id: '2', restaurantId: 'pizza-hut', restaurantName: 'Pizza Hut' }
+      ]
+    }]
+  });
+
+  assert.deepEqual(state.cart.map(line => line.restaurantId), ['savora-kitchen']);
+  assert.deepEqual(state.orders[0].items.map(line => line.restaurantId), ['savora-kitchen']);
+  assert.throws(() => State.addCartLine(state, {
+    id: '3', restaurantId: 'pizza-hut', restaurantName: 'Pizza Hut', name: 'Pizza', price: 10
+  }, 1), /one restaurant/i);
+});
+
+test('assigns legacy cart and order lines a deterministic restaurant identity', () => {
+  const state = State.normalize({
+    cart: [{ id: '1', name: 'Legacy pasta' }],
+    orders: [{ id: 'SVR-legacy', items: [{ id: '1', name: 'Legacy pasta' }] }]
+  });
+
+  assert.deepEqual(state.cart[0].restaurantId, 'savora-kitchen');
+  assert.deepEqual(state.cart[0].restaurantName, 'Savora Kitchen');
+  assert.deepEqual(state.orders[0].restaurantId, 'savora-kitchen');
+  assert.deepEqual(state.orders[0].items[0].restaurantName, 'Savora Kitchen');
+  assert.throws(() => State.addCartLine(state, {
+    id: '2', restaurantId: 'pizza-hut', restaurantName: 'Pizza Hut', name: 'Pizza', price: 10
+  }, 1), /one restaurant/i);
+});
+
 test('rejects an empty delivery address and insufficient wallet payment', () => {
   const state = State.addCartLine(State.defaultState(), { id: '1', name: 'Pasta', price: 12.5 }, 1, []);
   assert.throws(() => State.placeDemoOrder(state, { address: '', paymentMethod: 'cash' }), /address/i);

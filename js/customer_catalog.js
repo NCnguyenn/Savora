@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.SavoraCatalog = api;
 }(typeof window === 'undefined' ? null : window, function createCatalog(root) {
-  const products = {
+  const baseProducts = {
     '1': {
       id: '1', restaurant: 'Burger King', category: 'burger', categories: ['burger', 'combo'],
       name: 'Mega Burger Feast Combo', image: 'assets/images/catalog/mega-burger-feast-combo.jpg',
@@ -41,7 +41,7 @@
       addOns: [{ id: '4-pearls', productId: '4', label: 'Extra tapioca pearls', price: 0.75 }, { id: '4-pudding', productId: '4', label: 'Egg pudding', price: 0.9 }]
     }
   };
-  const restaurants = {
+  const baseRestaurants = {
     'Burger King': { name: 'Burger King', cuisine: 'American', rating: 4.5, prepTime: '15-20 min', productIds: ['1'] },
     'Pizza Hut': { name: 'Pizza Hut', cuisine: 'Italian', rating: 4.2, prepTime: '25-30 min', productIds: ['2'] },
     'Tokyo Sushi': { name: 'Tokyo Sushi', cuisine: 'Japanese', rating: 4.8, prepTime: '20-25 min', productIds: ['3'] },
@@ -56,7 +56,7 @@
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const localCatalogImage = value => {
     const image = text(value);
-    return image.startsWith('assets/images/catalog/') ? image : '';
+    return /^assets\/images\/catalog\/[a-z0-9][a-z0-9-]*\.(?:jpg|jpeg|png|webp)$/.test(image) ? image : '';
   };
   const number = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   const restaurantIdFor = name => text(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -65,45 +65,64 @@
     if (root.SavoraRestaurantState && typeof root.SavoraRestaurantState.load === 'function') return root.SavoraRestaurantState.load();
     try { return JSON.parse(root.localStorage.getItem(restaurantStateKey) || '{}'); } catch (_) { return {}; }
   };
-  const allowedOverride = item => {
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const ownerFor = profile => ({
+    id: text(profile && profile.id).trim() || 'savora-kitchen',
+    name: text(profile && profile.name).trim() || 'Savora Kitchen',
+    cuisine: text(profile && profile.cuisine).trim()
+  });
+  const allowedOverride = (item, owner) => {
     const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
     return {
-      id: text(source.id), restaurantId: text(source.restaurantId), restaurantName: text(source.restaurantName),
+      id: text(source.id), restaurantId: owner.id, restaurantName: owner.name,
       name: text(source.name), description: text(source.description), category: text(source.category),
       image: localCatalogImage(source.image), price: number(source.price), available: source.available !== false
     };
   };
-  const mergeRestaurantOverrides = () => {
-    const state = storedRestaurantState();
-    const profile = state && state.profile && typeof state.profile === 'object' ? state.profile : {};
-    const overrides = Array.isArray(state && state.menuItems) ? state.menuItems.map(allowedOverride).filter(item => item.id) : [];
+  function applyRestaurantOverrides(sourceProducts, sourceRestaurants, state) {
+    const products = copy(sourceProducts && typeof sourceProducts === 'object' ? sourceProducts : {});
+    const restaurants = copy(sourceRestaurants && typeof sourceRestaurants === 'object' ? sourceRestaurants : {});
+    Object.values(products).forEach(product => {
+      product.restaurantId = text(product.restaurantId).trim() || restaurantIdFor(product.restaurant);
+      product.restaurantName = text(product.restaurantName).trim() || text(product.restaurant);
+      product.available = product.available !== false;
+      product.image = localCatalogImage(product.image) || placeholderImage;
+    });
+    const source = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+    const owner = ownerFor(source.profile);
+    const overrides = Array.isArray(source.menuItems) ? source.menuItems.map(item => allowedOverride(item, owner)).filter(item => item.id) : [];
     overrides.forEach(override => {
-      const product = products[override.id];
-      if (!product) return;
+      const product = products[override.id] || {
+        id: override.id, name: 'Menu item', description: '', category: 'menu', categories: ['menu'],
+        image: placeholderImage, price: 0, available: true, portions: [], addOns: []
+      };
       if (override.name) product.name = override.name;
       if (override.description) product.description = override.description;
       if (override.category) { product.category = override.category; product.categories = [override.category]; }
       if (override.image) product.image = override.image;
       if (Number.isFinite(Number(override.price)) && override.price > 0) product.price = override.price;
       product.available = override.available;
-      if (override.restaurantId) product.restaurantId = override.restaurantId;
-      if (override.restaurantName) { product.restaurant = override.restaurantName; product.restaurantName = override.restaurantName; }
-      if (override.restaurantId && override.restaurantId === text(profile.id) && text(profile.name)) {
-        product.restaurant = text(profile.name);
-        product.restaurantName = text(profile.name);
-      }
+      product.restaurantId = override.restaurantId;
+      product.restaurant = override.restaurantName;
+      product.restaurantName = override.restaurantName;
+      products[override.id] = product;
+      Object.values(restaurants).forEach(restaurant => {
+        restaurant.productIds = (Array.isArray(restaurant.productIds) ? restaurant.productIds : []).filter(id => String(id) !== override.id);
+      });
+      if (!restaurants[owner.name]) restaurants[owner.name] = {
+        name: owner.name, cuisine: owner.cuisine || 'Local kitchen', rating: 0, prepTime: '', productIds: []
+      };
+      const ids = restaurants[owner.name].productIds;
+      if (!ids.includes(override.id)) ids.push(override.id);
     });
-  };
-  Object.values(products).forEach(product => {
-    product.restaurantId = restaurantIdFor(product.restaurant);
-    product.restaurantName = product.restaurant;
-    product.available = true;
-  });
-  mergeRestaurantOverrides();
-  const imageFor = product => product && typeof product.image === 'string' && product.image.startsWith('assets/images/catalog/')
+    return { products, restaurants };
+  }
+  const merged = applyRestaurantOverrides(baseProducts, baseRestaurants, storedRestaurantState());
+  const { products, restaurants } = merged;
+  const imageFor = product => product && localCatalogImage(product.image)
     ? product.image
     : placeholderImage;
-  const api = { products, restaurants, categories, recommendations: ['1', '2', '3', '4'], placeholderImage, imageFor };
+  const api = { products, restaurants, categories, recommendations: ['1', '2', '3', '4'], placeholderImage, imageFor, applyRestaurantOverrides };
   const freeze = value => {
     Object.values(value).forEach(child => child && typeof child === 'object' && !Object.isFrozen(child) && freeze(child));
     return Object.freeze(value);

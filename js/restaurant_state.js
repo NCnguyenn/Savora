@@ -23,19 +23,19 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   const localCatalogImage = value => {
     const image = text(value);
-    return image.startsWith('assets/images/catalog/') ? image : '';
+    return /^assets\/images\/catalog\/[a-z0-9][a-z0-9-]*\.(?:jpg|jpeg|png|webp)$/.test(image) ? image : '';
   };
   const allowedStatus = value => Object.hasOwn(ORDER_TRANSITIONS, value) ? value : '';
   const normalizeHistory = history => Array.isArray(history) ? history.map(entry => {
     const status = allowedStatus(entry && entry.status);
     return status ? { status, createdAt: text(entry && entry.createdAt), actor: text(entry && entry.actor) } : null;
   }).filter(Boolean) : [];
-  const normalizeMenuItem = item => {
+  const normalizeMenuItem = (item, owner = {}) => {
     const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
     return {
       id: text(source.id),
-      restaurantId: text(source.restaurantId),
-      restaurantName: text(source.restaurantName),
+      restaurantId: text(owner.id) || 'savora-kitchen',
+      restaurantName: text(owner.name) || 'Savora Kitchen',
       name: text(source.name),
       description: text(source.description),
       category: text(source.category),
@@ -46,9 +46,9 @@
   };
   const defaultState = () => ({
     version: 1,
-    profile: { id: 'savora-kitchen', name: '', address: '', description: '', cuisine: '', phone: '', image: '' },
+    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '' },
     operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 0, capacity: 0 },
-    menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: '', name: '', description: '', category: '', image: '', price: 0, available: true }],
+    menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, available: true }],
     reviews: []
   });
 
@@ -58,11 +58,12 @@
     const profile = source.profile && typeof source.profile === 'object' ? source.profile : {};
     PROFILE_KEYS.forEach(key => { state.profile[key] = key === 'image' ? localCatalogImage(profile[key]) : text(profile[key]); });
     state.profile.id = state.profile.id || 'savora-kitchen';
+    state.profile.name = state.profile.name || 'Savora Kitchen';
     const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
     state.operations.acceptingOrders = operations.acceptingOrders !== false;
     ['prepMinutes', 'deliveryRadius', 'capacity'].forEach(key => { state.operations[key] = nonNegative(operations[key]); });
     state.menuItems = Array.isArray(source.menuItems)
-      ? source.menuItems.map(normalizeMenuItem).filter(item => item.id)
+      ? source.menuItems.map(item => normalizeMenuItem(item, state.profile)).filter(item => item.id)
       : state.menuItems;
     if (!state.menuItems.length) state.menuItems = defaultState().menuItems;
     state.reviews = Array.isArray(source.reviews) ? source.reviews.map(review => {
@@ -98,10 +99,13 @@
   }
   function setMenuItem(state, item) {
     const next = normalize(state);
-    const patch = normalizeMenuItem(item);
-    if (!patch.id) throw new Error('Menu item id is required');
-    const index = next.menuItems.findIndex(entry => entry.id === patch.id);
-    if (index >= 0) next.menuItems[index] = { ...next.menuItems[index], ...patch };
+    const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+    const id = text(source.id);
+    if (!id) throw new Error('Menu item id is required');
+    const index = next.menuItems.findIndex(entry => entry.id === id);
+    const current = index >= 0 ? next.menuItems[index] : {};
+    const patch = normalizeMenuItem({ ...current, ...source, id }, next.profile);
+    if (index >= 0) next.menuItems[index] = patch;
     else next.menuItems.push(patch);
     return normalize(next);
   }
@@ -110,7 +114,7 @@
     const itemId = text(id);
     const item = next.menuItems.find(entry => entry.id === itemId);
     if (item) item.available = available !== false;
-    else next.menuItems.push(normalizeMenuItem({ id: itemId, available }));
+    else next.menuItems.push(normalizeMenuItem({ id: itemId, available }, next.profile));
     return normalize(next);
   }
   function setProfile(state, patch) {
@@ -120,6 +124,8 @@
       if (Object.hasOwn(source, key)) next.profile[key] = key === 'image' ? localCatalogImage(source[key]) : text(source[key]);
     });
     next.profile.id = next.profile.id || 'savora-kitchen';
+    next.profile.name = next.profile.name || 'Savora Kitchen';
+    next.menuItems = next.menuItems.map(item => normalizeMenuItem(item, next.profile));
     return next;
   }
   function setOperations(state, patch) {

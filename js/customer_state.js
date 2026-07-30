@@ -5,12 +5,21 @@
 }(typeof window === 'undefined' ? null : window, function createState() {
   const KEY = 'savora_customer_state_v2';
   const DELIVERY_FEE = 2;
+  const LEGACY_RESTAURANT_ID = 'savora-kitchen';
+  const LEGACY_RESTAURANT_NAME = 'Savora Kitchen';
   const profileKeys = ['fullName', 'email', 'address', 'phone'];
   const orderStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed', 'cancelled'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const deliveryNote = value => text(value).trim().slice(0, 120);
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
   const copy = value => JSON.parse(JSON.stringify(value));
+  const restaurantIdentity = (source, fallback = {}) => {
+    const id = text(source && source.restaurantId).trim() || text(fallback.id).trim() || LEGACY_RESTAURANT_ID;
+    const name = text(source && (source.restaurantName || source.restaurant)).trim()
+      || text(fallback.name).trim()
+      || (id === LEGACY_RESTAURANT_ID ? LEGACY_RESTAURANT_NAME : id);
+    return { id, name };
+  };
   const defaultState = () => ({
     version: 2,
     cart: [],
@@ -27,17 +36,28 @@
   });
   const normalizeCartLine = (line, index = 0) => {
     const id = text(line && line.id);
+    const restaurant = restaurantIdentity(line);
     return {
       lineId: text(line && line.lineId) || (id ? `legacy-${id}-${index}` : ''),
       id,
-      restaurantId: text(line && line.restaurantId),
-      restaurantName: text(line && (line.restaurantName || line.restaurant)),
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
       name: text(line && line.name),
       image: text(line && line.image),
       unitPrice: Math.max(0, number(line && line.unitPrice)),
       quantity: Math.max(1, Math.floor(number(line && line.quantity))),
       options: Array.isArray(line && line.options) ? line.options.map(normalizeOption) : [],
       note: text(line && line.note)
+    };
+  };
+  const normalizeOwnedLines = (rawLines, owner) => {
+    const lines = Array.isArray(rawLines) ? rawLines.map(normalizeCartLine).filter(line => line.lineId && line.id) : [];
+    const identity = restaurantIdentity(owner || lines[0], lines[0] && { id: lines[0].restaurantId, name: lines[0].restaurantName });
+    return {
+      owner: identity,
+      lines: lines.filter(line => line.restaurantId === identity.id).map(line => ({
+        ...line, restaurantId: identity.id, restaurantName: identity.name
+      }))
     };
   };
   function normalize(raw) {
@@ -58,13 +78,10 @@
       ? source.favorites.products.map(String) : [])];
     state.favorites.restaurants = [...new Set(Array.isArray(source.favorites && source.favorites.restaurants)
       ? source.favorites.restaurants.map(String) : [])];
-    state.cart = Array.isArray(source.cart)
-      ? source.cart.map(normalizeCartLine).filter(line => line.lineId && line.id)
-      : [];
+    state.cart = normalizeOwnedLines(source.cart).lines;
     state.orders = Array.isArray(source.orders) ? source.orders.map(order => {
-      const items = Array.isArray(order && order.items)
-        ? order.items.map(normalizeCartLine).filter(line => line.lineId && line.id)
-        : [];
+      const ownedItems = normalizeOwnedLines(order && order.items, order);
+      const items = ownedItems.lines;
       const status = orderStatuses.includes(order && order.status) ? order.status : 'completed';
       const history = Array.isArray(order && order.statusHistory) ? order.statusHistory.map(entry => ({
         status: orderStatuses.includes(entry && entry.status) ? entry.status : '',
@@ -75,8 +92,8 @@
       id: text(order && order.id),
       status,
       statusHistory: history,
-      restaurantId: text(order && order.restaurantId) || (items[0] && items[0].restaurantId) || '',
-      restaurantName: text(order && (order.restaurantName || order.restaurant)) || (items[0] && items[0].restaurantName) || '',
+      restaurantId: ownedItems.owner.id,
+      restaurantName: ownedItems.owner.name,
       address: text(order && order.address),
       deliveryNote: deliveryNote(order && order.deliveryNote),
       paymentMethod: order && order.paymentMethod === 'wallet' ? 'wallet' : 'cash',
@@ -107,8 +124,9 @@
     const qty = Math.max(1, Math.floor(number(quantity)));
     const productId = product && product.id != null ? text(String(product.id)) : '';
     if (!productId) throw new Error('Product id is required');
-    const restaurantId = text(product && product.restaurantId);
-    const restaurantName = text(product && (product.restaurantName || product.restaurant));
+    const restaurant = restaurantIdentity(product);
+    const restaurantId = restaurant.id;
+    const restaurantName = restaurant.name;
     const cartRestaurantId = next.cart.find(line => line.restaurantId)?.restaurantId || '';
     if (restaurantId && cartRestaurantId && restaurantId !== cartRestaurantId) throw new Error('A cart can contain items from one restaurant only');
     const normalizedOptions = Array.isArray(options) ? options.map(normalizeOption) : [];
