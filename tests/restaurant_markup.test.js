@@ -127,6 +127,8 @@ test('Live Order Center uses the shared shell and exposes accessible order-opera
 test('Order History provides safe responsive records, audit detail, and real follow-up links', () => {
   assert.ok(fs.existsSync(path.join(root, 'restaurant_order_history.php')), 'restaurant_order_history.php must exist');
   const page = read('restaurant_order_history.php');
+  const controller = read('js/restaurant_orders.js');
+  const css = read('css/restaurant_style.css');
 
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
@@ -139,10 +141,33 @@ test('Order History provides safe responsive records, audit detail, and real fol
   assert.match(page, /data-history-details/);
   assert.match(page, /data-status-timeline/);
   assert.match(page, /data-history-pagination/);
+  assert.match(page, /data-history-page="previous"/);
+  assert.match(page, /data-history-page="next"/);
   assert.match(page, /data-history-invoice/);
+  assert.match(page, /data-history-customer-order/);
   assert.match(page, /data-history-reorder/);
   assert.match(page, /aria-live="polite"/);
+  assert.match(page, /href="restaurant_invoices\.php\?order=/);
   assert.match(page, /href="customer_history\.php\?order=/);
+  assert.match(page, /href="customer_history\.php\?reorder=/);
+  assert.match(controller, /historyPage:\s*1/);
+  assert.match(controller, /HISTORY_PAGE_SIZE/);
+  assert.match(controller, /records\.slice\(/);
+  assert.match(controller, /data-history-page/);
+  assert.match(controller, /restaurant_invoices\.php\?order=/);
+  assert.match(controller, /customer_history\.php\?order=/);
+  assert.match(controller, /customer_history\.php\?reorder=/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\[data-history-table\]\s*\{\s*display:\s*none;/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\[data-history-cards\]\s*\{\s*display:\s*grid;/);
+  assert.match(css, /@media \(min-width: 769px\)[\s\S]*\[data-history-cards\]\s*\{\s*display:\s*none;/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+});
+
+test('Live Order details retains its labelled heading after safe rerendering', () => {
+  const page = read('restaurant_orders.php');
+  const controller = read('js/restaurant_orders.js');
+
+  assert.match(page, /data-order-details[^>]*aria-labelledby="live-order-details-title"/);
+  assert.match(controller, /heading\('h2', 'Order details', 'live-order-details-title'\)/);
 });

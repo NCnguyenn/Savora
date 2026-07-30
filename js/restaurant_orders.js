@@ -7,7 +7,8 @@
   const liveStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'];
   const historyStatuses = ['completed', 'cancelled', 'refunded'];
   const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
-  const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '' };
+  const HISTORY_PAGE_SIZE = 7;
+  const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '', historyPage: 1 };
   const text = value => typeof value === 'string' ? value : '';
   const ordersForRestaurant = () => {
     const restaurant = root.SavoraRestaurantState.load();
@@ -24,7 +25,7 @@
     if (node) node.textContent = message;
   };
   const button = (label, action, disabled) => ui().el('button', { type: 'button', 'data-order-action': action, disabled: Boolean(disabled) }, label);
-  const heading = (tag, value) => ui().el(tag, {}, value);
+  const heading = (tag, value, id) => ui().el(tag, id ? { id } : {}, value);
 
   function renderLiveCounts(orders) {
     doc.querySelectorAll('[data-order-count]').forEach(node => {
@@ -64,7 +65,7 @@
   function renderLiveDetails(order) {
     const panel = doc.querySelector('[data-order-details]');
     if (!panel) return;
-    panel.replaceChildren(heading('h2', 'Order details'));
+    panel.replaceChildren(heading('h2', 'Order details', 'live-order-details-title'));
     if (!order) {
       panel.append(ui().el('p', { className: 'restaurant-empty' }, 'Select a live order to review its items and actions.'));
       return;
@@ -155,15 +156,23 @@
     const salesNode = doc.querySelector('[data-history-sales]');
     if (salesNode) salesNode.textContent = ui().formatMoney(sales);
     const records = filterHistory(all).sort((a, b) => text(b.createdAt).localeCompare(text(a.createdAt)));
+    const totalPages = Math.max(1, Math.ceil(records.length / HISTORY_PAGE_SIZE));
+    state.historyPage = Math.min(Math.max(1, state.historyPage), totalPages);
+    const pageStart = (state.historyPage - 1) * HISTORY_PAGE_SIZE;
+    const pageRecords = records.slice(pageStart, pageStart + HISTORY_PAGE_SIZE);
     if (!state.selectedHistoryId || !records.some(order => order.id === state.selectedHistoryId)) state.selectedHistoryId = records[0] ? records[0].id : '';
     tableBody.replaceChildren(); cards.replaceChildren();
     if (!records.length) {
       const empty = ui().el('p', { className: 'restaurant-empty' }, 'No historical orders match these filters.');
       cards.append(empty);
       tableBody.append(ui().el('tr', {}, [ui().el('td', { colspan: 8 }, 'No historical orders match these filters.')]));
-    } else records.forEach(order => { tableBody.append(historyRow(order)); cards.append(historyCard(order)); });
+    } else pageRecords.forEach(order => { tableBody.append(historyRow(order)); cards.append(historyCard(order)); });
     const count = doc.querySelector('[data-history-result-count]');
-    if (count) count.textContent = `${records.length} record${records.length === 1 ? '' : 's'}`;
+    if (count) count.textContent = records.length ? `Showing ${pageStart + 1}–${pageStart + pageRecords.length} of ${records.length} records` : '0 records';
+    const previous = doc.querySelector('[data-history-page="previous"]');
+    const next = doc.querySelector('[data-history-page="next"]');
+    if (previous) previous.disabled = state.historyPage === 1;
+    if (next) next.disabled = state.historyPage === totalPages;
     renderHistoryDetails(records.find(order => order.id === state.selectedHistoryId));
   }
 
@@ -181,8 +190,13 @@
     timeline.replaceChildren();
     const events = Array.isArray(order.statusHistory) && order.statusHistory.length ? order.statusHistory : [{ status: order.status, createdAt: order.createdAt, actor: 'customer' }];
     events.forEach(event => timeline.append(ui().el('li', {}, `${labels[event.status] || event.status} · ${formatDate(event.createdAt)} · ${text(event.actor) || 'system'}`)));
+    const id = encodeURIComponent(order.id);
     const invoice = doc.querySelector('[data-history-invoice]');
-    if (invoice) invoice.href = `customer_history.php?order=${encodeURIComponent(order.id)}`;
+    const customerOrder = doc.querySelector('[data-history-customer-order]');
+    const reorder = doc.querySelector('[data-history-reorder]');
+    if (invoice) invoice.href = `restaurant_invoices.php?order=${id}`;
+    if (customerOrder) customerOrder.href = `customer_history.php?order=${id}`;
+    if (reorder) reorder.href = `customer_history.php?reorder=${id}`;
   }
 
   function bindLiveCenter() {
@@ -204,11 +218,13 @@
   function bindHistory() {
     const page = doc.querySelector('[data-order-history]');
     if (!page) return;
-    page.addEventListener('input', event => { if (event.target.closest('[data-history-filters]')) renderHistory(); });
-    page.addEventListener('change', event => { if (event.target.closest('[data-history-filters]')) renderHistory(); });
+    page.addEventListener('input', event => { if (event.target.closest('[data-history-filters]')) { state.historyPage = 1; renderHistory(); } });
+    page.addEventListener('change', event => { if (event.target.closest('[data-history-filters]')) { state.historyPage = 1; renderHistory(); } });
     page.addEventListener('click', event => {
       const select = event.target.closest('[data-history-select]');
+      const pageControl = event.target.closest('[data-history-page]');
       if (select) { state.selectedHistoryId = select.dataset.historySelect; renderHistory(); announce('[data-history-feedback]', `Showing details for ${state.selectedHistoryId}.`); }
+      if (pageControl) { state.historyPage += pageControl.dataset.historyPage === 'next' ? 1 : -1; renderHistory(); }
       if (event.target.closest('[data-close-history-details]')) { const drawer = doc.querySelector('[data-history-details]'); if (drawer) drawer.hidden = true; }
     });
     renderHistory();

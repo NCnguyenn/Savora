@@ -377,6 +377,18 @@ test('orders render persisted status-aware history and exact configuration reord
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.orders-layout\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
+test('Customer order history opens a selected Restaurant follow-up record without reordering it', () => {
+  const history = read('customer_history.php');
+
+  assert.match(history, /new URLSearchParams\(window\.location\.search\)/);
+  assert.match(history, /params\.get\('order'\)/);
+  assert.match(history, /params\.get\('reorder'\)/);
+  assert.match(history, /data-customer-order-id/);
+  assert.match(history, /requestedCard\.focus\(\)/);
+  assert.match(history, /requestedCard\.scrollIntoView/);
+  assert.doesNotMatch(history, /reorder\(requestedOrder/);
+});
+
 test('favorites use accessible tabs, independent heart controls and state-backed empty panels', () => {
   const favorites = read('customer_favorites.php');
   const css = read('css/customer_style.css');

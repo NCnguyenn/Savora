@@ -103,6 +103,8 @@
       restaurantName: ownedItems.owner.name,
       address: text(order && order.address),
       deliveryNote: deliveryNote(order && order.deliveryNote),
+      prepMinutes: Math.max(0, Math.floor(number(order && order.prepMinutes))),
+      cancelReason: text(order && order.cancelReason).trim().slice(0, 200),
       paymentMethod: order && order.paymentMethod === 'wallet' ? 'wallet' : 'cash',
       promoCode: text(order && order.promoCode),
       items,

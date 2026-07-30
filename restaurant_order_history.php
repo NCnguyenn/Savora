@@ -21,14 +21,15 @@
         </form>
         <div class="restaurant-table-wrap"><table class="restaurant-table" data-history-table><caption class="sr-only">Restaurant order history</caption><thead><tr><th scope="col">Order</th><th scope="col">Date</th><th scope="col">Customer</th><th scope="col">Fulfillment</th><th scope="col">Items</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody data-history-table-body></tbody></table></div>
         <div data-history-cards aria-live="polite"></div>
-        <nav data-history-pagination aria-label="Order history pagination"><button type="button" disabled aria-label="Previous page">Previous</button><span data-history-result-count>0 records</span><button type="button" disabled aria-label="Next page">Next</button></nav>
+        <nav data-history-pagination aria-label="Order history pagination"><button type="button" data-history-page="previous" aria-label="Previous page">Previous</button><span data-history-result-count aria-live="polite">0 records</span><button type="button" data-history-page="next" aria-label="Next page">Next</button></nav>
     </section>
     <aside class="restaurant-card" data-history-details aria-labelledby="history-details-title" hidden>
         <header class="restaurant-card-header"><h2 id="history-details-title">Order details</h2><button type="button" data-close-history-details aria-label="Close order details"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
         <div data-history-detail-content></div>
         <ol data-status-timeline aria-label="Order status timeline"></ol>
-        <a class="restaurant-primary-action" data-history-invoice href="customer_history.php?order=">View customer order</a>
-        <a class="restaurant-primary-action" data-history-reorder href="restaurant_orders.php">Reorder details</a>
+        <a class="restaurant-primary-action" data-history-invoice href="restaurant_invoices.php?order=">View invoice</a>
+        <a class="restaurant-primary-action" data-history-customer-order href="customer_history.php?order=">View customer order</a>
+        <a class="restaurant-primary-action" data-history-reorder href="customer_history.php?reorder=">Review reorder details</a>
     </aside>
 </main>
 <script defer src="js/restaurant_orders.js"></script>

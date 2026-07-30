@@ -60,7 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeDetails = document.getElementById('active-order-details');
     const resultCount = document.getElementById('order-result-count');
     const activeStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way']);
+    const params = new URLSearchParams(window.location.search);
+    const requestedOrderId = params.get('order') || params.get('reorder');
     let selectedFilter = 'all';
+    let requestedCard = null;
 
     const statusDetails = {
         pending: { label: 'Pending confirmation', icon: 'fa-hourglass-half' },
@@ -150,7 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ? ui.el('p', { className: 'order-delivery-note' }, [icon('fa-message'), 'Delivery note: ', order.deliveryNote])
             : null;
 
-        return ui.el('li', {}, ui.el('article', { className: 'surface-card order-card' }, [
+        const article = ui.el('article', {
+            className: 'surface-card order-card',
+            'data-customer-order-id': order.id,
+            tabindex: order.id === requestedOrderId ? '-1' : null
+        }, [
             visual,
             ui.el('div', { className: 'order-card-copy' }, [
                 ui.el('p', { className: 'order-restaurant' }, restaurantForOrder(order)),
@@ -164,7 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusChip(order.status)
             ]),
             ui.el('div', { className: 'order-card-actions' }, reorderButton)
-        ]));
+        ]);
+        if (order.id === requestedOrderId) requestedCard = article;
+        return ui.el('li', {}, article);
     }
 
     function renderHistory() {
@@ -179,7 +188,12 @@ document.addEventListener('DOMContentLoaded', () => {
             )));
             return;
         }
+        requestedCard = null;
         historyList.replaceChildren(...orders.map(orderCard));
+        if (requestedCard) {
+            requestedCard.focus();
+            requestedCard.scrollIntoView({ block: 'center' });
+        }
     }
 
     function renderActiveOrder() {

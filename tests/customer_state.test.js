@@ -149,6 +149,18 @@ test('delivery notes are trimmed, capped and preserved on demo orders', () => {
   assert.equal(State.normalize({ orders: [{ id: 'saved', deliveryNote: note }] }).orders[0].deliveryNote, note.trim().slice(0, 120));
 });
 
+test('preserves Restaurant preparation and cancellation metadata after a Customer-state reload', () => {
+  const accepted = RestaurantState.updateOrderStatus({
+    orders: [{ id: 'SVR-metadata', status: 'pending', items: [], total: 20 }]
+  }, 'SVR-metadata', 'confirmed', { prepMinutes: 35 });
+  const reloadedAccepted = State.normalize(accepted);
+  assert.equal(reloadedAccepted.orders[0].prepMinutes, 35);
+
+  const cancelled = RestaurantState.updateOrderStatus(reloadedAccepted, 'SVR-metadata', 'cancelled', { cancelReason: 'Kitchen capacity' });
+  const reloadedCancelled = State.normalize(cancelled);
+  assert.equal(reloadedCancelled.orders[0].cancelReason, 'Kitchen capacity');
+});
+
 test('favorite toggling is idempotent and scoped by kind', () => {
   let state = State.defaultState();
   state = State.toggleFavorite(state, 'products', '1');
