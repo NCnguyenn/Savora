@@ -178,3 +178,41 @@ test('Live Order details retains its labelled heading after safe rerendering', (
   assert.match(page, /data-order-details[^>]*aria-labelledby="live-order-details-title"/);
   assert.match(controller, /heading\('h2', 'Order details', 'live-order-details-title'\)/);
 });
+
+test('Menu Management and Menu Item Editor use the shared shell with accessible customer-preview controls', () => {
+  for (const file of ['restaurant_menu.php', 'restaurant_menu_item.php', 'js/restaurant_menu.js']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+  const menu = read('restaurant_menu.php');
+  const editor = read('restaurant_menu_item.php');
+  const controller = read('js/restaurant_menu.js');
+
+  for (const page of [menu, editor]) {
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
+    assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_footer\.php['"]/);
+    assert.equal((page.match(/<main\b/gi) || []).length, 1, 'each menu route has one main landmark');
+    assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
+  }
+
+  assert.match(menu, /<h1[^>]*>\s*Menu Management\s*<\/h1>/);
+  for (const hook of ['data-menu-search', 'data-menu-category', 'data-menu-availability', 'data-menu-sort', 'data-menu-view', 'data-menu-list', 'data-menu-feedback']) assert.match(menu, new RegExp(hook));
+  assert.match(controller, /restaurant_menu_item\.php\?id=/);
+  assert.match(controller, /data-menu-availability-toggle/);
+
+  assert.match(editor, /<h1[^>]*data-menu-editor-title[^>]*>\s*Add Menu Item\s*<\/h1>/);
+  for (const field of ['menu-name', 'menu-description', 'menu-category', 'menu-image', 'menu-price', 'menu-compare-price', 'menu-tax-category', 'menu-available', 'menu-stock', 'menu-prep-time', 'menu-dietary-tags']) assert.match(editor, new RegExp(`name="${field}"`));
+  assert.match(editor, /data-menu-option-groups/);
+  assert.match(editor, /data-menu-add-ons/);
+  assert.match(editor, /data-menu-customer-preview/);
+  assert.match(editor, /data-menu-validation[^>]*aria-live="polite"/);
+  assert.match(editor, /data-menu-status[^>]*aria-live="polite"/);
+  assert.match(editor, /data-menu-save="draft"/);
+  assert.match(editor, /data-menu-save="publish"/);
+
+  assert.match(controller, /api\.setMenuItem/);
+  assert.match(controller, /api\.setItemAvailability/);
+  assert.match(controller, /api\.persist/);
+  assert.match(controller, /textContent/);
+  assert.doesNotMatch(controller, /innerHTML\s*=/);
+});

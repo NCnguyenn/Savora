@@ -76,7 +76,8 @@
     return {
       id: text(source.id), restaurantId: owner.id, restaurantName: owner.name,
       name: text(source.name), description: text(source.description), category: text(source.category),
-      image: localCatalogImage(source.image), price: number(source.price), available: source.available !== false
+      image: localCatalogImage(source.image), price: number(source.price), available: source.available !== false,
+      status: source.status === 'draft' ? 'draft' : 'published'
     };
   };
   function applyRestaurantOverrides(sourceProducts, sourceRestaurants, state) {
@@ -91,7 +92,7 @@
     const source = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
     const owner = ownerFor(source.profile);
     const overrides = Array.isArray(source.menuItems) ? source.menuItems.map(item => allowedOverride(item, owner)).filter(item => item.id) : [];
-    overrides.forEach(override => {
+    overrides.filter(override => override.status !== 'draft').forEach(override => {
       const product = products[override.id] || {
         id: override.id, name: 'Menu item', description: '', category: 'menu', categories: ['menu'],
         image: placeholderImage, price: 0, available: true, portions: [], addOns: []

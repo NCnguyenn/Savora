@@ -17,7 +17,6 @@
   };
   const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image'];
   const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'capacity'];
-  const MENU_KEYS = ['id', 'restaurantId', 'restaurantName', 'name', 'description', 'category', 'image', 'price', 'available'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const nonNegative = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -30,6 +29,17 @@
     const status = allowedStatus(entry && entry.status);
     return status ? { status, createdAt: text(entry && entry.createdAt), actor: text(entry && entry.actor) } : null;
   }).filter(Boolean) : [];
+  const normalizeOptions = options => Array.isArray(options) ? options.map(option => {
+    const source = option && typeof option === 'object' && !Array.isArray(option) ? option : {};
+    const label = text(source.label);
+    return label ? { label, price: nonNegative(source.price) } : null;
+  }).filter(Boolean).slice(0, 20) : [];
+  const normalizeOptionGroups = groups => Array.isArray(groups) ? groups.map(group => {
+    const source = group && typeof group === 'object' && !Array.isArray(group) ? group : {};
+    const name = text(source.name);
+    return name ? { name, required: source.required === true, options: normalizeOptions(source.options) } : null;
+  }).filter(Boolean).slice(0, 8) : [];
+  const normalizeDietaryTags = tags => Array.isArray(tags) ? [...new Set(tags.map(text).filter(Boolean))].slice(0, 12) : [];
   const normalizeMenuItem = (item, owner = {}) => {
     const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
     return {
@@ -41,14 +51,23 @@
       category: text(source.category),
       image: localCatalogImage(source.image),
       price: nonNegative(source.price),
-      available: source.available !== false
+      compareAtPrice: nonNegative(source.compareAtPrice),
+      taxCategory: text(source.taxCategory),
+      optionGroups: normalizeOptionGroups(source.optionGroups),
+      addOns: normalizeOptions(source.addOns),
+      available: source.available !== false,
+      stockTracking: source.stockTracking === true,
+      stock: nonNegative(source.stock),
+      prepTime: nonNegative(source.prepTime),
+      dietaryTags: normalizeDietaryTags(source.dietaryTags),
+      status: source.status === 'draft' ? 'draft' : 'published'
     };
   };
   const defaultState = () => ({
     version: 1,
     profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '' },
     operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 0, capacity: 0 },
-    menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, available: true }],
+    menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, compareAtPrice: 0, taxCategory: '', optionGroups: [], addOns: [], available: true, stockTracking: false, stock: 0, prepTime: 20, dietaryTags: [], status: 'published' }],
     reviews: []
   });
 

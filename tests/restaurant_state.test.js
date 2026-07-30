@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const RestaurantState = require('../js/restaurant_state.js');
 const Catalog = require('../js/customer_catalog.js');
+const Menu = require('../js/restaurant_menu.js');
 
 test('accepts only valid order transitions and records an audit event', () => {
   const customer = { orders: [{ id: 'SVR-1', status: 'pending', items: [], total: 20 }] };
@@ -85,4 +86,39 @@ test('permits every Live Order Center transition and rejects terminal or skipped
     const customer = { orders: [{ id: `${from}-${to}`, status: from, items: [], total: 20 }] };
     assert.throws(() => RestaurantState.updateOrderStatus(customer, `${from}-${to}`, to), /transition/i);
   }
+});
+
+test('menu editor validates a publishable price, falls back from unsafe images, and preserves Customer-facing availability', () => {
+  const invalid = Menu.validateMenuItem({ id: 'menu-unsafe', name: 'Unsafe special', category: 'lunch', price: '0', image: 'https://example.test/dish.jpg' });
+  assert.equal(invalid.valid, false);
+  assert.match(invalid.errors.price, /greater than zero/i);
+
+  const item = Menu.menuItemFromDraft({
+    id: 'menu-safe', name: 'Safe special', description: 'Local only', category: 'lunch',
+    price: '12.50', image: 'assets/images/catalog/../secret.jpg', available: false,
+    optionGroups: [{ name: 'Size', required: true, options: [{ label: 'Regular', price: '0' }] }],
+    addOns: [{ label: 'Extra herb', price: '1.25' }], stock: '3', prepTime: '15', dietaryTags: ['vegetarian']
+  });
+  assert.equal(item.image, 'assets/images/food-placeholder.svg');
+  assert.equal(item.price, 12.5);
+  assert.equal(item.available, false);
+  assert.equal(item.optionGroups[0].options[0].price, 0);
+
+  const state = RestaurantState.setMenuItem(RestaurantState.defaultState(), item);
+  const catalog = Catalog.applyRestaurantOverrides(Catalog.products, Catalog.restaurants, state);
+  assert.equal(catalog.products['menu-safe'].available, false);
+  assert.equal(catalog.products['menu-safe'].price, 12.5);
+});
+
+test('menu editor maps camel-case state fields back to their labelled form controls', () => {
+  assert.equal(Menu.editorFieldName('taxCategory'), 'menu-tax-category');
+  assert.equal(Menu.editorFieldName('prepTime'), 'menu-prep-time');
+  assert.equal(Menu.editorFieldName('compareAtPrice'), 'menu-compare-price');
+});
+
+test('menu editor creates labelled option groups and add-ons from their form values', () => {
+  const groups = Menu.appendOptionGroup([], { name: 'Choose a size', required: true, optionLabel: 'Large', optionPrice: '2.00' });
+  const addOns = Menu.appendAddOn([], { label: 'Extra parmesan', price: '1.25' });
+  assert.deepEqual(groups, [{ name: 'Choose a size', required: true, options: [{ label: 'Large', price: 2 }] }]);
+  assert.deepEqual(addOns, [{ label: 'Extra parmesan', price: 1.25 }]);
 });
