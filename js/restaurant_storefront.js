@@ -128,6 +128,8 @@
     };
     const previewDraft = () => renderProfilePreview(preview, { ...state, profile: { ...state.profile, ...profilePatch(form) }, operations: { ...state.operations, deliveryRadius: Number(fields(form)('delivery-radius').value) || 0 } });
     form.addEventListener('input', previewDraft);
+    const profileName = fields(form)('profile-name');
+    if (profileName) profileName.addEventListener('input', () => { if (profileName.value.trim()) profileName.removeAttribute('aria-invalid'); });
     form.addEventListener('submit', event => {
       event.preventDefault();
       const patch = profilePatch(form); const deliveryRadius = Number(fields(form)('delivery-radius').value); const minimumOrder = Number(fields(form)('minimum-order').value); const prepMinutes = Number(fields(form)('profile-prep-minutes').value);

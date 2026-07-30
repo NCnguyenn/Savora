@@ -225,6 +225,12 @@ test('Operations special-hour controls expose labelled timed inputs when open', 
   assert.match(controller, /Special hours closing time/);
 });
 
+test('Store Profile clears a corrected restaurant-name validation error', () => {
+  const controller = read('js/restaurant_storefront.js');
+  assert.match(controller, /profile-name/);
+  assert.match(controller, /removeAttribute\('aria-invalid'\)/);
+});
+
 test('Store Profile and Operations routes provide accessible safe storefront controls', () => {
   for (const file of ['restaurant_profile.php', 'restaurant_operations.php', 'js/restaurant_storefront.js']) {
     assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);

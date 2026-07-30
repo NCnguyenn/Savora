@@ -91,6 +91,31 @@
     if (!date) return null;
     return source.closed === true ? { date, closed: true, note: text(source.note) } : { date, open: clock(source.open) || '09:00', close: clock(source.close) || '17:00', closed: false, note: text(source.note) };
   }).filter(Boolean).slice(0, 24) : [];
+  const localDateKey = value => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const month = String(date.getMonth() + 1).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  };
+  const minutes = value => {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(text(value));
+    return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+  };
+  function storefrontStatus(operations, now = new Date()) {
+    const settings = operations && typeof operations === 'object' && !Array.isArray(operations) ? operations : {};
+    if (settings.acceptingOrders === false) return { isOpen: false, status: 'Orders paused' };
+    const date = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(date.getTime())) return { isOpen: false, status: 'Closed now' };
+    const dateKey = localDateKey(date);
+    const special = specialHours(settings.specialHours).find(entry => entry.date === dateKey);
+    const day = WEEK_DAYS[(date.getDay() + 6) % 7];
+    const hours = special || weeklyHours(settings.weeklyHours)[day];
+    if (!hours || hours.closed) return { isOpen: false, status: special ? 'Closed today' : 'Closed now' };
+    const open = minutes(hours.open); const close = minutes(hours.close); const current = date.getHours() * 60 + date.getMinutes();
+    if (open === null || close === null) return { isOpen: false, status: 'Closed now' };
+    const isOpen = close > open ? current >= open && current < close : current >= open || current < close;
+    return { isOpen, status: isOpen ? 'Open for orders' : 'Closed now' };
+  }
   const storedRestaurantState = () => {
     if (!root) return {};
     if (root.SavoraRestaurantState && typeof root.SavoraRestaurantState.load === 'function') return root.SavoraRestaurantState.load();
@@ -101,12 +126,13 @@
     const source = profile && typeof profile === 'object' ? profile : {};
     const settings = operations && typeof operations === 'object' ? operations : {};
     const acceptingOrders = settings.acceptingOrders !== false;
+    const availability = storefrontStatus(settings);
     return {
       id: text(source.id).trim() || 'savora-kitchen', name: text(source.name).trim() || 'Savora Kitchen', cuisine: text(source.cuisine).trim(),
       image: localCatalogImage(source.image) || placeholderImage, description: text(source.description), address: text(source.address),
       deliveryEnabled: settings.deliveryEnabled !== false, pickupEnabled: settings.pickupEnabled !== false,
       deliveryRadius: bounded(settings.deliveryRadius, 0.1, 50, 5), prepMinutes: bounded(settings.prepMinutes, 1, 180, 20),
-      acceptingOrders, status: acceptingOrders ? 'Open for orders' : 'Orders paused', weeklyHours: weeklyHours(settings.weeklyHours), specialHours: specialHours(settings.specialHours)
+      acceptingOrders, isOpen: availability.isOpen, status: availability.status, weeklyHours: weeklyHours(settings.weeklyHours), specialHours: specialHours(settings.specialHours)
     };
   };
   const allowedOverride = (item, owner) => {
@@ -178,7 +204,7 @@
   const imageFor = product => product && localCatalogImage(product.image)
     ? product.image
     : placeholderImage;
-  const api = { products, restaurants, categories, recommendations: ['1', '2', '3', '4'], placeholderImage, imageFor, applyRestaurantOverrides };
+  const api = { products, restaurants, categories, recommendations: ['1', '2', '3', '4'], placeholderImage, imageFor, applyRestaurantOverrides, storefrontStatus };
   const freeze = value => {
     Object.values(value).forEach(child => child && typeof child === 'object' && !Object.isFrozen(child) && freeze(child));
     return Object.freeze(value);

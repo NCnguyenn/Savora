@@ -499,3 +499,13 @@ test('Customer discovery renders bridged restaurant storefront and accepting sta
   assert.match(dashboard, /text:\s*restaurant\.status/);
   assert.doesNotMatch(dashboard, /innerHTML\s*=/);
 });
+
+test('Customer discovery uses the menu image fallback and explicit fulfillment copy', () => {
+  const dashboard = read('customer_dashboard.php');
+
+  assert.match(dashboard, /restaurant\.image\s*\?\s*SavoraCatalog\.imageFor\(\{ image: restaurant\.image \}\)\s*:\s*SavoraCatalog\.imageFor\(menu\[0\]\)/);
+  assert.match(dashboard, /Delivery and pickup available/);
+  assert.match(dashboard, /Delivery available within/);
+  assert.match(dashboard, /Pickup available/);
+  assert.match(dashboard, /Delivery and pickup unavailable/);
+});

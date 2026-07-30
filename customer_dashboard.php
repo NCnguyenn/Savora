@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             ...restaurant,
             categories: [...new Set(menu.flatMap(item => item.categories))],
-            image: SavoraCatalog.imageFor({ image: restaurant.image }) || SavoraCatalog.imageFor(menu[0])
+            image: restaurant.image ? SavoraCatalog.imageFor({ image: restaurant.image }) : SavoraCatalog.imageFor(menu[0])
         };
     });
     const searchInput = document.getElementById('search-input');
@@ -188,14 +188,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const storefront = createElement('p', {
             className: 'food-card-meta',
-            text: restaurant.description || restaurant.address || (restaurant.deliveryEnabled === false ? 'Pickup available' : `${restaurant.deliveryRadius || 0} mi delivery`)
+            text: restaurant.description || restaurant.address || 'Storefront details available'
+        });
+        const fulfillmentCopy = restaurant.deliveryEnabled === false && restaurant.pickupEnabled === false
+            ? 'Delivery and pickup unavailable'
+            : restaurant.deliveryEnabled === false
+                ? 'Pickup available'
+                : restaurant.pickupEnabled === false
+                    ? `Delivery available within ${restaurant.deliveryRadius || 0} mi`
+                    : 'Delivery and pickup available';
+        const fulfillment = createElement('p', {
+            className: 'food-card-meta',
+            text: fulfillmentCopy
         });
         const action = createElement('span', { className: 'restaurant-card-action', text: 'View menu →' });
         const card = createElement('button', {
             className: 'food-card discovery-card restaurant-discovery-card',
             type: 'button',
             'aria-label': `Open ${restaurant.name} menu`
-        }, [image, title, meta, status, storefront, action]);
+        }, [image, title, meta, status, storefront, fulfillment, action]);
         card.addEventListener('click', () => SavoraUI.openMenuModal(restaurant.name));
         return createElement('article', { className: 'discovery-card-shell' }, [
             card,

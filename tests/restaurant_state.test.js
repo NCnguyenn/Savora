@@ -262,3 +262,16 @@ test('Customer catalog receives only safe storefront profile and operations fiel
   assert.equal(restaurant.specialHours[0].open, '11:00');
   assert.equal(Object.hasOwn(restaurant, 'onerror'), false);
 });
+
+test('Customer storefront availability respects accepting status, local hours, and special-date overrides', () => {
+  const weeklyHours = {
+    monday: { open: '09:00', close: '17:00' },
+    tuesday: { open: '20:00', close: '02:00' }
+  };
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: false, weeklyHours }, new Date(2026, 5, 1, 10, 0)), { isOpen: false, status: 'Orders paused' });
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours }, new Date(2026, 5, 1, 8, 59)), { isOpen: false, status: 'Closed now' });
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours }, new Date(2026, 5, 1, 10, 0)), { isOpen: true, status: 'Open for orders' });
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours, specialHours: [{ date: '2026-06-01', closed: true }] }, new Date(2026, 5, 1, 10, 0)), { isOpen: false, status: 'Closed today' });
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours, specialHours: [{ date: '2026-06-01', open: '11:00', close: '13:00' }] }, new Date(2026, 5, 1, 12, 0)), { isOpen: true, status: 'Open for orders' });
+  assert.deepEqual(Catalog.storefrontStatus({ acceptingOrders: true, weeklyHours }, new Date(2026, 5, 2, 1, 0)), { isOpen: true, status: 'Open for orders' });
+});
