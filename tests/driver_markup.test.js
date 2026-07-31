@@ -43,9 +43,11 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
 
 test('Demo dispatch candidates have matching driver accounts', () => {
   const database = read('db.php');
-  assert.match(database, /driver-nearby-2/);
-  assert.match(database, /driver-nearby-3/);
-  assert.match(database, /INSERT IGNORE INTO users/);
+  const schema = read('lib/platform_schema.php');
+  const databaseBoundary = `${database}\n${schema}`;
+  assert.match(databaseBoundary, /driver-nearby-2/);
+  assert.match(databaseBoundary, /driver-nearby-3/);
+  assert.match(databaseBoundary, /INSERT IGNORE INTO users/);
 });
 
 test('Database connection honors a configurable XAMPP MySQL port', () => {
