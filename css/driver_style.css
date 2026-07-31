@@ -876,13 +876,27 @@ a { color: inherit; }
   .driver-party-grid, .driver-delivery-meta-grid, .driver-delivery-actions { grid-template-columns: 1fr; }
   [data-driver-page="delivery"],
   [data-driver-page="overview"].has-active-offer { padding-bottom: 112px; }
-  [data-driver-page="delivery"] .driver-delivery-actions .driver-primary-action,
-  [data-driver-page="overview"].has-active-offer .driver-offer-actions .driver-primary-action {
+  [data-driver-page="delivery"] .driver-delivery-actions .driver-primary-action {
     position: fixed;
     z-index: 950;
     right: 18px;
     bottom: 82px;
     left: 18px;
+    min-height: 52px;
+    box-shadow: 0 10px 28px rgba(4, 41, 30, 0.24);
+  }
+  [data-driver-page="overview"].has-active-offer .driver-offer-actions {
+    position: fixed;
+    z-index: 950;
+    right: 18px;
+    bottom: 82px;
+    left: 18px;
+    display: grid;
+    grid-template-columns: 1.25fr 0.9fr;
+    gap: 8px;
+  }
+  [data-driver-page="overview"].has-active-offer .driver-offer-actions .driver-primary-action {
+    position: static;
     min-height: 52px;
     box-shadow: 0 10px 28px rgba(4, 41, 30, 0.24);
   }

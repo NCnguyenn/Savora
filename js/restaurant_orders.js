@@ -86,8 +86,13 @@
     const delivery = driverState()
       ? driverState().deliveryForOrder(driverState().load(), order.id)
       : null;
+    const dispatchState = driverState()
+      ? driverState().dispatchForOrder(driverState().load(), order.id)
+      : null;
     const dispatchCopy = delivery
       ? `${delivery.driverName || 'Assigned driver'} · ${delivery.status.replace(/_/g, ' ')}`
+      : dispatchState && dispatchState.status === 'offer_sent'
+        ? 'Offer sent to an eligible nearby driver'
       : order.status === 'ready_for_pickup'
         ? 'Searching for an available driver'
         : 'Driver assignment begins when this order is ready for pickup';

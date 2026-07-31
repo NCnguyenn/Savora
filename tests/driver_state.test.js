@@ -88,6 +88,15 @@ test('does not create an offer while offline, busy, or without a ready order', (
   assert.equal(DriverState.createOffer(accepted.state, { orders: [second] }, restaurant, 3000).currentOffer, null);
 });
 
+test('going offline while an offer is open returns it to the next eligible driver', () => {
+  const offered = DriverState.createOffer(onlineState(), { orders: [readyOrder()] }, restaurant, 1000);
+  const offline = DriverState.setAvailability(offered, false);
+
+  assert.equal(offline.currentOffer, null);
+  assert.equal(DriverState.dispatchForOrder(offline, 'SV-1042').status, 'offer_sent');
+  assert.notEqual(DriverState.dispatchForOrder(offline, 'SV-1042').candidateDriverId, offered.profile.id);
+});
+
 test('decline and timeout clear the offer without changing the shared order status', () => {
   const order = readyOrder();
   const offered = DriverState.createOffer(onlineState(), { orders: [order] }, restaurant, 1000);
@@ -97,9 +106,78 @@ test('decline and timeout clear the offer without changing the shared order stat
   assert.equal(declined.currentOffer, null);
   assert.deepEqual(declined.declinedOrderIds, ['SV-1042']);
   assert.equal(declined.offerAttempts.at(-1).outcome, 'declined');
+  assert.equal(DriverState.dispatchForOrder(declined, 'SV-1042').status, 'offer_sent');
+  assert.notEqual(DriverState.dispatchForOrder(declined, 'SV-1042').candidateDriverId, declined.profile.id);
   assert.equal(expired.currentOffer, null);
   assert.equal(expired.offerAttempts.at(-1).outcome, 'expired');
+  assert.equal(DriverState.dispatchForOrder(expired, 'SV-1042').status, 'offer_sent');
   assert.equal(order.status, 'ready_for_pickup');
+});
+
+test('decline automatically offers the order exclusively to the next eligible driver', () => {
+  const customer = { orders: [readyOrder()] };
+  const firstOffer = DriverState.createOffer(onlineState(), customer, restaurant, 1000);
+  const declined = DriverState.declineOffer(firstOffer, 'SV-1042', 2000);
+  const dispatch = DriverState.dispatchForOrder(declined, 'SV-1042');
+
+  assert.equal(dispatch.status, 'offer_sent');
+  assert.equal(dispatch.attemptedDriverIds.includes('driver'), true);
+  assert.ok(dispatch.candidateDriverId);
+
+  let secondDriver = DriverState.setProfile(declined, {
+    id: dispatch.candidateDriverId,
+    fullName: 'Alex Rivera',
+    phone: '(555) 010-9901'
+  });
+  secondDriver = DriverState.createOffer(secondDriver, customer, restaurant, 2500);
+
+  assert.equal(secondDriver.currentOffer.orderId, 'SV-1042');
+  assert.equal(DriverState.dispatchForOrder(secondDriver, 'SV-1042').candidateDriverId, dispatch.candidateDriverId);
+  const accepted = DriverState.acceptOffer(secondDriver, customer, restaurant, 'SV-1042', 3000);
+  assert.equal(DriverState.activeDelivery(accepted.state).driverId, dispatch.candidateDriverId);
+  assert.equal(DriverState.dispatchForOrder(accepted.state, 'SV-1042').status, 'assigned');
+});
+
+test('unmaterialized redispatched offers continue to expire and advance through eligible drivers', () => {
+  const offered = DriverState.createOffer(onlineState(), { orders: [readyOrder()] }, restaurant, 1000);
+  const firstHandoff = DriverState.declineOffer(offered, 'SV-1042', 2000);
+  const firstDispatch = DriverState.dispatchForOrder(firstHandoff, 'SV-1042');
+  const secondHandoff = DriverState.expireDispatches(firstHandoff, firstDispatch.expiresAt);
+  const secondDispatch = DriverState.dispatchForOrder(secondHandoff, 'SV-1042');
+
+  assert.equal(secondDispatch.lastOutcome, 'expired');
+  assert.equal(secondDispatch.status, 'offer_sent');
+  assert.notEqual(secondDispatch.candidateDriverId, firstDispatch.candidateDriverId);
+  assert.equal(secondHandoff.offerAttempts.at(-1).outcome, 'expired');
+
+  const exhausted = DriverState.expireDispatches(secondHandoff, secondDispatch.expiresAt);
+  assert.equal(DriverState.dispatchForOrder(exhausted, 'SV-1042').status, 'searching_driver');
+});
+
+test('offer selection enforces distance, COD, document eligibility, and nearest-order ranking', () => {
+  const farCash = readyOrder({ id: 'far', distanceToPickupKm: 30 });
+  const nearCash = readyOrder({ id: 'near', distanceToPickupKm: 2 });
+  let driver = DriverState.setLocation(onlineState(), {
+    method: 'manual',
+    address: '21 Oak Avenue',
+    serviceRadiusKm: 12
+  });
+
+  const ranked = DriverState.createOffer(driver, { orders: [farCash, nearCash] }, restaurant, 1000);
+  assert.equal(ranked.currentOffer.orderId, 'near');
+
+  driver = DriverState.setLocation(driver, {
+    method: 'manual',
+    address: '21 Oak Avenue',
+    serviceRadiusKm: 1
+  });
+  assert.equal(DriverState.createOffer(driver, { orders: [nearCash] }, restaurant, 1000).currentOffer, null);
+
+  const noCash = DriverState.setPreferences(onlineState(), { cashOnDelivery: false });
+  assert.equal(DriverState.createOffer(noCash, { orders: [nearCash] }, restaurant, 1000).currentOffer, null);
+
+  const unverified = DriverState.setProfile(onlineState(), { driverLicenseStatus: 'Expired' });
+  assert.equal(DriverState.createOffer(unverified, { orders: [nearCash] }, restaurant, 1000).currentOffer, null);
 });
 
 test('accepts an offer once and enforces one active delivery', () => {
@@ -133,6 +211,26 @@ test('pickup and delivery are driver-owned shared order transitions', () => {
   assert.throws(
     () => DriverState.updateMilestone(accepted.state, accepted.customerState, 'SV-1042', 'delivered', 5000),
     /transition/i
+  );
+});
+
+test('milestones reject a stale shared order that was cancelled or already changed', () => {
+  const customer = { orders: [readyOrder()] };
+  const offered = DriverState.createOffer(onlineState(), customer, restaurant, 1000);
+  const accepted = DriverState.acceptOffer(offered, customer, restaurant, 'SV-1042', 2000);
+  const cancelledBeforeArrival = structuredClone(accepted.customerState);
+  cancelledBeforeArrival.orders[0].status = 'cancelled';
+  assert.throws(
+    () => DriverState.updateMilestone(accepted.state, cancelledBeforeArrival, 'SV-1042', 'arrived', 2500),
+    /order.*status|no longer/i
+  );
+
+  const arrived = DriverState.updateMilestone(accepted.state, accepted.customerState, 'SV-1042', 'arrived', 2500);
+  const cancelledBeforePickup = structuredClone(arrived.customerState);
+  cancelledBeforePickup.orders[0].status = 'cancelled';
+  assert.throws(
+    () => DriverState.updateMilestone(arrived.state, cancelledBeforePickup, 'SV-1042', 'picked_up', 3000),
+    /order.*status|no longer/i
   );
 });
 

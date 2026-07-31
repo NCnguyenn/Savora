@@ -84,7 +84,7 @@
     const dialog = typeof dialogOrId === 'string' ? doc.getElementById(dialogOrId) : dialogOrId;
     if (!dialog) return;
     dialog.hidden = true;
-    if (!doc.querySelector('.driver-dialog:not([hidden]), .driver-mobile-panel:not([hidden])')) {
+    if (!doc.querySelector('.driver-dialog:not([hidden]), .driver-mobile-panel:not([hidden]), [role="dialog"]:not([hidden])')) {
       doc.body.classList.remove('driver-dialog-open');
     }
     if (lastDialogTrigger && typeof lastDialogTrigger.focus === 'function') lastDialogTrigger.focus();
@@ -123,7 +123,7 @@
       if (support) openDialog('driver-support-dialog', support);
     });
     doc.addEventListener('keydown', event => {
-      const dialog = doc.querySelector('.driver-dialog:not([hidden]), .driver-mobile-panel:not([hidden])');
+      const dialog = doc.querySelector('.driver-dialog:not([hidden]), .driver-mobile-panel:not([hidden]), [role="dialog"]:not([hidden])');
       if (!dialog) return;
       if (event.key === 'Escape') {
         event.preventDefault();

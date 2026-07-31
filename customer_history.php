@@ -231,12 +231,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ? ui.el('p', { className: 'active-order-delivery-note' }, [icon('fa-message'), 'Delivery note: ', activeOrder.deliveryNote])
             : null;
         const delivery = driverForOrder(activeOrder);
+        const dispatch = driverStateApi
+            ? driverStateApi.dispatchForOrder(driverStateApi.load(), activeOrder.id)
+            : null;
         const dispatchStatus = activeOrder.status === 'ready_for_pickup' && !delivery
             ? ui.el('section', { className: 'active-order-driver' }, [
                 icon('fa-satellite-dish'),
                 ui.el('div', {}, [
-                    ui.el('strong', {}, 'Searching for a nearby driver'),
-                    ui.el('p', {}, 'The restaurant is ready and Savora is sending the delivery to eligible drivers.')
+                    ui.el('strong', {}, dispatch && dispatch.status === 'offer_sent' ? 'Offer sent to a nearby driver' : 'Searching for a nearby driver'),
+                    ui.el('p', {}, dispatch && dispatch.status === 'offer_sent'
+                        ? 'This offer is exclusive for 30 seconds. Savora will continue the search if it is declined or expires.'
+                        : 'The restaurant is ready and Savora is sending the delivery to eligible drivers.')
                 ])
             ])
             : delivery

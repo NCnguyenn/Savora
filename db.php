@@ -52,4 +52,16 @@ if ($result->num_rows == 0) {
     }
     $stmt->close();
 }
+
+// Keep the demo dispatch pool usable even after the initial database seed.
+$driver_demo_users = [
+    ['username' => 'driver-nearby-2', 'password' => password_hash('123456', PASSWORD_DEFAULT), 'role' => 'driver', 'full_name' => 'Alex Rivera (Driver)'],
+    ['username' => 'driver-nearby-3', 'password' => password_hash('123456', PASSWORD_DEFAULT), 'role' => 'driver', 'full_name' => 'Jordan Lee (Driver)']
+];
+$stmt = $conn->prepare("INSERT IGNORE INTO users (username, password, role, full_name) VALUES (?, ?, ?, ?)");
+foreach ($driver_demo_users as $user) {
+    $stmt->bind_param("ssss", $user['username'], $user['password'], $user['role'], $user['full_name']);
+    $stmt->execute();
+}
+$stmt->close();
 ?>

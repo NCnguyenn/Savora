@@ -23,6 +23,7 @@ $driver_titles = [
 $driver_document_title = $driver_titles[$driver_current_page] ?? 'Driver Portal | Savora';
 $driver_name_raw = (string) ($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Savora Driver');
 $driver_name = htmlspecialchars($driver_name_raw, ENT_QUOTES, 'UTF-8');
+$driver_session_id = htmlspecialchars((string) ($_SESSION['username'] ?? 'driver'), ENT_QUOTES, 'UTF-8');
 $driver_initial = htmlspecialchars(strtoupper(substr((string) ($_SESSION['username'] ?? 'D'), 0, 1)), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
@@ -34,7 +35,7 @@ $driver_initial = htmlspecialchars(strtoupper(substr((string) ($_SESSION['userna
     <link rel="stylesheet" href="assets/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="css/driver_style.css">
 </head>
-<body class="driver-body" data-driver-session-name="<?php echo $driver_name; ?>">
+<body class="driver-body" data-driver-session-name="<?php echo $driver_name; ?>" data-driver-session-id="<?php echo $driver_session_id; ?>">
     <a class="skip-link" href="#driver-main">Skip to main content</a>
     <div class="driver-shell">
         <aside class="driver-sidebar" aria-label="Driver navigation">

@@ -11,6 +11,7 @@
   if (!page || !DriverState || !CustomerState || !RestaurantState || !ui) return;
 
   let countdownTimer = null;
+  let dispatchTimer = null;
 
   const setText = (selector, value) => {
     const node = doc.querySelector(selector);
@@ -27,14 +28,19 @@
 
   function syncSessionProfile(state) {
     const sessionName = String(doc.body.dataset.driverSessionName || '').replace(/\s*\(Driver\)\s*$/i, '').trim();
-    if (!sessionName || sessionName === state.profile.fullName) return state;
-    return DriverState.setProfile(state, { fullName: sessionName });
+    const sessionId = String(doc.body.dataset.driverSessionId || '').trim();
+    const patch = {};
+    if (sessionName && sessionName !== state.profile.fullName) patch.fullName = sessionName;
+    if (sessionId && sessionId !== state.profile.id) patch.id = sessionId;
+    return Object.keys(patch).length ? DriverState.setProfile(state, patch) : state;
   }
 
   function prepareDriverState(states) {
     let driver = syncSessionProfile(states.driver);
-    driver = DriverState.expireOffer(driver, Date.now());
-    driver = DriverState.createOffer(driver, states.customer, states.restaurant, Date.now());
+    const now = Date.now();
+    driver = DriverState.expireOffer(driver, now);
+    driver = DriverState.expireDispatches(driver, now);
+    driver = DriverState.createOffer(driver, states.customer, states.restaurant, now);
     return DriverState.persist(driver);
   }
 
@@ -95,6 +101,16 @@
         copy: 'Your next eligible delivery will appear here with restaurant, customer, route, and earnings details.'
       };
     }
+    const reassigned = state.dispatches.find(dispatch =>
+      dispatch.status === 'offer_sent' && dispatch.candidateDriverId && dispatch.candidateDriverId !== state.profile.id &&
+      state.offerAttempts.some(attempt => attempt.orderId === dispatch.orderId && ['declined', 'expired'].includes(attempt.outcome))
+    );
+    if (reassigned) {
+      return {
+        title: 'Offer reassigned',
+        copy: 'This delivery is now being offered to another eligible driver. Savora is looking for your next nearby delivery.'
+      };
+    }
     return {
       title: 'Looking for nearby deliveries',
       copy: 'You are online. Savora will show one eligible offer at a time.'
@@ -119,8 +135,12 @@
       content.hidden = true;
       if (countdownTimer) root.clearInterval(countdownTimer);
       countdownTimer = null;
+      scheduleDispatchReconciliation(state);
       return;
     }
+
+    if (dispatchTimer) root.clearTimeout(dispatchTimer);
+    dispatchTimer = null;
 
     empty.hidden = true;
     content.hidden = false;
@@ -140,6 +160,20 @@
       ])));
     }
     startCountdown(offer);
+  }
+
+  function scheduleDispatchReconciliation(state) {
+    if (dispatchTimer) root.clearTimeout(dispatchTimer);
+    dispatchTimer = null;
+    const expiresAt = state.dispatches
+      .filter(dispatch => dispatch.status === 'offer_sent' && dispatch.expiresAt > Date.now())
+      .map(dispatch => dispatch.expiresAt)
+      .sort((a, b) => a - b)[0];
+    if (!expiresAt) return;
+    dispatchTimer = root.setTimeout(() => {
+      dispatchTimer = null;
+      renderAll();
+    }, Math.max(0, expiresAt - Date.now()) + 25);
   }
 
   function updateCountdown(offer) {

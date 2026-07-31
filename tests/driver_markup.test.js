@@ -28,6 +28,8 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
 
   assert.match(header, /session_status\(\)\s*===\s*PHP_SESSION_NONE/);
   assert.match(header, /\(\$_SESSION\['role'\]\s*\?\?\s*''\)\s*!==\s*'driver'/);
+  assert.match(header, /data-driver-session-id=/);
+  assert.match(read('js/driver_dashboard.js'), /scheduleDispatchReconciliation/);
   for (const route of routeNames) assert.match(header, new RegExp(route.replace('.', '\\.')));
   assert.equal((header.match(/=>\s*\[['"](?:Overview|Active Delivery|History|Earnings|Profile)['"]/g) || []).length, 5);
   assert.match(header, /aria-current="page"/);
@@ -37,6 +39,13 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
   assert.match(footer, /js\/restaurant_state\.js/);
   assert.match(footer, /js\/driver_state\.js/);
   assert.match(footer, /js\/driver_ui\.js/);
+});
+
+test('Demo dispatch candidates have matching driver accounts', () => {
+  const database = read('db.php');
+  assert.match(database, /driver-nearby-2/);
+  assert.match(database, /driver-nearby-3/);
+  assert.match(database, /INSERT IGNORE INTO users/);
 });
 
 test('Driver stylesheet contains the approved palette, responsive navigation and visible focus', () => {
@@ -56,6 +65,8 @@ test('Driver stylesheet contains the approved palette, responsive navigation and
   assert.match(css, /:focus-visible/);
   assert.match(css, /@media\s*\(max-width:\s*860px\)/);
   assert.match(css, /grid-template-columns:\s*repeat\(5,\s*1fr\)/);
+  assert.match(css, /\[data-driver-page="overview"\]\.has-active-offer \.driver-offer-actions\s*\{\s*position:\s*fixed;/);
+  assert.match(css, /grid-template-columns:\s*1\.25fr 0\.9fr;/);
 });
 
 test('Driver UI renders persisted values with DOM nodes and exposes dialog and toast helpers', () => {
@@ -113,6 +124,7 @@ test('Active Delivery exposes route, parties, order details and one milestone ac
 
 test('Delivery History exposes accessible filters, responsive records and detail drawer', () => {
   const page = read('driver_history.php');
+  const controller = read('js/driver_history.js');
   assert.equal((page.match(/<main\b/gi) || []).length, 1);
   assert.match(page, /<h1[^>]*>\s*Delivery history\s*<\/h1>/);
   for (const hook of [
@@ -131,6 +143,8 @@ test('Delivery History exposes accessible filters, responsive records and detail
   assert.match(page, /<label[^>]*for="driver-history-search"/);
   assert.match(page, /<label[^>]*for="driver-history-date"/);
   assert.match(page, /<label[^>]*for="driver-history-status"/);
+  assert.match(controller, /ui\.openDialog\(drawer, trigger\)/);
+  assert.match(controller, /ui\.closeDialog\(drawer\)/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
 });
 

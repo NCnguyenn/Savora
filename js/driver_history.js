@@ -87,7 +87,7 @@
     cards.replaceChildren(...records.map(historyCard));
     empty.hidden = records.length > 0;
     if (!selectedId && params.get('delivery')) selectedId = params.get('delivery');
-    if (selectedId && records.some(record => record.orderId === selectedId)) openDetails(selectedId, false);
+    if (selectedId && records.some(record => record.orderId === selectedId) && doc.querySelector('[data-history-drawer]')?.hidden) openDetails(selectedId);
   }
 
   function detailRow(iconName, label, value) {
@@ -97,7 +97,7 @@
     ]);
   }
 
-  function openDetails(orderId, focus = true) {
+  function openDetails(orderId, trigger) {
     const delivery = DriverState.deliveryForOrder(DriverState.load(), orderId);
     const drawer = doc.querySelector('[data-history-drawer]');
     const detail = doc.querySelector('[data-history-detail]');
@@ -122,15 +122,12 @@
         : 'Paid with Savora Pay'),
       detailRow('fa-dollar-sign', 'Your earnings', ui.money(delivery.earnings + delivery.bonus))
     );
-    drawer.hidden = false;
-    doc.body.classList.add('driver-dialog-open');
-    if (focus) drawer.querySelector('[data-history-close]')?.focus();
+    ui.openDialog(drawer, trigger);
   }
 
   function closeDetails() {
     const drawer = doc.querySelector('[data-history-drawer]');
-    if (drawer) drawer.hidden = true;
-    doc.body.classList.remove('driver-dialog-open');
+    if (drawer) ui.closeDialog(drawer);
     selectedId = '';
   }
 
@@ -163,7 +160,7 @@
   doc.querySelector('[data-history-export]')?.addEventListener('click', exportCsv);
   page.addEventListener('click', event => {
     const select = event.target.closest('[data-history-select]');
-    if (select) openDetails(select.dataset.historySelect);
+    if (select) openDetails(select.dataset.historySelect, select);
   });
   doc.querySelectorAll('[data-history-close]').forEach(button => button.addEventListener('click', closeDetails));
   doc.addEventListener('keydown', event => {

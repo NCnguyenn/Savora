@@ -360,19 +360,35 @@ async function checkOfferDecisionFlow(client) {
     locationTop: document.querySelector('[data-driver-location]').getBoundingClientRect().top,
     actionTop: document.querySelector('[data-accept-offer]').getBoundingClientRect().top,
     actionBottom: document.querySelector('[data-accept-offer]').getBoundingClientRect().bottom,
+    declineTop: document.querySelector('[data-decline-offer]').getBoundingClientRect().top,
+    declineBottom: document.querySelector('[data-decline-offer]').getBoundingClientRect().bottom,
     viewport: innerHeight
   }))()`);
   assert(mobileOrder.offerTop < mobileOrder.locationTop, 'time-sensitive offer is not prioritized above location tools on mobile');
   assert(mobileOrder.actionTop >= 0 && mobileOrder.actionBottom <= mobileOrder.viewport - 74, 'accept action is not immediately reachable above mobile navigation');
+  assert(mobileOrder.declineTop >= 0 && mobileOrder.declineBottom <= mobileOrder.viewport - 74, 'decline action is not immediately reachable above mobile navigation');
   await captureScreenshot(client, 'state-offer-320');
   await setViewport(client, 1440, 1000);
   await evaluate(client, "document.querySelector('[data-decline-offer]').click()");
   await waitFor(client, "!SavoraDriverState.load().currentOffer", 'declining offer');
   assert(await evaluate(client, "SavoraState.load().orders.find(order => order.id === 'QA-DRIVER').status === 'ready_for_pickup'"), 'decline changed the shared order status');
+  assert(await evaluate(client, "SavoraDriverState.dispatchForOrder(SavoraDriverState.load(), 'QA-DRIVER')?.status === 'offer_sent'"), 'decline did not redispatch to the next eligible driver');
+  assert(await evaluate(client, "document.querySelector('[data-offer-empty]').innerText.includes('Offer reassigned')"), 'Driver was not told that the offer moved to another eligible driver');
+  const reassignedDriver = await evaluate(client, "SavoraDriverState.dispatchForOrder(SavoraDriverState.load(), 'QA-DRIVER').candidateDriverId");
+  await evaluate(client, `(() => {
+    const driver = SavoraDriverState.load();
+    const dispatch = driver.dispatches.find(item => item.orderId === 'QA-DRIVER');
+    dispatch.expiresAt = Date.now() + 250;
+    SavoraDriverState.persist(driver);
+    return true;
+  })()`);
+  await navigate(client, 'driver_dashboard.php');
+  await waitFor(client, `SavoraDriverState.dispatchForOrder(SavoraDriverState.load(), 'QA-DRIVER')?.candidateDriverId !== ${JSON.stringify(reassignedDriver)}`, 'automatic expiry of a reassigned offer', 2500);
 
   await resetOffer(client, 250);
   await waitFor(client, "!SavoraDriverState.load().currentOffer", 'automatic offer expiry', 2500);
   assert(await evaluate(client, "SavoraDriverState.load().offerAttempts.some(attempt => attempt.orderId === 'QA-DRIVER' && attempt.outcome === 'expired')"), 'expired offer was not recorded');
+  assert(await evaluate(client, "SavoraDriverState.dispatchForOrder(SavoraDriverState.load(), 'QA-DRIVER')?.status === 'offer_sent'"), 'expired offer did not redispatch to the next eligible driver');
 }
 
 async function checkDeliveryFlow(client) {
@@ -412,6 +428,15 @@ async function checkDeliveryFlow(client) {
   await waitFor(client, "location.pathname.endsWith('/driver_history.php')", 'completed delivery history');
   await waitFor(client, "globalThis.SavoraState?.load().orders.find(order => order.id === 'QA-DRIVER')?.status === 'completed'", 'completed Customer order');
   await waitFor(client, "document.querySelector('main')?.innerText.includes('QA-DRIVER')", 'completed delivery in history');
+  await waitFor(client, "document.activeElement?.matches('[data-history-close]')", 'focusing delivery history drawer');
+  await pressKey(client, 'Tab', 'Tab', 9);
+  assert(await evaluate(client, "document.activeElement?.closest('[data-history-drawer]') !== null"), 'history drawer does not contain keyboard focus');
+  await pressKey(client, 'Escape', 'Escape', 27);
+  await waitFor(client, "document.querySelector('[data-history-drawer]').hidden", 'closing delivery history drawer');
+  await evaluate(client, "document.querySelector('[data-history-select]').click()");
+  await waitFor(client, "document.activeElement?.matches('[data-history-close]')", 'focusing drawer from selected record');
+  await pressKey(client, 'Escape', 'Escape', 27);
+  assert(await evaluate(client, "document.activeElement?.matches('[data-history-select]')"), 'closing history drawer did not restore focus to its trigger');
   await navigate(client, 'driver_earnings.php');
   assert(await evaluate(client, "document.querySelector('main').innerText.includes('$6.80')"), 'completed delivery earnings are missing');
   await captureScreenshot(client, 'state-earnings-completed-1440');

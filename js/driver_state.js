@@ -9,6 +9,7 @@
   const OFFER_DURATION_MS = 30000;
   const ACTIVE_DELIVERY_STATUSES = ['assigned', 'arrived', 'picked_up'];
   const DELIVERY_STATUSES = [...ACTIVE_DELIVERY_STATUSES, 'delivered', 'cancelled', 'failed'];
+  const DISPATCH_STATUSES = ['searching_driver', 'offer_sent', 'assigned', 'arrived', 'picked_up', 'delivered'];
   const MILESTONE_TRANSITIONS = {
     assigned: ['arrived'],
     arrived: ['picked_up'],
@@ -65,8 +66,28 @@
     cashOnDelivery: true,
     avoidHighways: false
   });
+  const defaultDispatchCandidates = () => ([
+    {
+      id: 'driver-nearby-2',
+      fullName: 'Alex Rivera',
+      online: true,
+      eligible: true,
+      serviceRadiusKm: 12,
+      distanceToPickupKm: 2.2,
+      cashOnDelivery: true
+    },
+    {
+      id: 'driver-nearby-3',
+      fullName: 'Jordan Lee',
+      online: true,
+      eligible: true,
+      serviceRadiusKm: 8,
+      distanceToPickupKm: 3.6,
+      cashOnDelivery: true
+    }
+  ]);
   const defaultState = () => ({
-    version: 1,
+    version: 2,
     online: false,
     profile: defaultProfile(),
     location: {
@@ -80,6 +101,8 @@
     currentOffer: null,
     declinedOrderIds: [],
     offerAttempts: [],
+    dispatchCandidates: defaultDispatchCandidates(),
+    dispatches: [],
     deliveries: []
   });
 
@@ -161,6 +184,43 @@
     };
   }
 
+  function normalizeDispatchCandidate(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const id = text(raw.id);
+    if (!id) return null;
+    return {
+      id,
+      fullName: text(raw.fullName) || 'Nearby driver',
+      online: raw.online === true,
+      eligible: raw.eligible !== false,
+      serviceRadiusKm: bounded(raw.serviceRadiusKm, 0.1, 50, 8),
+      distanceToPickupKm: bounded(raw.distanceToPickupKm, 0, 100, 2.5),
+      cashOnDelivery: raw.cashOnDelivery !== false
+    };
+  }
+
+  function normalizeDispatch(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const orderId = text(raw.orderId);
+    const status = DISPATCH_STATUSES.includes(raw.status) ? raw.status : '';
+    if (!orderId || !status) return null;
+    return {
+      orderId,
+      status,
+      candidateDriverId: text(raw.candidateDriverId),
+      candidateName: text(raw.candidateName),
+      attemptedDriverIds: [...new Set(Array.isArray(raw.attemptedDriverIds)
+        ? raw.attemptedDriverIds.map(text).filter(Boolean).slice(0, 50)
+        : [])],
+      attemptCount: Math.max(0, Math.floor(nonNegative(raw.attemptCount))),
+      expiresAt: timestamp(raw.expiresAt),
+      updatedAt: iso(raw.updatedAt),
+      lastOutcome: ['accepted', 'declined', 'expired'].includes(raw.lastOutcome) ? raw.lastOutcome : '',
+      paymentMethod: raw.paymentMethod === 'wallet' ? 'wallet' : 'cash',
+      distanceToPickupKm: bounded(raw.distanceToPickupKm, 0, 100, 1.4)
+    };
+  }
+
   function normalize(raw) {
     const state = defaultState();
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -197,6 +257,12 @@
         createdAt: iso(attempt && attempt.createdAt)
       } : null;
     }).filter(Boolean).slice(-300) : [];
+    state.dispatchCandidates = Array.isArray(source.dispatchCandidates)
+      ? source.dispatchCandidates.map(normalizeDispatchCandidate).filter(Boolean).slice(0, 50)
+      : defaultDispatchCandidates();
+    state.dispatches = Array.isArray(source.dispatches)
+      ? source.dispatches.map(normalizeDispatch).filter(Boolean).slice(-300)
+      : [];
     state.deliveries = Array.isArray(source.deliveries)
       ? source.deliveries.map(normalizeDelivery).filter(Boolean).slice(-300)
       : [];
@@ -221,7 +287,14 @@
   function setAvailability(state, online) {
     const next = normalize(state);
     next.online = online === true;
-    if (!next.online) next.currentOffer = null;
+    if (!next.online && next.currentOffer) {
+      const offer = next.currentOffer;
+      const now = Date.now();
+      recordAttempt(next, offer.orderId, 'declined', now);
+      next.declinedOrderIds = [...new Set([...next.declinedOrderIds, offer.orderId])];
+      handOffOffer(next, offer, 'declined', now);
+      next.currentOffer = null;
+    }
     return next;
   }
 
@@ -303,17 +376,144 @@
     return normalize(state).deliveries.find(delivery => ACTIVE_DELIVERY_STATUSES.includes(delivery.status)) || null;
   }
 
+  function dispatchForOrder(state, orderId) {
+    const id = text(orderId);
+    return normalize(state).dispatches.find(dispatch => dispatch.orderId === id) || null;
+  }
+
+  function documentEligible(profile) {
+    const invalid = value => /expired|rejected|missing|unverified/i.test(text(value));
+    return !invalid(profile.driverLicenseStatus) && !invalid(profile.registrationStatus) && !invalid(profile.insuranceStatus);
+  }
+
+  function pickupDistance(order) {
+    return bounded(order && order.distanceToPickupKm, 0, 100, 1.4);
+  }
+
+  function driverCanReceiveOrder(state, order) {
+    const next = normalize(state);
+    if (!next.online || next.preferences.newOffers === false || activeDelivery(next) || !next.location.address || !documentEligible(next.profile)) return false;
+    if (order && order.paymentMethod === 'cash' && next.preferences.cashOnDelivery === false) return false;
+    return pickupDistance(order) <= next.serviceRadiusKm;
+  }
+
+  function candidateCanReceiveOffer(candidate, offer) {
+    return candidate.online && candidate.eligible && candidate.serviceRadiusKm >= offer.distanceToPickupKm &&
+      (offer.paymentMethod !== 'cash' || candidate.cashOnDelivery);
+  }
+
+  function candidateForRedispatch(state, offer, attemptedDriverIds) {
+    return state.dispatchCandidates
+      .filter(candidate => !attemptedDriverIds.includes(candidate.id) && candidateCanReceiveOffer(candidate, offer))
+      .sort((a, b) => a.distanceToPickupKm - b.distanceToPickupKm)[0] || null;
+  }
+
+  function updateDispatch(state, orderId, patch) {
+    const index = state.dispatches.findIndex(dispatch => dispatch.orderId === text(orderId));
+    const previous = index >= 0 ? state.dispatches[index] : {
+      orderId: text(orderId),
+      status: 'searching_driver',
+      candidateDriverId: '',
+      candidateName: '',
+      attemptedDriverIds: [],
+      attemptCount: 0,
+      expiresAt: 0,
+      updatedAt: '',
+      lastOutcome: '',
+      paymentMethod: 'cash',
+      distanceToPickupKm: 1.4
+    };
+    const next = normalizeDispatch({ ...previous, ...patch });
+    if (index >= 0) state.dispatches[index] = next;
+    else state.dispatches.push(next);
+    return next;
+  }
+
+  function handOffOffer(state, offer, outcome, now) {
+    const existing = dispatchForOrder(state, offer.orderId) || {};
+    const attemptedDriverIds = [...new Set([
+      ...(existing.attemptedDriverIds || []),
+      existing.candidateDriverId || state.profile.id
+    ].filter(Boolean))];
+    const candidate = candidateForRedispatch(state, offer, attemptedDriverIds);
+    return updateDispatch(state, offer.orderId, candidate ? {
+      status: 'offer_sent',
+      candidateDriverId: candidate.id,
+      candidateName: candidate.fullName,
+      attemptedDriverIds,
+      attemptCount: Math.max(0, Number(existing.attemptCount) || 0) + 1,
+      expiresAt: now + OFFER_DURATION_MS,
+      updatedAt: new Date(now).toISOString(),
+      lastOutcome: outcome,
+      paymentMethod: offer.paymentMethod,
+      distanceToPickupKm: offer.distanceToPickupKm
+    } : {
+      status: 'searching_driver',
+      candidateDriverId: '',
+      candidateName: '',
+      attemptedDriverIds,
+      attemptCount: Math.max(0, Number(existing.attemptCount) || 0) + 1,
+      expiresAt: 0,
+      updatedAt: new Date(now).toISOString(),
+      lastOutcome: outcome,
+      paymentMethod: offer.paymentMethod,
+      distanceToPickupKm: offer.distanceToPickupKm
+    });
+  }
+
+  function expireDispatches(state, now = Date.now()) {
+    const next = normalize(state);
+    const time = timestamp(now);
+    next.dispatches
+      .filter(dispatch => dispatch.status === 'offer_sent' && dispatch.expiresAt > 0 && dispatch.expiresAt <= time)
+      .filter(dispatch => !next.currentOffer || next.currentOffer.orderId !== dispatch.orderId)
+      .forEach(dispatch => {
+        recordAttempt(next, dispatch.orderId, 'expired', time);
+        handOffOffer(next, dispatch, 'expired', time);
+      });
+    return normalize(next);
+  }
+
   function createOffer(state, customerState, restaurantState, now = Date.now()) {
     const next = normalize(state);
-    if (!next.online || activeDelivery(next) || next.currentOffer || next.preferences.newOffers === false) return next;
+    const time = timestamp(now);
+    if (!driverCanReceiveOrder(next, { paymentMethod: 'wallet', distanceToPickupKm: 0 })) return next;
+    if (next.currentOffer) {
+      const offerDispatch = dispatchForOrder(next, next.currentOffer.orderId);
+      if (!offerDispatch || offerDispatch.candidateDriverId === next.profile.id) return next;
+      next.currentOffer = null;
+    }
     const orders = Array.isArray(customerState && customerState.orders) ? customerState.orders : [];
-    const order = orders.find(item =>
-      item && item.status === 'ready_for_pickup' &&
-      !next.declinedOrderIds.includes(text(item.id)) &&
-      !next.deliveries.some(delivery => delivery.orderId === text(item.id))
-    );
+    const handoff = next.dispatches.find(dispatch => dispatch.status === 'offer_sent' && dispatch.candidateDriverId === next.profile.id);
+    const dispatchOrder = handoff && orders.find(item => item && text(item.id) === handoff.orderId);
+    const order = dispatchOrder && dispatchOrder.status === 'ready_for_pickup' && driverCanReceiveOrder(next, dispatchOrder)
+      ? dispatchOrder
+      : orders
+        .filter(item => item && item.status === 'ready_for_pickup' && driverCanReceiveOrder(next, item))
+        .filter(item => {
+          const dispatch = dispatchForOrder(next, item.id);
+          return !dispatch || dispatch.status === 'searching_driver' || dispatch.candidateDriverId === next.profile.id;
+        })
+        .filter(item => !next.deliveries.some(delivery => delivery.orderId === text(item.id)))
+        .sort((a, b) => pickupDistance(a) - pickupDistance(b))[0];
     if (!order) return next;
-    next.currentOffer = normalizeOffer(offerSnapshot(order, restaurantState, timestamp(now)));
+    next.currentOffer = normalizeOffer(offerSnapshot(order, restaurantState, time));
+    const existing = dispatchForOrder(next, order.id);
+    updateDispatch(next, order.id, {
+      status: 'offer_sent',
+      candidateDriverId: next.profile.id,
+      candidateName: next.profile.fullName,
+      attemptedDriverIds: existing?.attemptedDriverIds || [],
+      attemptCount: existing?.attemptCount || 0,
+      expiresAt: existing?.candidateDriverId === next.profile.id && existing.expiresAt > time
+        ? existing.expiresAt
+        : time + OFFER_DURATION_MS,
+      updatedAt: new Date(time).toISOString(),
+      lastOutcome: existing?.lastOutcome || '',
+      paymentMethod: next.currentOffer.paymentMethod,
+      distanceToPickupKm: next.currentOffer.distanceToPickupKm
+    });
+    next.currentOffer.expiresAt = dispatchForOrder(next, order.id).expiresAt;
     return next;
   }
 
@@ -329,8 +529,10 @@
   function expireOffer(state, now = Date.now()) {
     const next = normalize(state);
     if (!next.currentOffer || timestamp(now) < next.currentOffer.expiresAt) return next;
-    recordAttempt(next, next.currentOffer.orderId, 'expired', timestamp(now));
+    const time = timestamp(now);
+    recordAttempt(next, next.currentOffer.orderId, 'expired', time);
     next.declinedOrderIds = [...new Set([...next.declinedOrderIds, next.currentOffer.orderId])];
+    handOffOffer(next, next.currentOffer, 'expired', time);
     next.currentOffer = null;
     return normalize(next);
   }
@@ -338,8 +540,10 @@
   function declineOffer(state, orderId, now = Date.now()) {
     const next = normalize(state);
     if (!next.currentOffer || next.currentOffer.orderId !== text(orderId)) throw new Error('Delivery offer not found');
-    recordAttempt(next, next.currentOffer.orderId, 'declined', timestamp(now));
+    const time = timestamp(now);
+    recordAttempt(next, next.currentOffer.orderId, 'declined', time);
     next.declinedOrderIds = [...new Set([...next.declinedOrderIds, next.currentOffer.orderId])];
+    handOffOffer(next, next.currentOffer, 'declined', time);
     next.currentOffer = null;
     return normalize(next);
   }
@@ -355,6 +559,10 @@
     const order = customer.orders.find(item => text(item && item.id) === current.orderId);
     if (!order || order.status !== 'ready_for_pickup') throw new Error('Order is no longer ready for pickup');
     const profile = next.profile;
+    const dispatch = dispatchForOrder(next, current.orderId);
+    if (dispatch && (dispatch.status !== 'offer_sent' || dispatch.candidateDriverId !== profile.id)) {
+      throw new Error('Delivery offer is assigned to another driver');
+    }
     const vehicle = [profile.vehicleColor, profile.vehicleModel, profile.licensePlate].filter(Boolean).join(' · ');
     next.deliveries.push(normalizeDelivery({
       ...current,
@@ -367,6 +575,16 @@
       milestones: [{ status: 'assigned', createdAt: new Date(time).toISOString() }]
     }));
     recordAttempt(next, current.orderId, 'accepted', time);
+    updateDispatch(next, current.orderId, {
+      status: 'assigned',
+      candidateDriverId: profile.id,
+      candidateName: profile.fullName,
+      expiresAt: 0,
+      updatedAt: new Date(time).toISOString(),
+      lastOutcome: 'accepted',
+      paymentMethod: current.paymentMethod,
+      distanceToPickupKm: current.distanceToPickupKm
+    });
     next.currentOffer = null;
     return { state: normalize(next), customerState: customer };
   }
@@ -387,6 +605,10 @@
     }
     const order = customer.orders.find(item => text(item && item.id) === delivery.orderId);
     if (!order) throw new Error('Order not found');
+    const expectedOrderStatus = milestone === 'delivered' ? 'on_the_way' : 'ready_for_pickup';
+    if (order.status !== expectedOrderStatus) {
+      throw new Error(`Order status no longer allows ${milestone}`);
+    }
     const time = timestamp(now);
     delivery.status = milestone;
     delivery.milestones.push({ status: milestone, createdAt: new Date(time).toISOString() });
@@ -400,6 +622,15 @@
       });
     }
     if (milestone === 'delivered') delivery.deliveredAt = new Date(time).toISOString();
+    updateDispatch(next, delivery.orderId, {
+      status: milestone,
+      candidateDriverId: delivery.driverId,
+      candidateName: delivery.driverName,
+      expiresAt: 0,
+      updatedAt: new Date(time).toISOString(),
+      paymentMethod: delivery.paymentMethod,
+      distanceToPickupKm: delivery.distanceToPickupKm
+    });
     return { state: normalize(next), customerState: customer };
   }
 
@@ -442,12 +673,14 @@
     setProfile,
     setPreferences,
     createOffer,
+    expireDispatches,
     expireOffer,
     declineOffer,
     acceptOffer,
     updateMilestone,
     activeDelivery,
     deliveryForOrder,
+    dispatchForOrder,
     deriveHistory,
     deriveEarnings
   };

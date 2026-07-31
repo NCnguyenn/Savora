@@ -383,6 +383,7 @@ test('Restaurant Live Orders loads Driver state and stops at ready for pickup', 
   assert.match(footer, /js\/driver_state\.js/);
   assert.match(controller, /SavoraDriverState/);
   assert.match(controller, /deliveryForOrder/);
+  assert.match(controller, /dispatchForOrder/);
   assert.match(controller, /Driver dispatch/);
   assert.match(controller, /Searching for an available driver/);
   assert.doesNotMatch(controller, /Hand off order|Complete handoff/);

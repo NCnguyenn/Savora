@@ -518,8 +518,13 @@ test('Customer tracking loads Driver state and renders dispatch visibility safel
   assert.match(footer, /js\/driver_state\.js/);
   assert.match(dashboard, /SavoraDriverState/);
   assert.match(dashboard, /deliveryForOrder/);
+  assert.match(dashboard, /dispatchForOrder/);
+  assert.match(dashboard, /function initializeTrackingMap\(delivery\)/);
+  assert.match(dashboard, /const driverState = delivery && window\.SavoraDriverState/);
+  assert.match(dashboard, /if \(driverLocation\) \{/);
   assert.match(history, /SavoraDriverState/);
   assert.match(history, /deliveryForOrder/);
+  assert.match(history, /dispatchForOrder/);
   assert.match(history, /Searching for a nearby driver/);
   assert.match(history, /Driver assigned/);
   assert.doesNotMatch(`${dashboard}\n${history}`, /innerHTML\s*=/);

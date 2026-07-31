@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filterDiscovery();
     });
 
-    function initializeTrackingMap() {
+    function initializeTrackingMap(delivery) {
         const mapElement = document.getElementById('order-map');
         if (!mapElement) return;
         const markDegraded = () => {
@@ -289,11 +289,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const customerLocation = [10.7769, 106.7009];
-        const driverState = window.SavoraDriverState ? window.SavoraDriverState.load() : null;
+        const driverState = delivery && window.SavoraDriverState ? window.SavoraDriverState.load() : null;
         const savedLocation = driverState && driverState.location && driverState.location.method === 'gps'
             ? [driverState.location.latitude, driverState.location.longitude]
             : null;
-        const driverLocation = savedLocation && savedLocation.every(Number.isFinite) ? savedLocation : [10.7812, 106.6945];
+        const driverLocation = delivery
+            ? (savedLocation && savedLocation.every(Number.isFinite) ? savedLocation : [10.7812, 106.6945])
+            : null;
         const map = L.map('order-map', { zoomControl: false, scrollWheelZoom: false }).setView(customerLocation, 14);
         let tileFailed = false;
         const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -309,8 +311,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         tiles.addTo(map);
         const customerMarker = L.circleMarker(customerLocation, { radius: 8, color: '#fff', weight: 3, fillColor: '#ef634b', fillOpacity: 1 }).addTo(map);
-        const driverMarker = L.circleMarker(driverLocation, { radius: 9, color: '#fff', weight: 3, fillColor: '#073b2b', fillOpacity: 1 }).addTo(map);
-        map.fitBounds(L.featureGroup([customerMarker, driverMarker]).getBounds().pad(0.25));
+        if (driverLocation) {
+            const driverMarker = L.circleMarker(driverLocation, { radius: 9, color: '#fff', weight: 3, fillColor: '#073b2b', fillOpacity: 1 }).addTo(map);
+            map.fitBounds(L.featureGroup([customerMarker, driverMarker]).getBounds().pad(0.25));
+        }
     }
 
     function renderTracking() {
@@ -341,8 +345,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const delivery = window.SavoraDriverState
             ? window.SavoraDriverState.deliveryForOrder(window.SavoraDriverState.load(), activeOrder.id)
             : null;
+        const dispatch = window.SavoraDriverState
+            ? window.SavoraDriverState.dispatchForOrder(window.SavoraDriverState.load(), activeOrder.id)
+            : null;
         const driverCopy = activeOrder.status === 'ready_for_pickup' && !delivery
-            ? 'Searching for a nearby driver'
+            ? dispatch && dispatch.status === 'offer_sent'
+                ? 'Savora has sent this delivery to an eligible nearby driver'
+                : 'Searching for a nearby driver'
             : delivery
                 ? `Driver assigned · ${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`
                 : '';
@@ -359,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createElement('a', { className: 'primary-action', href: 'customer_history.php', text: 'Track order' })
         ].filter(Boolean));
         tracking.replaceChildren(article);
-        initializeTrackingMap();
+        initializeTrackingMap(delivery);
     }
 
     filterDiscovery();
