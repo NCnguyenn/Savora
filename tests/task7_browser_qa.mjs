@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const debugPort = Number(process.env.SAVORA_CDP_PORT || 9227);
-const baseUrl = 'http://localhost/Savora';
+const baseUrl = process.env.SAVORA_BASE_URL || 'http://localhost/Savora';
 const artifactDir = path.resolve('.superpowers/sdd/customer-ui-2026-07-29/task-7-qa');
 const routes = {
   discover: 'customer_dashboard.php',

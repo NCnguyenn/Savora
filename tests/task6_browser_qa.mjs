@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const debugPort = 9227;
-const baseUrl = 'http://localhost/Savora';
+const debugPort = Number(process.env.SAVORA_CDP_PORT || 9227);
+const baseUrl = process.env.SAVORA_BASE_URL || 'http://localhost/Savora';
 const artifactDir = path.resolve('.superpowers/sdd/customer-ui-2026-07-29');
 
 class CdpClient {

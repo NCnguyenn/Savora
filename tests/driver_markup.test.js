@@ -48,6 +48,12 @@ test('Demo dispatch candidates have matching driver accounts', () => {
   assert.match(database, /INSERT IGNORE INTO users/);
 });
 
+test('Database connection honors a configurable XAMPP MySQL port', () => {
+  const database = read('db.php');
+  assert.match(database, /SAVORA_DB_PORT/);
+  assert.match(database, /new mysqli\(\$host, \$username, \$password, '', \$dbPort\)/);
+});
+
 test('Driver stylesheet contains the approved palette, responsive navigation and visible focus', () => {
   const css = read('css/driver_style.css').toLowerCase();
   for (const color of [

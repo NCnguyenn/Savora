@@ -4,9 +4,10 @@ $host = "localhost";
 $username = "root";
 $password = "";
 $dbname = "savora_db";
+$dbPort = (int) (getenv('SAVORA_DB_PORT') ?: 3307);
 
 // Connect to MySQL
-$conn = new mysqli($host, $username, $password);
+$conn = new mysqli($host, $username, $password, '', $dbPort);
 
 // Check connection
 if ($conn->connect_error) {
