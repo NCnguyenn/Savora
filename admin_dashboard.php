@@ -1,122 +1,101 @@
 <?php
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header('Location: index.php');
-    exit();
+declare(strict_types=1);
+
+$admin_page_title = 'System Overview';
+require_once __DIR__ . '/components/admin_header.php';
+
+$overview = admin_page_data($conn, 'overview');
+$accounts = $overview['accounts'];
+$roleCounts = ['customer' => 0, 'restaurant' => 0, 'driver' => 0];
+foreach ($accounts as $account) {
+    if (array_key_exists($account['role'], $roleCounts) && $account['status'] === 'active') {
+        $roleCounts[$account['role']]++;
+    }
 }
+$recentAccounts = array_slice($accounts, 0, 5);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Savora</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-logo"><i class="fa-solid fa-utensils"></i> Savora <span style="font-size: 0.8rem; display:block; color:var(--text-muted);">Admin Control</span></div>
-            <ul class="nav-menu">
-                <li class="nav-item"><a href="#" class="nav-link active"><i class="fa-solid fa-chart-pie"></i> Overview</a></li>
-                <li class="nav-item"><a href="#" class="nav-link"><i class="fa-solid fa-users"></i> Users</a></li>
-                <li class="nav-item"><a href="#" class="nav-link"><i class="fa-solid fa-store"></i> Restaurants</a></li>
-                <li class="nav-item"><a href="#" class="nav-link"><i class="fa-solid fa-motorcycle"></i> Drivers</a></li>
-                <li class="nav-item"><a href="#" class="nav-link"><i class="fa-solid fa-money-bill-transfer"></i> Finance</a></li>
-            </ul>
-            <a href="logout.php" class="nav-link logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
-        </aside>
+<main class="admin-main" id="admin-main" tabindex="-1">
+    <header class="admin-page-heading">
+        <div>
+            <p class="admin-eyebrow">FRIDAY, JULY 31</p>
+            <h1>System Overview</h1>
+            <p>Monitor platform health, approvals and live operations from one place.</p>
+        </div>
+        <div class="admin-page-heading__actions">
+            <a class="admin-button admin-button--ghost" href="admin_analytics.php"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> View analytics</a>
+            <a class="admin-button admin-button--primary" href="admin_orders.php"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Live operations</a>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="top-header">
-                <div>
-                    <h2>System Overview</h2>
-                    <p style="color: var(--text-muted);">Platform statistics and recent activities.</p>
-                </div>
-                <div class="user-info">
-                    <span class="badge badge-info"><i class="fa-solid fa-shield-halved"></i> Admin Mode</span>
-                    <div class="avatar" style="background-color: #2D3436;"><?php echo substr($_SESSION['username'], 0, 1); ?></div>
-                </div>
+    <section class="admin-kpi-grid" aria-label="Platform summary">
+        <article class="admin-kpi-card">
+            <span class="admin-kpi-card__icon admin-kpi-card__icon--sage"><i class="fa-solid fa-users" aria-hidden="true"></i></span>
+            <div class="admin-kpi-card__label">Active customers <span class="admin-trend admin-trend--up">+8.2%</span></div>
+            <strong><?= admin_escape($roleCounts['customer']) ?></strong>
+            <small>Verified customer accounts</small>
+        </article>
+        <article class="admin-kpi-card">
+            <span class="admin-kpi-card__icon admin-kpi-card__icon--coral"><i class="fa-solid fa-store" aria-hidden="true"></i></span>
+            <div class="admin-kpi-card__label">Live restaurants <span class="admin-trend admin-trend--up">+3.1%</span></div>
+            <strong><?= admin_escape($roleCounts['restaurant']) ?></strong>
+            <small>Approved storefronts</small>
+        </article>
+        <article class="admin-kpi-card">
+            <span class="admin-kpi-card__icon admin-kpi-card__icon--blue"><i class="fa-solid fa-motorcycle" aria-hidden="true"></i></span>
+            <div class="admin-kpi-card__label">Online drivers <span class="admin-trend admin-trend--steady">Live</span></div>
+            <strong><?= admin_escape($roleCounts['driver']) ?></strong>
+            <small>Available delivery partners</small>
+        </article>
+        <article class="admin-kpi-card admin-kpi-card--dark">
+            <span class="admin-kpi-card__icon"><i class="fa-solid fa-shield-heart" aria-hidden="true"></i></span>
+            <div class="admin-kpi-card__label">Platform health <span class="admin-trend admin-trend--light">Stable</span></div>
+            <strong>99.9%</strong>
+            <small>All core services operational</small>
+        </article>
+    </section>
+
+    <section class="admin-overview-grid">
+        <article class="admin-card admin-card--span-two">
+            <header class="admin-card__header">
+                <div><span class="admin-eyebrow">LIVE ACTIVITY</span><h2>Order volume</h2></div>
+                <select class="admin-select" aria-label="Order volume period"><option>Last 7 days</option><option>Last 30 days</option></select>
+            </header>
+            <div class="admin-chart-placeholder" role="img" aria-label="Order volume trending upward during the week">
+                <span style="--bar: 42%"></span><span style="--bar: 58%"></span><span style="--bar: 48%"></span>
+                <span style="--bar: 72%"></span><span style="--bar: 64%"></span><span style="--bar: 88%"></span><span style="--bar: 76%"></span>
             </div>
+            <div class="admin-chart-labels"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+        </article>
 
-            <!-- Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon" style="background: rgba(45, 52, 54, 0.1); color: #2D3436;"><i class="fa-solid fa-users"></i></div>
-                    <div class="stat-details">
-                        <h3>1,250</h3>
-                        <p>Total Customers</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon" style="background: rgba(252, 163, 17, 0.1); color: #fca311;"><i class="fa-solid fa-store"></i></div>
-                    <div class="stat-details">
-                        <h3>85</h3>
-                        <p>Active Restaurants</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon" style="background: rgba(22, 101, 52, 0.1); color: #166534;"><i class="fa-solid fa-motorcycle"></i></div>
-                    <div class="stat-details">
-                        <h3>142</h3>
-                        <p>Active Drivers</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
-                    <div class="stat-details">
-                        <h3>$12,450</h3>
-                        <p>Platform Revenue</p>
-                    </div>
-                </div>
-            </div>
+        <article class="admin-card admin-priority-card">
+            <header class="admin-card__header"><div><span class="admin-eyebrow">ACTION CENTER</span><h2>Needs attention</h2></div><span class="admin-count-badge">4</span></header>
+            <a class="admin-task-row" href="admin_restaurants.php?status=pending"><span class="admin-task-row__icon"><i class="fa-solid fa-store" aria-hidden="true"></i></span><span><strong>Restaurant approvals</strong><small>2 applications waiting</small></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>
+            <a class="admin-task-row" href="admin_drivers.php?status=pending"><span class="admin-task-row__icon"><i class="fa-solid fa-id-card" aria-hidden="true"></i></span><span><strong>Driver verification</strong><small>1 document review</small></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>
+            <a class="admin-task-row" href="admin_cases.php?priority=urgent"><span class="admin-task-row__icon admin-task-row__icon--coral"><i class="fa-solid fa-life-ring" aria-hidden="true"></i></span><span><strong>Urgent case</strong><small>Response due in 12 min</small></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>
+        </article>
+    </section>
 
-            <!-- Recent System Activity -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h3>Recent User Registrations</h3>
-                    <a href="#">Manage Users</a>
-                </div>
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>User ID</th>
-                            <th>Name</th>
-                            <th>Role</th>
-                            <th>Joined Date</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>#U0892</td>
-                            <td>Michael Scott</td>
-                            <td><span class="badge badge-primary">Customer</span></td>
-                            <td>Just now</td>
-                            <td><span class="badge badge-success">Active</span></td>
-                        </tr>
-                        <tr>
-                            <td>#R0045</td>
-                            <td>Pizza Planet</td>
-                            <td><span class="badge badge-warning">Restaurant</span></td>
-                            <td>2 hours ago</td>
-                            <td><span class="badge badge-warning">Pending Approval</span></td>
-                        </tr>
-                        <tr>
-                            <td>#D0234</td>
-                            <td>Tom Hardy</td>
-                            <td><span class="badge badge-info">Driver</span></td>
-                            <td>1 day ago</td>
-                            <td><span class="badge badge-success">Active</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-        </main>
-    </div>
-</body>
-</html>
+    <section class="admin-card">
+        <header class="admin-card__header">
+            <div><span class="admin-eyebrow">RECENT ACTIVITY</span><h2>New platform accounts</h2></div>
+            <a class="admin-text-link" href="admin_accounts.php">Manage all <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+        </header>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead><tr><th>Account</th><th>Role</th><th>Joined</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                <?php foreach ($recentAccounts as $account): ?>
+                    <tr>
+                        <td><div class="admin-person"><span class="admin-avatar admin-avatar--soft"><?= admin_escape(strtoupper(substr((string) $account['full_name'], 0, 1))) ?></span><span><strong><?= admin_escape($account['full_name']) ?></strong><small><?= admin_escape($account['email']) ?></small></span></div></td>
+                        <td><span class="admin-role-label"><?= admin_escape(ucfirst((string) $account['role'])) ?></span></td>
+                        <td><?= admin_escape(date('M j, Y', strtotime((string) $account['created_at']))) ?></td>
+                        <td><span class="admin-status admin-status--<?= admin_escape($account['status']) ?>"><i aria-hidden="true"></i><?= admin_escape(ucfirst((string) $account['status'])) ?></span></td>
+                        <td><a class="admin-row-action" href="admin_accounts.php?id=<?= admin_escape($account['id']) ?>" aria-label="View <?= admin_escape($account['full_name']) ?>"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+<?php require_once __DIR__ . '/components/admin_footer.php'; ?>
