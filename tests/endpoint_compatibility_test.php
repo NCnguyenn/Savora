@@ -86,17 +86,26 @@ session_start();
 $_SESSION = ['user_id' => $userId, 'role' => (string) $admin['role'], 'session_version' => (int) $admin['session_version'], 'admin_csrf' => $csrf];
 session_write_close();
 
-$validReplayKey = 'task4-endpoint-valid-' . bin2hex(random_bytes(5));
-$corruptReplayKey = 'task4-endpoint-corrupt-' . bin2hex(random_bytes(5));
-$validReplay = ['ok' => true, 'message' => 'Replay response.', 'data' => ['replayed' => true]];
-$validJson = json_encode($validReplay, JSON_THROW_ON_ERROR);
-$corruptJson = '';
+$replayKeyPrefix = 'task4-endpoint-envelope-' . bin2hex(random_bytes(5));
+$validTrueReplayKey = $replayKeyPrefix . '-valid-true';
+$validFalseReplayKey = $replayKeyPrefix . '-valid-false';
+$validTrueReplay = ['ok' => true, 'message' => 'Replay response.', 'data' => ['replayed' => true]];
+$validFalseReplay = ['ok' => false, 'message' => 'Replay failure.'];
 $replayAction = 'replay_test';
 $store = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,response_json) VALUES(?,?,?,?)');
-$store->bind_param('isss', $userId, $validReplayKey, $replayAction, $validJson);
-$store->execute();
-$store->bind_param('isss', $userId, $corruptReplayKey, $replayAction, $corruptJson);
-$store->execute();
+$replayFixtures = [
+    $validTrueReplayKey => json_encode($validTrueReplay, JSON_THROW_ON_ERROR),
+    $validFalseReplayKey => json_encode($validFalseReplay, JSON_THROW_ON_ERROR),
+    $replayKeyPrefix . '-invalid-invalid-json' => '',
+    $replayKeyPrefix . '-invalid-list' => '[]',
+    $replayKeyPrefix . '-invalid-empty-object' => '{}',
+    $replayKeyPrefix . '-invalid-missing-ok' => '{"message":"Missing ok."}',
+    $replayKeyPrefix . '-invalid-non-boolean-ok' => '{"ok":1}',
+];
+foreach ($replayFixtures as $replayKey => $replayJson) {
+    $store->bind_param('isss', $userId, $replayKey, $replayAction, $replayJson);
+    $store->execute();
+}
 $store->close();
 
 try {
@@ -116,14 +125,19 @@ try {
     $platformCsrf = endpoint_request('api/platform_state.php', '{', $sessionId, $sessionPath, 'wrong-token', 'role-csrf-1');
     endpoint_expect($platformCsrf === ['status' => 403, 'raw' => '{"ok":false,"message":"Secure session expired."}', 'body' => ['ok' => false, 'message' => 'Secure session expired.']], 'Platform CSRF must precede malformed JSON and remain exact.');
 
-    $validReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validReplayKey);
-    endpoint_expect($validReplayResponse['status'] === 200 && $validReplayResponse['body'] === $validReplay, 'A valid stored platform response must replay exactly.');
+    $validTrueReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
+    endpoint_expect($validTrueReplayResponse['status'] === 200 && $validTrueReplayResponse['body'] === $validTrueReplay, 'A valid ok=true platform response must replay exactly.');
+    $validFalseReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validFalseReplayKey);
+    endpoint_expect($validFalseReplayResponse['status'] === 200 && $validFalseReplayResponse['body'] === $validFalseReplay, 'A valid ok=false platform response must replay exactly.');
 
-    $corruptReplay = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $corruptReplayKey);
-    endpoint_expect($corruptReplay === ['status' => 500, 'raw' => '{"ok":false,"message":"Stored response is invalid."}', 'body' => ['ok' => false, 'message' => 'Stored response is invalid.']], 'A corrupt stored response must never replay as 200 [].');
+    foreach (['invalid-json', 'list', 'empty-object', 'missing-ok', 'non-boolean-ok'] as $label) {
+        $invalidReplay = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $replayKeyPrefix . '-invalid-' . $label);
+        endpoint_expect($invalidReplay === ['status' => 500, 'raw' => '{"ok":false,"message":"Stored response is invalid."}', 'body' => ['ok' => false, 'message' => 'Stored response is invalid.']], "Invalid {$label} response must not replay successfully.");
+    }
 } finally {
-    $deleteKeys = $conn->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key IN (?,?)');
-    $deleteKeys->bind_param('iss', $userId, $validReplayKey, $corruptReplayKey);
+    $cleanupPattern = $replayKeyPrefix . '%';
+    $deleteKeys = $conn->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key LIKE ?');
+    $deleteKeys->bind_param('is', $userId, $cleanupPattern);
     $deleteKeys->execute();
     $deleteKeys->close();
     $deleteSession = $conn->prepare('DELETE FROM user_sessions WHERE user_id=? AND session_hash=?');

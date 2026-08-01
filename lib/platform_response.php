@@ -26,8 +26,13 @@ function platform_response_find(mysqli $conn, int $actorId, string $key): ?array
     }
 
     $response = json_decode((string) $stored['response_json'], true, 512, JSON_THROW_ON_ERROR);
-    if (!is_array($response)) {
-        throw new JsonException('Stored platform response must be a JSON object.');
+    if (
+        !is_array($response)
+        || array_is_list($response)
+        || !array_key_exists('ok', $response)
+        || !is_bool($response['ok'])
+    ) {
+        throw new JsonException('Stored platform response must use the canonical response envelope.');
     }
 
     return $response;

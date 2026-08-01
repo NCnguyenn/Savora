@@ -17,9 +17,10 @@ if (!$admin) {
     throw new RuntimeException('Active Admin fixture is missing.');
 }
 $actorId = (int) $admin['id'];
-$failedKey = 'task4-failed-' . bin2hex(random_bytes(6));
-$validKey = 'task4-valid-' . bin2hex(random_bytes(6));
-$corruptKey = 'task4-corrupt-' . bin2hex(random_bytes(6));
+$keyPrefix = 'task4-envelope-' . bin2hex(random_bytes(6));
+$failedKey = $keyPrefix . '-failed';
+$validTrueKey = $keyPrefix . '-valid-true';
+$validFalseKey = $keyPrefix . '-valid-false';
 $eventType = 'task4_response_' . bin2hex(random_bytes(5));
 
 try {
@@ -45,27 +46,43 @@ try {
     response_expect((int) $failedMutation->get_result()->fetch_assoc()['total'] === 0, 'Serialization failure must roll back the domain mutation.');
     $failedMutation->close();
 
-    $expected = ['ok' => true, 'message' => 'Stored safely.', 'data' => ['value' => 7]];
+    $expectedTrue = ['ok' => true, 'message' => 'Stored safely.', 'data' => ['value' => 7]];
     $conn->begin_transaction();
-    platform_response_store($conn, $actorId, $validKey, 'valid_response', $expected);
+    platform_response_store($conn, $actorId, $validTrueKey, 'valid_true_response', $expectedTrue);
     $conn->commit();
-    response_expect(platform_response_find($conn, $actorId, $validKey) === $expected, 'Valid stored responses must replay exactly.');
+    response_expect(platform_response_find($conn, $actorId, $validTrueKey) === $expectedTrue, 'A valid ok=true response must replay exactly.');
+
+    $expectedFalse = ['ok' => false, 'message' => 'Stored failure.'];
+    $conn->begin_transaction();
+    platform_response_store($conn, $actorId, $validFalseKey, 'valid_false_response', $expectedFalse);
+    $conn->commit();
+    response_expect(platform_response_find($conn, $actorId, $validFalseKey) === $expectedFalse, 'A valid ok=false response must replay exactly.');
     response_expect(platform_response_find($conn, $actorId, 'task4-missing-' . bin2hex(random_bytes(4))) === null, 'Missing idempotency keys must not replay.');
 
-    $corruptJson = '';
     $action = 'corrupt_response';
     $corrupt = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,response_json) VALUES(?,?,?,?)');
-    $corrupt->bind_param('isss', $actorId, $corruptKey, $action, $corruptJson);
-    $corrupt->execute();
-    $corrupt->close();
-    try {
-        platform_response_find($conn, $actorId, $corruptKey);
-        throw new RuntimeException('An empty stored response replayed as an empty success body.');
-    } catch (JsonException) {
+    $invalidResponses = [
+        'invalid-json' => '',
+        'list' => '[]',
+        'empty-object' => '{}',
+        'missing-ok' => '{"message":"Missing ok."}',
+        'non-boolean-ok' => '{"ok":"true"}',
+    ];
+    foreach ($invalidResponses as $label => $corruptJson) {
+        $corruptKey = $keyPrefix . '-invalid-' . $label;
+        $corrupt->bind_param('isss', $actorId, $corruptKey, $action, $corruptJson);
+        $corrupt->execute();
+        try {
+            platform_response_find($conn, $actorId, $corruptKey);
+            throw new RuntimeException("Invalid {$label} response replayed successfully.");
+        } catch (JsonException) {
+        }
     }
+    $corrupt->close();
 } finally {
-    $cleanup = $conn->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key IN (?,?,?)');
-    $cleanup->bind_param('isss', $actorId, $failedKey, $validKey, $corruptKey);
+    $cleanupPattern = $keyPrefix . '%';
+    $cleanup = $conn->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key LIKE ?');
+    $cleanup->bind_param('is', $actorId, $cleanupPattern);
     $cleanup->execute();
     $cleanup->close();
     $conn->close();
