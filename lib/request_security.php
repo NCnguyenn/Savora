@@ -35,6 +35,21 @@ function savora_require_csrf(array $headers): void
         }
     }
     if (!admin_verify_csrf($token)) {
-        savora_error(403, 'Secure session expired.');
+        throw new InvalidArgumentException('Invalid CSRF token.');
     }
+}
+
+function savora_require_idempotency_key(array $headers): string
+{
+    $key = '';
+    foreach ($headers as $name => $value) {
+        if (is_string($name) && strcasecmp($name, 'Idempotency-Key') === 0) {
+            $key = is_string($value) ? trim($value) : '';
+            break;
+        }
+    }
+    if (!preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,99}\z/', $key)) {
+        throw new InvalidArgumentException('Invalid idempotency key.');
+    }
+    return $key;
 }

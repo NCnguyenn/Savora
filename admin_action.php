@@ -12,14 +12,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     savora_error(405, 'POST is required.', [], admin_reference_id());
 }
 
-savora_require_csrf(['X-CSRF-Token' => (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')]);
+try {
+    savora_require_csrf(['X-CSRF-Token' => (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')]);
+} catch (InvalidArgumentException) {
+    savora_error(403, 'Your secure session expired. Refresh and try again.', [], admin_reference_id());
+}
 
-$idempotencyKey = mb_substr(trim((string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '')), 0, 100);
-if ($idempotencyKey === '') {
+try {
+    $idempotencyKey = savora_require_idempotency_key(['Idempotency-Key' => (string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '')]);
+} catch (InvalidArgumentException) {
     savora_error(422, 'An idempotency key is required.', [], admin_reference_id());
 }
 
-$decoded = savora_read_json();
+try {
+    $decoded = savora_read_json();
+} catch (JsonException) {
+    savora_error(400, 'Invalid JSON request.', [], admin_reference_id());
+}
 
 $action = mb_substr(trim((string) ($decoded['action'] ?? '')), 0, 100);
 $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : [];

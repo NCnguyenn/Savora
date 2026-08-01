@@ -31,10 +31,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     savora_json(['ok' => true, 'csrfToken' => admin_csrf_token(), 'role' => $role, 'orders' => $orders, 'serverTime' => date(DATE_ATOM)]);
 }
 
-savora_require_csrf(['X-CSRF-Token' => (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')]);
-$key = mb_substr(trim((string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '')), 0, 100);
-if ($key === '') savora_error(422, 'Idempotency key required.');
-$body = savora_read_json();
+try {
+    savora_require_csrf(['X-CSRF-Token' => (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')]);
+} catch (InvalidArgumentException) {
+    savora_error(403, 'Secure session expired.');
+}
+try {
+    $key = savora_require_idempotency_key(['Idempotency-Key' => (string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '')]);
+} catch (InvalidArgumentException) {
+    savora_error(422, 'Idempotency key required.');
+}
+try {
+    $body = savora_read_json();
+} catch (JsonException) {
+    savora_error(400, 'Invalid JSON.');
+}
 $command = (string) ($body['command'] ?? '');
 $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
 
