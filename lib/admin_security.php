@@ -49,6 +49,10 @@ function admin_require_role(): void
         header('Location: index.php');
         exit();
     }
+    if (!savora_session_has_csrf_token($_SESSION)) {
+        header('Location: index.php');
+        exit();
+    }
 }
 
 function admin_configure_session_path(): void

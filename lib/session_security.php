@@ -26,6 +26,12 @@ function savora_session_hash(?string $sessionId = null): string
     return hash('sha256', $sessionId ?? session_id());
 }
 
+function savora_session_has_csrf_token(array $session): bool
+{
+    $token = $session['admin_csrf'] ?? '';
+    return is_string($token) && $token !== '';
+}
+
 function savora_register_user_session(mysqli $conn, int $userId): void
 {
     $hash = savora_session_hash();

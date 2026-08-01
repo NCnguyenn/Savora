@@ -24,3 +24,20 @@ test('normal authenticated GET bootstrap reads but does not issue CSRF tokens', 
     assert.match(source, /\$_SESSION\['admin_csrf'\]\s*\?\?\s*''/, `${footer} must read the existing CSRF token`);
   }
 });
+
+test('legacy sessions without a CSRF token must reauthenticate without a GET session write', () => {
+  const sessionSecurity = fs.readFileSync('lib/session_security.php', 'utf8');
+  assert.match(sessionSecurity, /function savora_session_has_csrf_token/);
+
+  for (const header of ['components/customer_header.php', 'components/restaurant_header.php', 'components/driver_header.php']) {
+    const source = fs.readFileSync(header, 'utf8');
+    assert.match(source, /if \(!savora_session_has_csrf_token\(\$_SESSION\)\) \{\s*header\('Location: index\.php'\);\s*exit\(\);\s*\}/, `${header} must redirect legacy sessions without ending them`);
+  }
+
+  const adminSecurity = fs.readFileSync('lib/admin_security.php', 'utf8');
+  assert.match(adminSecurity, /if \(!savora_session_has_csrf_token\(\$_SESSION\)\) \{\s*header\('Location: index\.php'\);\s*exit\(\);\s*\}/);
+
+  for (const api of ['api/platform_state.php', 'api/session_heartbeat.php']) {
+    assert.match(fs.readFileSync(api, 'utf8'), /savora_session_has_csrf_token\(\$_SESSION\)/, `${api} must reject legacy sessions without a CSRF token`);
+  }
+});

@@ -33,6 +33,9 @@ if (!$sessionValidation['ok']) {
     savora_end_session();
     platform_json(['ok' => false, 'message' => 'Your session is no longer active.'], 401);
 }
+if (!savora_session_has_csrf_token($_SESSION)) {
+    platform_json(['ok' => false, 'message' => 'Please sign in again.'], 401);
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     if ($role === 'customer') {

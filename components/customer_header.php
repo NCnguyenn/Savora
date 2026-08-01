@@ -8,6 +8,10 @@ if (!$customer_session['ok']) {
     header('Location: index.php');
     exit();
 }
+if (!savora_session_has_csrf_token($_SESSION)) {
+    header('Location: index.php');
+    exit();
+}
 $full_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Customer';
 $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'customer';
 $current_page = basename($_SERVER['PHP_SELF']);

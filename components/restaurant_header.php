@@ -8,6 +8,10 @@ if (!$restaurant_session['ok']) {
     header('Location: index.php');
     exit();
 }
+if (!savora_session_has_csrf_token($_SESSION)) {
+    header('Location: index.php');
+    exit();
+}
 
 $restaurant_current_page = basename($_SERVER['PHP_SELF'] ?? 'restaurant_dashboard.php');
 $restaurant_routes = [

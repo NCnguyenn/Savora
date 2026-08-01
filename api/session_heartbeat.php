@@ -29,6 +29,9 @@ if (!$validation['ok']) {
     savora_end_session();
     session_heartbeat_json(['ok' => false, 'message' => 'Your session is no longer active.'], 401);
 }
+if (!savora_session_has_csrf_token($_SESSION)) {
+    session_heartbeat_json(['ok' => false, 'message' => 'Please sign in again.'], 401);
+}
 
 if (!admin_verify_csrf((string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
     session_heartbeat_json(['ok' => false, 'message' => 'Secure session expired.'], 403);
