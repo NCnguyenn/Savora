@@ -268,6 +268,21 @@
             });
         });
 
+        root.document.querySelectorAll('[data-admin-operation-action]').forEach(function bindOperationAction(button) {
+            button.addEventListener('click', function confirmOperation() {
+                const action = button.dataset.adminOperationAction;
+                const pageReason = root.document.querySelector('[data-admin-operation-reason]');
+                openDialog({ title: button.textContent.trim() || 'Confirm operation', message: 'This operation is transactional and will append an immutable audit record.', confirmLabel: 'Confirm', requireReason: true, onConfirm: async function performOperation(dialogReason) {
+                    const driver = root.document.querySelector('[data-admin-driver-target]');
+                    const refund = root.document.querySelector('[data-admin-refund-amount]');
+                    const payload = { reason: (pageReason && pageReason.value.trim()) || dialogReason, order_id: button.dataset.orderId, case_id: button.dataset.caseId, payout_id: button.dataset.payoutId, reconciliation_id: button.dataset.reconciliationId, promotion_id: button.dataset.promotionId, driver_user_id: driver ? driver.value : undefined, amount: refund ? refund.value : undefined };
+                    const result = await requestAction(action, payload);
+                    showToast(result.message, 'success');
+                    root.setTimeout(function refreshOperation() { root.location.reload(); }, 500);
+                }});
+            });
+        });
+
         const confirmButton = root.document.querySelector('[data-admin-confirm]');
         if (confirmButton) confirmButton.addEventListener('click', async function confirmAction() {
             const dialog = confirmButton.closest('[data-admin-confirmation]');

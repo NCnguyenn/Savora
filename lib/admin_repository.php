@@ -189,6 +189,29 @@ function admin_driver_partner_data(mysqli $conn, array $filters): array
     ];
 }
 
+function admin_orders_data(mysqli $conn, array $filters): array
+{
+    $orders = admin_rows($conn, "SELECT o.*,u.full_name AS customer_name,r.name AS restaurant_name,du.full_name AS driver_name,d.status AS dispatch_status,d.attempt_count FROM orders o JOIN users u ON u.id=o.customer_user_id JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN delivery_dispatches d ON d.order_id=o.id LEFT JOIN users du ON du.id=d.assigned_driver_user_id ORDER BY o.placed_at DESC LIMIT 100");
+    $selectedId=max(0,(int)($filters['id']??0)); if($selectedId===0&&$orders)$selectedId=(int)$orders[0]['id']; $selected=[];foreach($orders as $order)if((int)$order['id']===$selectedId){$selected=$order;break;}
+    return ['orders'=>$orders,'selected'=>$selected,'summary'=>admin_one($conn,"SELECT COUNT(*) total_orders,SUM(status NOT IN ('delivered','cancelled','refunded')) live_orders,SUM(status IN ('pending','ready_for_pickup')) needs_attention,COALESCE(SUM(total),0) gross_value FROM orders"),'items'=>$selectedId?admin_rows($conn,'SELECT * FROM order_items WHERE order_id=?','i',[$selectedId]):[],'timeline'=>$selectedId?admin_rows($conn,'SELECT * FROM order_status_history WHERE order_id=? ORDER BY created_at','i',[$selectedId]):[],'dispatch_attempts'=>$selectedId?admin_rows($conn,'SELECT f.status,f.offered_at,f.expires_at,f.responded_at,u.full_name AS driver_name FROM delivery_offers f JOIN delivery_dispatches d ON d.id=f.dispatch_id JOIN users u ON u.id=f.driver_user_id WHERE d.order_id=? ORDER BY f.offered_at DESC','i',[$selectedId]):[],'payment'=>$selectedId?admin_one($conn,'SELECT * FROM payments WHERE order_id=?','i',[$selectedId]):[],'available_drivers'=>admin_rows($conn,"SELECT u.id,u.full_name,d.service_area,d.rating FROM driver_profiles d JOIN users u ON u.id=d.user_id WHERE u.status='active' AND d.eligibility_status='eligible' ORDER BY d.rating DESC")];
+}
+
+function admin_cases_data(mysqli $conn,array $filters):array
+{
+    $cases=admin_rows($conn,"SELECT c.*,u.full_name AS reporter_name,o.reference_code AS order_reference FROM support_cases c JOIN users u ON u.id=c.reporting_user_id LEFT JOIN orders o ON o.id=c.order_id ORDER BY FIELD(c.priority,'urgent','high','medium','low'),c.sla_due_at");$selectedId=max(0,(int)($filters['id']??0));if($selectedId===0&&$cases)$selectedId=(int)$cases[0]['id'];$selected=[];foreach($cases as $case)if((int)$case['id']===$selectedId){$selected=$case;break;}
+    return ['cases'=>$cases,'selected'=>$selected,'summary'=>admin_one($conn,"SELECT COUNT(*) total_cases,SUM(status NOT IN ('resolved','closed')) open_cases,SUM(priority='urgent' AND status NOT IN ('resolved','closed')) urgent_cases,SUM(sla_due_at<NOW() AND status NOT IN ('resolved','closed')) breached FROM support_cases"),'messages'=>$selectedId?admin_rows($conn,'SELECT m.*,u.full_name AS author_name FROM case_messages m JOIN users u ON u.id=m.author_user_id WHERE m.case_id=? ORDER BY m.created_at','i',[$selectedId]):[],'attachments'=>$selectedId?admin_rows($conn,'SELECT * FROM case_attachments WHERE case_id=? ORDER BY created_at','i',[$selectedId]):[],'refunds'=>$selectedId?admin_rows($conn,'SELECT * FROM refunds WHERE case_id=? ORDER BY created_at DESC','i',[$selectedId]):[]];
+}
+
+function admin_finance_data(mysqli $conn):array
+{
+    return ['summary'=>array_merge(admin_one($conn,"SELECT COALESCE(SUM(gross_amount),0) gross_order_value,COALESCE(SUM(fee_amount),0) platform_revenue FROM ledger_entries WHERE status='completed'"),admin_one($conn,"SELECT COALESCE(SUM(amount),0) refunds FROM refunds WHERE status='processed'"),admin_one($conn,"SELECT COALESCE(SUM(amount),0) pending_payouts FROM payouts WHERE status IN ('scheduled','processing','held')")),'ledger'=>admin_rows($conn,'SELECT * FROM ledger_entries ORDER BY created_at DESC LIMIT 100'),'restaurant_payouts'=>admin_rows($conn,"SELECT p.*,r.name AS party_name FROM payouts p JOIN restaurants r ON p.party_type='restaurant' AND p.party_id=r.id ORDER BY p.scheduled_at DESC"),'driver_payouts'=>admin_rows($conn,"SELECT p.*,u.full_name AS party_name FROM payouts p JOIN users u ON p.party_type='driver' AND p.party_id=u.id ORDER BY p.scheduled_at DESC"),'cod'=>admin_rows($conn,'SELECT c.*,u.full_name AS driver_name FROM cod_reconciliations c JOIN users u ON u.id=c.driver_user_id ORDER BY c.id DESC'),'refund_rows'=>admin_rows($conn,'SELECT f.*,o.reference_code AS order_reference FROM refunds f JOIN orders o ON o.id=f.order_id ORDER BY f.created_at DESC')];
+}
+
+function admin_promotions_data(mysqli $conn):array
+{
+    return ['promotions'=>admin_rows($conn,'SELECT * FROM promotions ORDER BY starts_at DESC'),'fees'=>admin_rows($conn,'SELECT * FROM fee_rules ORDER BY effective_at DESC'),'areas'=>admin_rows($conn,'SELECT * FROM service_areas ORDER BY name'),'summary'=>admin_one($conn,"SELECT SUM(status='active') active_promotions,COALESCE(SUM(budget),0) total_budget,COALESCE(SUM(used_amount),0) used_budget,(SELECT COUNT(*) FROM promotion_redemptions) redemptions FROM promotions")];
+}
+
 function admin_page_data(mysqli $conn, string $page, array $filters = []): array
 {
     $data = ['page' => $page, 'filters' => $filters];
@@ -213,6 +236,10 @@ function admin_page_data(mysqli $conn, string $page, array $filters = []): array
     if ($page === 'drivers') {
         return array_merge($data, admin_driver_partner_data($conn, $filters));
     }
+    if($page==='orders')return array_merge($data,admin_orders_data($conn,$filters));
+    if($page==='cases')return array_merge($data,admin_cases_data($conn,$filters));
+    if($page==='finance')return array_merge($data,admin_finance_data($conn));
+    if($page==='promotions')return array_merge($data,admin_promotions_data($conn));
     $data['accounts'] = admin_account_rows($conn, $filters);
     return $data;
 }

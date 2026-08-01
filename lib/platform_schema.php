@@ -310,6 +310,8 @@ function platform_seed_operations(mysqli $conn): void
     }
     $orderInsert->close();
 
+    $conn->query("INSERT IGNORE INTO payments (order_id,method,amount,status,provider_reference,paid_at) SELECT id,payment_method,total,'paid',CONCAT('DEMO-',reference_code),placed_at FROM orders WHERE reference_code IN ('SV-10482','SV-10483','SV-10484','SV-10485','SV-10486','SV-10487','SV-10488','SV-10489')");
+
     $ledger = $conn->prepare("INSERT IGNORE INTO ledger_entries (reference_code, order_id, entry_type, party_type, party_id, gross_amount, fee_amount, net_amount, payment_method, status, created_at) SELECT CONCAT('LED-', o.reference_code), o.id, 'order_sale', 'restaurant', ?, o.total, ROUND(o.total * 0.12, 2), ROUND(o.total * 0.88, 2), o.payment_method, 'completed', o.placed_at FROM orders o WHERE o.reference_code = ? AND o.status = 'delivered'");
     foreach (['SV-10482', 'SV-10483', 'SV-10488'] as $reference) {
         $ledger->bind_param('is', $restaurantId, $reference);
@@ -327,6 +329,7 @@ function platform_seed_operations(mysqli $conn): void
         $caseInsert->execute();
     }
     $caseInsert->close();
+    $conn->query("UPDATE support_cases SET order_id=(SELECT id FROM orders WHERE reference_code='SV-10482' LIMIT 1) WHERE reference_code='CASE-1042' AND order_id IS NULL");
 
     $audit = $conn->prepare("INSERT IGNORE INTO audit_logs (actor_user_id, action, entity_type, entity_id, after_summary, reason, ip_address, result, reference_id) VALUES (?, ?, ?, ?, ?, ?, '127.0.0.1', 'success', ?)");
     $auditRows = [
@@ -339,4 +342,9 @@ function platform_seed_operations(mysqli $conn): void
         $audit->execute();
     }
     $audit->close();
+
+    $conn->query("INSERT IGNORE INTO promotions (code,audience,discount_type,discount_value,maximum_discount,minimum_order,usage_cap,budget,used_amount,starts_at,ends_at,status,scope) VALUES ('WELCOME20','new_customers','percentage',20,12,25,500,3000,640,DATE_SUB(NOW(),INTERVAL 10 DAY),DATE_ADD(NOW(),INTERVAL 20 DAY),'active','all_restaurants'),('LUNCH5','all_customers','fixed',5,5,20,1000,5000,1120,DATE_SUB(NOW(),INTERVAL 5 DAY),DATE_ADD(NOW(),INTERVAL 30 DAY),'active','all_restaurants')");
+    $conn->query("INSERT IGNORE INTO service_areas (name,city,radius_km,status,minimum_order,driver_health) VALUES ('Central District','Central City',6,'active',15,'healthy'),('North District','Central City',5,'active',18,'balanced'),('East District','Central City',4,'active',20,'limited')");
+    $conn->query("INSERT INTO fee_rules (rule_type,name,amount,unit,effective_at,status,created_by) SELECT 'platform_commission','Standard Restaurant Commission',12,'percent',NOW(),'active',{$ids['admin']} WHERE NOT EXISTS (SELECT 1 FROM fee_rules WHERE name='Standard Restaurant Commission')");
+    $conn->query("INSERT IGNORE INTO payouts (reference_code,party_type,party_id,amount,status,scheduled_at) VALUES ('PAY-REST-001','restaurant',{$restaurantId},218.40,'scheduled',DATE_ADD(NOW(),INTERVAL 2 DAY)),('PAY-DRV-001','driver',{$ids['driver']},48.20,'scheduled',DATE_ADD(NOW(),INTERVAL 2 DAY))");
 }
