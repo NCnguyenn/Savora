@@ -6,8 +6,9 @@ const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('all four role boundaries validate DB-backed session state', () => {
-  const files = ['lib/admin_security.php', 'components/customer_header.php', 'components/restaurant_header.php', 'components/driver_header.php', 'api/platform_state.php'];
+  const files = ['lib/admin_security.php', 'components/customer_header.php', 'components/restaurant_header.php', 'components/driver_header.php', 'lib/request_security.php'];
   for (const file of files) assert.match(read(file), /savora_validate_session/, `${file} must validate the database session`);
+  assert.match(read('api/platform_state.php'), /savora_request_actor/, 'api/platform_state.php must use the shared request boundary');
   const security = read('lib/session_security.php');
   for (const token of ['session_version', 'revoked_at', 'account_inactive', 'role_mismatch']) assert.match(security, new RegExp(token));
   assert.match(read('auth.php'), /savora_register_user_session/);

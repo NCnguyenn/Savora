@@ -2,17 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/admin_security.php';
-require_once __DIR__ . '/../lib/session_security.php';
-
-header('Content-Type: application/json; charset=utf-8');
-savora_start_session();
-
-function platform_json(array $value, int $status = 200): never
-{
-    http_response_code($status);
-    echo json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+require_once __DIR__ . '/../lib/request_security.php';
 
 function platform_rows(mysqli $conn, string $sql, int $id): array
 {
@@ -24,18 +14,9 @@ function platform_rows(mysqli $conn, string $sql, int $id): array
     return $rows;
 }
 
-if (!isset($_SESSION['user_id'], $_SESSION['role'])) platform_json(['ok' => false, 'message' => 'Authentication required.'], 401);
-$userId = (int) $_SESSION['user_id'];
-$role = (string) $_SESSION['role'];
-$requiredRole = in_array($role, ['customer', 'restaurant', 'driver'], true) ? $role : null;
-$sessionValidation = savora_validate_session($conn, $_SESSION, session_id(), $requiredRole);
-if (!$sessionValidation['ok']) {
-    savora_end_session();
-    platform_json(['ok' => false, 'message' => 'Your session is no longer active.'], 401);
-}
-if (!savora_session_has_csrf_token($_SESSION)) {
-    platform_json(['ok' => false, 'message' => 'Please sign in again.'], 401);
-}
+$actor = savora_request_actor($conn, ['customer', 'restaurant', 'driver', 'admin']);
+$userId = $actor['userId'];
+$role = $actor['role'];
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     if ($role === 'customer') {
@@ -47,14 +28,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     } else {
         $orders = [];
     }
-    platform_json(['ok' => true, 'csrfToken' => admin_csrf_token(), 'role' => $role, 'orders' => $orders, 'serverTime' => date(DATE_ATOM)]);
+    savora_json(['ok' => true, 'csrfToken' => admin_csrf_token(), 'role' => $role, 'orders' => $orders, 'serverTime' => date(DATE_ATOM)]);
 }
 
-if (!admin_verify_csrf((string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) platform_json(['ok' => false, 'message' => 'Secure session expired.'], 403);
+savora_require_csrf(['X-CSRF-Token' => (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')]);
 $key = mb_substr(trim((string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '')), 0, 100);
-if ($key === '') platform_json(['ok' => false, 'message' => 'Idempotency key required.'], 422);
-$body = json_decode((string) file_get_contents('php://input'), true);
-if (!is_array($body)) platform_json(['ok' => false, 'message' => 'Invalid JSON.'], 400);
+if ($key === '') savora_error(422, 'Idempotency key required.');
+$body = savora_read_json();
 $command = (string) ($body['command'] ?? '');
 $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
 
@@ -63,7 +43,7 @@ $lookup->bind_param('is', $userId, $key);
 $lookup->execute();
 $stored = $lookup->get_result()->fetch_assoc();
 $lookup->close();
-if ($stored) platform_json((array) json_decode((string) $stored['response_json'], true));
+if ($stored) savora_json((array) json_decode((string) $stored['response_json'], true));
 
 $conn->begin_transaction();
 try {
@@ -252,8 +232,8 @@ try {
     $store->execute();
     $store->close();
     $conn->commit();
-    platform_json($response);
+    savora_json($response);
 } catch (Throwable $error) {
     $conn->rollback();
-    platform_json(['ok' => false, 'message' => $error->getMessage()], 422);
+    savora_error(422, $error->getMessage());
 }

@@ -37,7 +37,8 @@ test('legacy sessions without a CSRF token must reauthenticate without a GET ses
   const adminSecurity = fs.readFileSync('lib/admin_security.php', 'utf8');
   assert.match(adminSecurity, /if \(!savora_session_has_csrf_token\(\$_SESSION\)\) \{\s*header\('Location: index\.php'\);\s*exit\(\);\s*\}/);
 
-  for (const api of ['api/platform_state.php', 'api/session_heartbeat.php']) {
-    assert.match(fs.readFileSync(api, 'utf8'), /savora_session_has_csrf_token\(\$_SESSION\)/, `${api} must reject legacy sessions without a CSRF token`);
-  }
+  const requestSecurity = fs.readFileSync('lib/request_security.php', 'utf8');
+  assert.match(requestSecurity, /savora_session_has_csrf_token\(\$_SESSION\)/, 'the shared request boundary must reject legacy sessions without a CSRF token');
+  assert.match(fs.readFileSync('api/platform_state.php', 'utf8'), /savora_request_actor/, 'api/platform_state.php must use the shared request boundary');
+  assert.match(fs.readFileSync('api/session_heartbeat.php', 'utf8'), /savora_session_has_csrf_token\(\$_SESSION\)/, 'api/session_heartbeat.php must reject legacy sessions without a CSRF token');
 });
