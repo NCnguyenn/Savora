@@ -262,6 +262,15 @@ function platform_seed_operations(mysqli $conn): void
         $restaurantApplication->execute();
     }
     $restaurantApplication->close();
+    $restaurantApplicationId = (int) ($conn->query("SELECT id FROM restaurant_applications WHERE reference_code = 'RA-2026-104'")->fetch_assoc()['id'] ?? 0);
+    if ($restaurantApplicationId > 0) {
+        $document = $conn->prepare("INSERT IGNORE INTO restaurant_application_documents (application_id, document_type, stored_path, mime_type, verification_status) VALUES (?, ?, ?, 'application/pdf', 'verified')");
+        foreach ([['business_registration','uploads/demo/business-registration.pdf'],['food_safety_certificate','uploads/demo/food-safety.pdf'],['owner_identity','uploads/demo/owner-identity.pdf']] as [$type,$path]) {
+            $document->bind_param('iss', $restaurantApplicationId, $type, $path);
+            $document->execute();
+        }
+        $document->close();
+    }
 
     $driverApplications = [
         ['DA-2026-207', 'jamie-carter', 'Jamie Carter', 'jamie@driver.test', 'Motorbike', 'pending', 'low'],
@@ -274,6 +283,15 @@ function platform_seed_operations(mysqli $conn): void
         $driverApplication->execute();
     }
     $driverApplication->close();
+    $driverApplicationId = (int) ($conn->query("SELECT id FROM driver_applications WHERE reference_code = 'DA-2026-207'")->fetch_assoc()['id'] ?? 0);
+    if ($driverApplicationId > 0) {
+        $document = $conn->prepare("INSERT IGNORE INTO driver_application_documents (application_id, document_type, stored_path, mime_type, verification_status, expires_at) VALUES (?, ?, ?, 'application/pdf', 'verified', DATE_ADD(NOW(), INTERVAL 1 YEAR))");
+        foreach ([['driver_license','uploads/demo/driver-license.pdf'],['vehicle_registration','uploads/demo/vehicle-registration.pdf'],['background_check','uploads/demo/background-check.pdf']] as [$type,$path]) {
+            $document->bind_param('iss', $driverApplicationId, $type, $path);
+            $document->execute();
+        }
+        $document->close();
+    }
 
     $orders = [
         ['SV-10482', 'delivered', 'wallet', 42.80, 3.90, 46.70, 0],

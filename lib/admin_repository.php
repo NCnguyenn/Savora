@@ -159,6 +159,36 @@ function admin_customers_data(mysqli $conn, array $filters): array
     ];
 }
 
+function admin_restaurant_partner_data(mysqli $conn, array $filters): array
+{
+    $applications = admin_rows($conn, "SELECT id, reference_code, owner_name, owner_email, restaurant_name, cuisine, city, address, status, risk_level, reviewer_note, submitted_at, version FROM restaurant_applications WHERE status IN ('pending','in_review','changes_requested') ORDER BY submitted_at");
+    $selectedId = max(0, (int) ($filters['id'] ?? 0));
+    if ($selectedId === 0 && $applications) $selectedId = (int) $applications[0]['id'];
+    $selected = $selectedId ? admin_one($conn, 'SELECT * FROM restaurant_applications WHERE id = ?', 'i', [$selectedId]) : [];
+    return [
+        'applications' => $applications,
+        'selected' => $selected,
+        'documents' => $selectedId ? admin_rows($conn, 'SELECT document_type, stored_path, mime_type, verification_status, expires_at, reviewer_note FROM restaurant_application_documents WHERE application_id = ? ORDER BY document_type', 'i', [$selectedId]) : [],
+        'restaurants' => admin_rows($conn, 'SELECT r.id, r.name, r.cuisine, r.city, r.status, r.accepting_orders, r.rating, r.cancellation_rate, r.payout_status, u.full_name AS owner_name, u.email FROM restaurants r JOIN users u ON u.id = r.owner_user_id ORDER BY r.created_at DESC'),
+        'summary' => admin_one($conn, "SELECT COUNT(*) AS pending, SUM(risk_level IN ('medium','high')) AS needs_review, COALESCE(AVG(TIMESTAMPDIFF(HOUR, submitted_at, NOW())), 0) AS average_age_hours FROM restaurant_applications WHERE status IN ('pending','in_review','changes_requested')"),
+    ];
+}
+
+function admin_driver_partner_data(mysqli $conn, array $filters): array
+{
+    $applications = admin_rows($conn, "SELECT id, reference_code, full_name, email, city, vehicle_type, vehicle_model, license_plate, service_area, status, risk_level, reviewer_note, submitted_at, version FROM driver_applications WHERE status IN ('pending','in_review','changes_requested') ORDER BY submitted_at");
+    $selectedId = max(0, (int) ($filters['id'] ?? 0));
+    if ($selectedId === 0 && $applications) $selectedId = (int) $applications[0]['id'];
+    $selected = $selectedId ? admin_one($conn, 'SELECT * FROM driver_applications WHERE id = ?', 'i', [$selectedId]) : [];
+    return [
+        'applications' => $applications,
+        'selected' => $selected,
+        'documents' => $selectedId ? admin_rows($conn, 'SELECT document_type, stored_path, mime_type, verification_status, expires_at, reviewer_note FROM driver_application_documents WHERE application_id = ? ORDER BY document_type', 'i', [$selectedId]) : [],
+        'drivers' => admin_rows($conn, 'SELECT d.id, u.id AS user_id, u.full_name, u.email, u.status, d.vehicle_type, d.license_plate, d.service_area, d.eligibility_status, d.availability_status, d.rating, d.acceptance_rate, d.completion_rate FROM driver_profiles d JOIN users u ON u.id = d.user_id ORDER BY d.created_at DESC'),
+        'summary' => admin_one($conn, "SELECT COUNT(*) AS pending, SUM(risk_level IN ('medium','high')) AS document_alerts, COALESCE(AVG(TIMESTAMPDIFF(HOUR, submitted_at, NOW())), 0) AS average_age_hours FROM driver_applications WHERE status IN ('pending','in_review','changes_requested')"),
+    ];
+}
+
 function admin_page_data(mysqli $conn, string $page, array $filters = []): array
 {
     $data = ['page' => $page, 'filters' => $filters];
@@ -176,6 +206,12 @@ function admin_page_data(mysqli $conn, string $page, array $filters = []): array
     }
     if ($page === 'customers') {
         return array_merge($data, admin_customers_data($conn, $filters));
+    }
+    if ($page === 'restaurants') {
+        return array_merge($data, admin_restaurant_partner_data($conn, $filters));
+    }
+    if ($page === 'drivers') {
+        return array_merge($data, admin_driver_partner_data($conn, $filters));
     }
     $data['accounts'] = admin_account_rows($conn, $filters);
     return $data;

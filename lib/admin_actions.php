@@ -232,6 +232,88 @@ function admin_account_action(mysqli $conn, string $action, array $payload, int 
     }
 }
 
+function admin_partner_application_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
+{
+    $isRestaurant = str_contains($action, 'restaurant');
+    $applicationTable = $isRestaurant ? 'restaurant_applications' : 'driver_applications';
+    $documentTable = $isRestaurant ? 'restaurant_application_documents' : 'driver_application_documents';
+    $role = $isRestaurant ? 'restaurant' : 'driver';
+    $applicationId = max(0, (int) ($payload['application_id'] ?? 0));
+    $expectedVersion = max(1, (int) ($payload['version'] ?? 0));
+    $note = mb_substr(trim((string) ($payload['reviewer_note'] ?? $payload['reason'] ?? '')), 0, 1000);
+    $decision = str_starts_with($action, 'approve_') ? 'approved' : (str_starts_with($action, 'request_') ? 'changes_requested' : 'rejected');
+    if ($applicationId === 0 || ($decision !== 'approved' && $note === '')) {
+        return ['ok' => false, 'message' => 'Application and reviewer note are required.', 'errors' => ['reviewer_note' => 'Add a clear decision note.'], 'referenceId' => admin_reference_id()];
+    }
+    $referenceId = admin_reference_id();
+    $conn->begin_transaction();
+    try {
+        $lock = $conn->prepare("SELECT * FROM {$applicationTable} WHERE id = ? FOR UPDATE");
+        $lock->bind_param('i', $applicationId);
+        $lock->execute();
+        $before = $lock->get_result()->fetch_assoc();
+        $lock->close();
+        if (!$before || !in_array($before['status'], ['pending','in_review','changes_requested'], true)) throw new RuntimeException('Application is no longer reviewable.');
+        if ((int) $before['version'] !== $expectedVersion) throw new RuntimeException('Application has a stale version.');
+        $newUserId = null;
+        if ($decision === 'approved') {
+            $documentQuery = $conn->prepare("SELECT document_type, verification_status, expires_at FROM {$documentTable} WHERE application_id = ?");
+            $documentQuery->bind_param('i', $applicationId);
+            $documentQuery->execute();
+            $documents = $documentQuery->get_result()->fetch_all(MYSQLI_ASSOC);
+            $documentQuery->close();
+            if (count($documents) < 3) throw new RuntimeException('All three required documents must be uploaded.');
+            foreach ($documents as $document) {
+                if ($document['verification_status'] !== 'verified' || ($document['expires_at'] && strtotime((string) $document['expires_at']) <= time())) throw new RuntimeException('Every required document must be verified and current.');
+            }
+            if (!$before['password_hash']) throw new RuntimeException('Application credentials were already consumed.');
+            $duplicate = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
+            $email = $isRestaurant ? $before['owner_email'] : $before['email'];
+            $duplicate->bind_param('ss', $before['username'], $email);
+            $duplicate->execute();
+            $exists = $duplicate->get_result()->fetch_assoc();
+            $duplicate->close();
+            if ($exists) throw new RuntimeException('Username or email already belongs to an account.');
+            $fullName = $isRestaurant ? $before['owner_name'] : $before['full_name'];
+            $phone = $isRestaurant ? $before['owner_phone'] : $before['phone'];
+            $insert = $conn->prepare("INSERT INTO users (username, password, role, full_name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
+            $insert->bind_param('ssssss', $before['username'], $before['password_hash'], $role, $fullName, $email, $phone);
+            $insert->execute();
+            $newUserId = $insert->insert_id;
+            $insert->close();
+            if ($isRestaurant) {
+                $profile = $conn->prepare("INSERT INTO restaurants (owner_user_id, name, cuisine, address, city, phone, status, accepting_orders) VALUES (?, ?, ?, ?, ?, ?, 'active', 0)");
+                $profile->bind_param('isssss', $newUserId, $before['restaurant_name'], $before['cuisine'], $before['address'], $before['city'], $before['owner_phone']);
+            } else {
+                $profile = $conn->prepare("INSERT INTO driver_profiles (user_id, city, vehicle_type, vehicle_model, license_plate, service_area, eligibility_status, availability_status) VALUES (?, ?, ?, ?, ?, ?, 'eligible', 'offline')");
+                $profile->bind_param('isssss', $newUserId, $before['city'], $before['vehicle_type'], $before['vehicle_model'], $before['license_plate'], $before['service_area']);
+            }
+            $profile->execute();
+            $profile->close();
+        }
+        $update = $conn->prepare("UPDATE {$applicationTable} SET status = ?, reviewer_id = ?, reviewer_note = ?, decision_reason = ?, reviewed_at = NOW(), password_hash = NULL, version = version + 1 WHERE id = ? AND version = ?");
+        $update->bind_param('sissii', $decision, $actorId, $note, $note, $applicationId, $expectedVersion);
+        $update->execute();
+        $update->close();
+        $after = ['status' => $decision, 'reviewer_id' => $actorId, 'user_id' => $newUserId, 'version' => $expectedVersion + 1];
+        if ($newUserId) {
+            $notification = $conn->prepare("INSERT INTO notifications (user_id, event_type, title, message, entity_type, entity_id) VALUES (?, ?, 'Application approved', 'Your Savora account is active. Sign in to complete your profile.', ?, ?)");
+            $entityType = $role . '_application';
+            $notification->bind_param('issi', $newUserId, $action, $entityType, $applicationId);
+            $notification->execute();
+            $notification->close();
+        }
+        admin_append_audit($conn, $actorId, $action, $role . '_application', $applicationId, $before, $after, $note ?: 'All required checks passed', $referenceId);
+        $response = ['ok' => true, 'message' => ucfirst($role) . ' application ' . str_replace('_', ' ', $decision) . '.', 'data' => ['application_id' => $applicationId, 'status' => $decision, 'user_id' => $newUserId, 'version' => $expectedVersion + 1], 'referenceId' => $referenceId];
+        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        $conn->commit();
+        return $response;
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        return ['ok' => false, 'message' => 'The application decision could not be completed.', 'errors' => ['reviewer_note' => $exception->getMessage()], 'referenceId' => $referenceId];
+    }
+}
+
 function admin_execute_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
 {
     $existing = admin_idempotency_response($conn, $actorId, $idempotencyKey);
@@ -246,6 +328,9 @@ function admin_execute_action(mysqli $conn, string $action, array $payload, int 
     }
     if (in_array($action, ['suspend_account', 'reactivate_account', 'block_account', 'revoke_sessions', 'reset_password'], true)) {
         return admin_account_action($conn, $action, $payload, $actorId, $idempotencyKey);
+    }
+    if (in_array($action, ['approve_restaurant', 'request_restaurant_changes', 'reject_restaurant', 'approve_driver', 'request_driver_changes', 'reject_driver'], true)) {
+        return admin_partner_application_action($conn, $action, $payload, $actorId, $idempotencyKey);
     }
     return [
         'ok' => false,

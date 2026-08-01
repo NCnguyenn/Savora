@@ -254,6 +254,20 @@
             });
         });
 
+        root.document.querySelectorAll('[data-admin-partner-action]').forEach(function bindPartnerAction(button) {
+            button.addEventListener('click', function decidePartnerApplication() {
+                const action = button.dataset.adminPartnerAction;
+                const reviewerNote = root.document.querySelector('[data-admin-reviewer-note]');
+                const isApproval = action.indexOf('approve_') === 0;
+                openDialog({ title: button.textContent.trim(), message: isApproval ? 'Approval creates exactly one login account and partner profile.' : 'The applicant will be notified and no login account will be created.', confirmLabel: button.textContent.trim(), requireReason: !isApproval, onConfirm: async function performPartnerDecision(reason) {
+                    const note = (reviewerNote && reviewerNote.value.trim()) || reason;
+                    const result = await requestAction(action, { application_id: button.dataset.applicationId, version: button.dataset.version, reviewer_note: note });
+                    showToast(result.message, 'success');
+                    root.setTimeout(function refreshPartners() { root.location.reload(); }, 500);
+                }});
+            });
+        });
+
         const confirmButton = root.document.querySelector('[data-admin-confirm]');
         if (confirmButton) confirmButton.addEventListener('click', async function confirmAction() {
             const dialog = confirmButton.closest('[data-admin-confirmation]');
