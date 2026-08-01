@@ -42,3 +42,10 @@ test('both command endpoints reject a reused key with a conflict response', () =
   assert.match(adminEndpoint, /catch \(SavoraIdempotencyConflict\)/);
   assert.match(adminEndpoint, /savora_error\(409, 'Idempotency key was already used for a different request\.'/);
 });
+
+test('endpoint replay fixtures use the canonical PHP request hash helper', () => {
+  const fixture = read('tests/endpoint_compatibility_test.php');
+  assert.match(fixture, /require_once __DIR__ \. '\/\.\.\/lib\/idempotency\.php';/);
+  assert.match(fixture, /savora_idempotency_hash\(\$replayAction, \[\]\)/);
+  assert.doesNotMatch(fixture, /hash\('sha256', \$replayAction \./);
+});
