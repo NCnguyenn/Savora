@@ -39,5 +39,22 @@
 <div class="admin-toast-region" aria-live="polite" aria-atomic="true" data-admin-toast-region></div>
 
 <script src="js/admin_ui.js"></script>
+<?php $sessionHeartbeatCsrfToken = admin_csrf_token(); ?>
+<script>
+(function () {
+    const csrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const intervalMs = 5 * 60 * 1000;
+    let lastHeartbeatAt = 0;
+    const heartbeat = () => {
+        if (document.visibilityState !== 'visible' || Date.now() - lastHeartbeatAt < intervalMs) return;
+        lastHeartbeatAt = Date.now();
+        fetch('api/session_heartbeat.php', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrfToken } }).catch(() => {});
+    };
+    heartbeat();
+    document.addEventListener('visibilitychange', heartbeat);
+    const scheduleHeartbeat = () => window.setTimeout(() => { heartbeat(); scheduleHeartbeat(); }, intervalMs);
+    scheduleHeartbeat();
+}());
+</script>
 </body>
 </html>

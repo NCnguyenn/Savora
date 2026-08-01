@@ -37,6 +37,15 @@ function savora_register_user_session(mysqli $conn, int $userId): void
     $stmt->close();
 }
 
+function savora_touch_session(mysqli $conn, int $userId, string $sessionId): void
+{
+    $hash = savora_session_hash($sessionId);
+    $touch = $conn->prepare('UPDATE user_sessions SET last_seen_at = NOW() WHERE user_id = ? AND session_hash = ? AND revoked_at IS NULL');
+    $touch->bind_param('is', $userId, $hash);
+    $touch->execute();
+    $touch->close();
+}
+
 function savora_validate_session(mysqli $conn, array $session, string $sessionId, ?string $requiredRole = null): array
 {
     $userId = (int) ($session['user_id'] ?? 0);
@@ -66,10 +75,6 @@ function savora_validate_session(mysqli $conn, array $session, string $sessionId
         return ['ok' => false, 'reason' => 'session_version_changed'];
     }
 
-    $touch = $conn->prepare('UPDATE user_sessions SET last_seen_at = NOW() WHERE user_id = ? AND session_hash = ? AND revoked_at IS NULL');
-    $touch->bind_param('is', $userId, $hash);
-    $touch->execute();
-    $touch->close();
     return ['ok' => true, 'reason' => 'active'];
 }
 
