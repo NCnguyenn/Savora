@@ -42,6 +42,22 @@ function migration_has_leading_index(mysqli $conn, string $table, string $column
     return $count > 0;
 }
 
+function migration_has_index_named(mysqli $conn, string $table, string $index): bool
+{
+    migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $table), 'Unsafe test table identifier.');
+    migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $index), 'Unsafe test index identifier.');
+    $database = savora_test_selected_database($conn);
+    $stmt = $conn->prepare(
+        'SELECT COUNT(*) AS total FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?'
+    );
+    $stmt->bind_param('sss', $database, $table, $index);
+    $stmt->execute();
+    $count = (int) $stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+    return $count > 0;
+}
+
 function migration_drop_constraint(mysqli $conn, string $table, string $constraint): void
 {
     migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $table), 'Unsafe test table identifier.');
@@ -49,8 +65,25 @@ function migration_drop_constraint(mysqli $conn, string $table, string $constrai
     $conn->query("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$constraint}`");
 }
 
+function migration_drop_index(mysqli $conn, string $table, string $index): void
+{
+    migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $table), 'Unsafe test table identifier.');
+    migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $index), 'Unsafe test index identifier.');
+    if (migration_has_index_named($conn, $table, $index)) {
+        $conn->query("ALTER TABLE `{$table}` DROP INDEX `{$index}`");
+    }
+}
+
+function migration_drop_retry_fixture(mysqli $conn): void
+{
+    $conn->query('DROP TABLE IF EXISTS migration_retry_child');
+    $conn->query('DROP TABLE IF EXISTS migration_retry_parent');
+}
+
 $conn = savora_test_database();
 require_once __DIR__ . '/../lib/migrations.php';
+
+migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
 migration_expect($versions === ['001_existing_schema', '002_core_integrity'], 'Migration registry order is incorrect.');
@@ -120,6 +153,60 @@ try {
 }
 migration_expect(savora_apply_migrations($conn) === ['002_core_integrity'], 'Integrity migration must recover after orphan cleanup.');
 migration_expect(savora_apply_migrations($conn) === [], 'Recovered integrity migration must remain idempotent.');
+
+$partialFixtureStarted = false;
+try {
+    $partialFixtureStarted = true;
+    $conn->query("DELETE FROM schema_migrations WHERE version = '002_core_integrity'");
+    migration_drop_constraint($conn, 'orders', 'fk_orders_customer');
+    migration_drop_index($conn, 'orders', 'idx_orders_customer');
+    migration_expect(!migration_has_leading_index($conn, 'orders', 'customer_user_id'), 'Partial-DDL fixture must remove the orders customer index.');
+    migration_drop_constraint($conn, 'notifications', 'fk_notifications_user');
+    migration_drop_retry_fixture($conn);
+    $conn->query('CREATE TABLE migration_retry_parent (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB');
+    $conn->query('CREATE TABLE migration_retry_child (id INT NOT NULL PRIMARY KEY, parent_id INT NOT NULL, KEY idx_migration_retry_parent (parent_id), CONSTRAINT fk_notifications_user FOREIGN KEY (parent_id) REFERENCES migration_retry_parent(id)) ENGINE=InnoDB');
+
+    $partialFailure = false;
+    try {
+        savora_apply_migrations($conn);
+    } catch (RuntimeException $exception) {
+        $partialFailure = $exception->getMessage() === 'Existing constraint fk_notifications_user does not match the migration definition.';
+    }
+    migration_expect($partialFailure, 'A later conflicting constraint must fail after earlier DDL.');
+    migration_expect(migration_constraint($conn, 'fk_orders_customer') !== null, 'Earlier foreign-key DDL must remain after a later migration failure.');
+    migration_expect(migration_has_index_named($conn, 'orders', 'idx_orders_customer'), 'Migration-created indexes must use their configured names.');
+    $version = $conn->query("SELECT COUNT(*) AS total FROM schema_migrations WHERE version = '002_core_integrity'")->fetch_assoc();
+    migration_expect((int) $version['total'] === 0, 'A partial-DDL failure must not record the migration version.');
+
+    migration_drop_retry_fixture($conn);
+    migration_expect(savora_apply_migrations($conn) === ['002_core_integrity'], 'Retry must recognize earlier DDL and record the migration once.');
+    migration_expect(savora_apply_migrations($conn) === [], 'Recovered partial-DDL migration must remain idempotent.');
+} finally {
+    migration_drop_retry_fixture($conn);
+    if ($partialFixtureStarted) {
+        savora_apply_migrations($conn);
+    }
+}
+
+$reusedIndexFixtureStarted = false;
+try {
+    $reusedIndexFixtureStarted = true;
+    $conn->query("DELETE FROM schema_migrations WHERE version = '002_core_integrity'");
+    migration_drop_constraint($conn, 'orders', 'fk_orders_restaurant');
+    migration_drop_index($conn, 'orders', 'idx_orders_restaurant');
+    migration_drop_index($conn, 'orders', 'idx_migration_reused_orders_restaurant');
+    $conn->query('ALTER TABLE orders ADD INDEX idx_migration_reused_orders_restaurant (restaurant_id)');
+    migration_expect(savora_apply_migrations($conn) === ['002_core_integrity'], 'Migration must accept an equivalent pre-existing leading index.');
+    migration_expect(migration_has_index_named($conn, 'orders', 'idx_migration_reused_orders_restaurant'), 'Equivalent pre-existing index must remain in use.');
+    migration_expect(!migration_has_index_named($conn, 'orders', 'idx_orders_restaurant'), 'Migration must not add a duplicate configured index when an equivalent index exists.');
+} finally {
+    if ($reusedIndexFixtureStarted) {
+        $conn->query("DELETE FROM schema_migrations WHERE version = '002_core_integrity'");
+        migration_drop_constraint($conn, 'orders', 'fk_orders_restaurant');
+        migration_drop_index($conn, 'orders', 'idx_migration_reused_orders_restaurant');
+        savora_apply_migrations($conn);
+    }
+}
 
 $conn->begin_transaction();
 try {

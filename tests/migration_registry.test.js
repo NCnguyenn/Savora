@@ -7,6 +7,8 @@ test('migration registry is explicit and core relationships are constrained', ()
   const registry = fs.readFileSync('lib/migrations.php', 'utf8');
   const migrate = fs.readFileSync('scripts/migrate.php', 'utf8');
   const integrity = fs.readFileSync('database/migrations/002_core_integrity.php', 'utf8');
+  const testDatabase = fs.readFileSync('tests/support/test_database.php', 'utf8');
+  const integration = fs.readFileSync('tests/migration_integrity_test.php', 'utf8');
 
   const existingSchema = registry.indexOf('001_existing_schema');
   const coreIntegrity = registry.indexOf('002_core_integrity');
@@ -35,4 +37,10 @@ test('migration registry is explicit and core relationships are constrained', ()
 
   assert.match(integrity, /'RESTRICT'/);
   assert.match(integrity, /'CASCADE'/);
+  assert.match(testDatabase, /SELECT DATABASE\(\) AS name/);
+  assert.match(testDatabase, /!== 'savora_test'/);
+  assert.match(integration, /savora_test_selected_database\(\$conn\) === 'savora_test'/);
+  assert.match(integration, /Existing constraint fk_notifications_user does not match the migration definition/);
+  assert.match(integration, /idx_orders_customer/);
+  assert.match(integration, /idx_migration_reused_orders_restaurant/);
 });
