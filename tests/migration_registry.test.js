@@ -12,8 +12,11 @@ test('migration registry is explicit and core relationships are constrained', ()
 
   const existingSchema = registry.indexOf('001_existing_schema');
   const coreIntegrity = registry.indexOf('002_core_integrity');
+  const requestHash = registry.indexOf('003_idempotency_request_hash');
   assert.ok(existingSchema >= 0, 'existing schema migration must be registered');
   assert.ok(coreIntegrity > existingSchema, 'core integrity migration must follow the existing schema migration');
+  assert.ok(requestHash > coreIntegrity, 'idempotency request hash migration must follow core integrity migration');
+  assert.match(registry, /003_idempotency_request_hash/);
   assert.match(migrate, /savora_apply_migrations\(\$conn\)/);
   assert.doesNotMatch(migrate, /platform_migrate\(\$conn\)/);
 

@@ -58,6 +58,19 @@ function migration_has_index_named(mysqli $conn, string $table, string $index): 
     return $count > 0;
 }
 
+function migration_column(mysqli $conn, string $table, string $column): ?array
+{
+    $database = savora_test_selected_database($conn);
+    $stmt = $conn->prepare(
+        'SELECT COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?'
+    );
+    $stmt->bind_param('sss', $database, $table, $column);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result ?: null;
+}
+
 function migration_drop_constraint(mysqli $conn, string $table, string $constraint): void
 {
     migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $table), 'Unsafe test table identifier.');
@@ -86,11 +99,15 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash'], 'Migration registry order is incorrect.');
 
-$conn->query("DELETE FROM schema_migrations WHERE version IN ('001_existing_schema', '002_core_integrity')");
+$conn->query("DELETE FROM schema_migrations WHERE version IN ('001_existing_schema', '002_core_integrity', '003_idempotency_request_hash')");
 migration_expect(savora_apply_migrations($conn) === $versions, 'Both migrations must apply in registry order.');
 migration_expect(savora_apply_migrations($conn) === [], 'A second migration pass must be a no-op.');
+migration_expect(
+    migration_column($conn, 'idempotency_keys', 'request_hash') === ['COLUMN_TYPE' => 'char(64)', 'IS_NULLABLE' => 'NO'],
+    'Idempotency request hashes must be stored as non-null SHA-256 values.'
+);
 
 $expected = [
     'fk_orders_customer' => ['orders', 'customer_user_id', 'users', 'id', 'RESTRICT'],

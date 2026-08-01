@@ -127,7 +127,9 @@
       const customer = root.SavoraState.load();
       const next = root.SavoraRestaurantState.updateOrderStatus(customer, order.id, target, { prepMinutes: prep ? prep.value : 20 });
       if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
-      await root.SavoraPlatformBridge.command('restaurant_order_status', { reference_code: order.id, status: target });
+      const intentScope = 'restaurant-order-' + order.id + '-' + target;
+      await root.SavoraPlatformBridge.command('restaurant_order_status', { reference_code: order.id, status: target }, root.SavoraApi.intentKey(intentScope));
+      root.SavoraApi.clearIntentKey(intentScope);
       root.SavoraState.persist(next);
       announce('[data-order-feedback]', `${order.id} is now ${labels[target].toLowerCase()}. Saved to the local customer order.`);
       ui().showToast(`${order.id} updated locally.`);

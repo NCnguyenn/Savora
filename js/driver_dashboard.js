@@ -284,7 +284,9 @@
       try {
         const result = DriverState.acceptOffer(states.driver, states.customer, states.restaurant, offer.orderId, Date.now());
         if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
-        await root.SavoraPlatformBridge.command('driver_accept_order', { reference_code: offer.orderId });
+        const intentScope = 'driver-accept-' + offer.orderId;
+        await root.SavoraPlatformBridge.command('driver_accept_order', { reference_code: offer.orderId }, root.SavoraApi.intentKey(intentScope));
+        root.SavoraApi.clearIntentKey(intentScope);
         DriverState.persist(result.state);
       CustomerState.persist(result.customerState);
       ui.announce(`Delivery ${offer.orderId} accepted.`);

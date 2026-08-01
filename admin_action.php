@@ -32,5 +32,9 @@ try {
 
 $action = mb_substr(trim((string) ($decoded['action'] ?? '')), 0, 100);
 $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : [];
-$result = admin_execute_action($conn, $action, $payload, $actor['userId'], $idempotencyKey);
+try {
+    $result = admin_execute_action($conn, $action, $payload, $actor['userId'], $idempotencyKey);
+} catch (SavoraIdempotencyConflict) {
+    savora_error(409, 'Idempotency key was already used for a different request.', [], admin_reference_id());
+}
 savora_json($result, ($result['ok'] ?? false) ? 200 : 422);

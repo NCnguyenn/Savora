@@ -8,6 +8,10 @@
     let previousFocus = null;
     let pendingAction = null;
 
+    function createIntentKey(scope) {
+        return 'adm-' + String(scope || 'action') + '-' + root.crypto.randomUUID();
+    }
+
     function focusableElements(container) {
         if (!container) return [];
         return Array.from(container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
@@ -58,7 +62,9 @@
         if (message) message.textContent = config.message || 'Please review the impact before continuing.';
         if (confirm) confirm.textContent = config.confirmLabel || 'Confirm';
         if (reasonField) reasonField.hidden = config.requireReason === false;
-        pendingAction = typeof config.onConfirm === 'function' ? config.onConfirm : null;
+        pendingAction = typeof config.onConfirm === 'function'
+            ? { onConfirm: config.onConfirm, idempotencyKey: createIntentKey('confirmation') }
+            : null;
         revealOverlay(dialog);
         return dialog;
     }
@@ -105,11 +111,12 @@
         return {
             'Content-Type': 'application/json',
             'X-CSRF-Token': token ? token.content : '',
-            'Idempotency-Key': idempotencyKey || ('adm-' + Date.now() + '-' + Math.random().toString(16).slice(2))
+            'Idempotency-Key': idempotencyKey
         };
     }
 
     async function requestAction(action, payload, idempotencyKey) {
+        if (!idempotencyKey) throw new Error('A stable idempotency key is required.');
         const response = await fetch('admin_action.php', {
             method: 'POST',
             credentials: 'same-origin',
@@ -158,7 +165,9 @@
         if (errorNode) errorNode.textContent = '';
         if (submit) submit.disabled = true;
         try {
-            const result = await requestAction(form.dataset.adminAction, formPayload(form));
+            const intentKey = form.dataset.adminIntentKey || (form.dataset.adminIntentKey = createIntentKey('form'));
+            const result = await requestAction(form.dataset.adminAction, formPayload(form), intentKey);
+            delete form.dataset.adminIntentKey;
             const version = form.querySelector('[name="version"]');
             if (version && result.data && result.data.version) version.value = String(result.data.version);
             showToast(result.message || 'Changes saved.', 'success');
@@ -244,9 +253,9 @@
                     message: 'This controlled intervention will notify the affected user and append an immutable audit record.',
                     confirmLabel: label,
                     requireReason: action !== 'reset_password',
-                    onConfirm: async function performConfirmedAction(dialogReason) {
+                    onConfirm: async function performConfirmedAction(dialogReason, idempotencyKey) {
                         const reason = (pageReason && pageReason.value.trim()) || dialogReason || 'Secure credential recovery';
-                        const result = await requestAction(action, { user_id: button.dataset.userId, version: button.dataset.version, reason: reason });
+                        const result = await requestAction(action, { user_id: button.dataset.userId, version: button.dataset.version, reason: reason }, idempotencyKey);
                         const recovery = result.data && result.data.recovery_url ? ` Recovery link: ${result.data.recovery_url}` : '';
                         showToast(result.message + recovery, 'success');
                         root.setTimeout(function refreshIdentity() { root.location.reload(); }, 500);
@@ -260,9 +269,9 @@
                 const action = button.dataset.adminPartnerAction;
                 const reviewerNote = root.document.querySelector('[data-admin-reviewer-note]');
                 const isApproval = action.indexOf('approve_') === 0;
-                openDialog({ title: button.textContent.trim(), message: isApproval ? 'Approval creates exactly one login account and partner profile.' : 'The applicant will be notified and no login account will be created.', confirmLabel: button.textContent.trim(), requireReason: !isApproval, onConfirm: async function performPartnerDecision(reason) {
+                openDialog({ title: button.textContent.trim(), message: isApproval ? 'Approval creates exactly one login account and partner profile.' : 'The applicant will be notified and no login account will be created.', confirmLabel: button.textContent.trim(), requireReason: !isApproval, onConfirm: async function performPartnerDecision(reason, idempotencyKey) {
                     const note = (reviewerNote && reviewerNote.value.trim()) || reason;
-                    const result = await requestAction(action, { application_id: button.dataset.applicationId, version: button.dataset.version, reviewer_note: note });
+                    const result = await requestAction(action, { application_id: button.dataset.applicationId, version: button.dataset.version, reviewer_note: note }, idempotencyKey);
                     showToast(result.message, 'success');
                     root.setTimeout(function refreshPartners() { root.location.reload(); }, 500);
                 }});
@@ -273,13 +282,13 @@
             button.addEventListener('click', function confirmOperation() {
                 const action = button.dataset.adminOperationAction;
                 const pageReason = root.document.querySelector('[data-admin-operation-reason]');
-                openDialog({ title: button.textContent.trim() || 'Confirm operation', message: 'This operation is transactional and will append an immutable audit record.', confirmLabel: 'Confirm', requireReason: true, onConfirm: async function performOperation(dialogReason) {
+                openDialog({ title: button.textContent.trim() || 'Confirm operation', message: 'This operation is transactional and will append an immutable audit record.', confirmLabel: 'Confirm', requireReason: true, onConfirm: async function performOperation(dialogReason, idempotencyKey) {
                     const driver = root.document.querySelector('[data-admin-driver-target]');
                     const refund = root.document.querySelector('[data-admin-refund-amount]');
                     const versions = root.SavoraAdminRecordVersions || {};
                     const versionKey = button.dataset.orderId ? `order:${button.dataset.orderId}` : button.dataset.caseId ? `case:${button.dataset.caseId}` : button.dataset.payoutId ? `payout:${button.dataset.payoutId}` : button.dataset.reconciliationId ? `cod:${button.dataset.reconciliationId}` : button.dataset.promotionId ? `promotion:${button.dataset.promotionId}` : button.dataset.serviceAreaId ? `service_area:${button.dataset.serviceAreaId}` : '';
                     const payload = { reason: (pageReason && pageReason.value.trim()) || dialogReason, version: button.dataset.version || versions[versionKey], order_id: button.dataset.orderId, case_id: button.dataset.caseId, payout_id: button.dataset.payoutId, reconciliation_id: button.dataset.reconciliationId, promotion_id: button.dataset.promotionId, service_area_id: button.dataset.serviceAreaId, status: button.dataset.status, driver_user_id: driver ? driver.value : undefined, amount: refund && refund.value ? refund.value : button.dataset.amount };
-                    const result = await requestAction(action, payload);
+                    const result = await requestAction(action, payload, idempotencyKey);
                     showToast(result.message, 'success');
                     root.setTimeout(function refreshOperation() { root.location.reload(); }, 500);
                 }});
@@ -297,7 +306,7 @@
                 return;
             }
             error.textContent = '';
-            if (pendingAction) await pendingAction(reason.value.trim());
+            if (pendingAction) await pendingAction.onConfirm(reason.value.trim(), pendingAction.idempotencyKey);
             closeDialog();
         });
     }

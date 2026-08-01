@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/admin_security.php';
-require_once __DIR__ . '/../lib/platform_response.php';
+require_once __DIR__ . '/../lib/idempotency.php';
 require_once __DIR__ . '/../lib/request_security.php';
 
 function platform_rows(mysqli $conn, string $sql, int $id): array
@@ -49,9 +49,12 @@ try {
 }
 $command = (string) ($body['command'] ?? '');
 $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
+$requestHash = savora_idempotency_hash($command, $payload);
 
 try {
-    $storedResponse = platform_response_find($conn, $userId, $key);
+    $storedResponse = savora_idempotency_find($conn, $userId, $key, $command, $requestHash);
+} catch (SavoraIdempotencyConflict) {
+    savora_error(409, 'Idempotency key was already used for a different request.');
 } catch (JsonException) {
     savora_error(500, 'Stored response is invalid.');
 }
@@ -238,7 +241,7 @@ try {
     }
 
     $response = ['ok' => true, 'message' => 'Platform state synchronized.', 'data' => $result];
-    platform_response_store($conn, $userId, $key, $command, $response);
+    savora_idempotency_store($conn, $userId, $key, $command, $requestHash, $response);
     $conn->commit();
     savora_json($response);
 } catch (JsonException) {

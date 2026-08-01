@@ -92,7 +92,8 @@ $validFalseReplayKey = $replayKeyPrefix . '-valid-false';
 $validTrueReplay = ['ok' => true, 'message' => 'Replay response.', 'data' => ['replayed' => true]];
 $validFalseReplay = ['ok' => false, 'message' => 'Replay failure.'];
 $replayAction = 'replay_test';
-$store = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,response_json) VALUES(?,?,?,?)');
+$replayHash = hash('sha256', $replayAction . "\n{}");
+$store = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,request_hash,response_json) VALUES(?,?,?,?,?)');
 $replayFixtures = [
     $validTrueReplayKey => json_encode($validTrueReplay, JSON_THROW_ON_ERROR),
     $validFalseReplayKey => json_encode($validFalseReplay, JSON_THROW_ON_ERROR),
@@ -103,7 +104,7 @@ $replayFixtures = [
     $replayKeyPrefix . '-invalid-non-boolean-ok' => '{"ok":1}',
 ];
 foreach ($replayFixtures as $replayKey => $replayJson) {
-    $store->bind_param('isss', $userId, $replayKey, $replayAction, $replayJson);
+    $store->bind_param('issss', $userId, $replayKey, $replayAction, $replayHash, $replayJson);
     $store->execute();
 }
 $store->close();

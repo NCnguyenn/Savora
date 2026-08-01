@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/support/test_database.php';
-require_once __DIR__ . '/../lib/platform_response.php';
+require_once __DIR__ . '/../lib/idempotency.php';
 
 function response_expect(bool $value, string $message): void
 {
@@ -30,7 +30,7 @@ try {
     $mutation->execute();
     $mutation->close();
     try {
-        platform_response_store($conn, $actorId, $failedKey, 'serialization_failure', ['ok' => true, 'data' => ['bad' => "\xB1\x31"]]);
+        savora_idempotency_store($conn, $actorId, $failedKey, 'serialization_failure', savora_idempotency_hash('serialization_failure', []), ['ok' => true, 'data' => ['bad' => "\xB1\x31"]]);
         throw new RuntimeException('Invalid response serialization was accepted.');
     } catch (JsonException) {
         $conn->rollback();
@@ -46,21 +46,26 @@ try {
     response_expect((int) $failedMutation->get_result()->fetch_assoc()['total'] === 0, 'Serialization failure must roll back the domain mutation.');
     $failedMutation->close();
 
+    $trueAction = 'valid_true_response';
+    $trueHash = savora_idempotency_hash($trueAction, []);
     $expectedTrue = ['ok' => true, 'message' => 'Stored safely.', 'data' => ['value' => 7]];
     $conn->begin_transaction();
-    platform_response_store($conn, $actorId, $validTrueKey, 'valid_true_response', $expectedTrue);
+    savora_idempotency_store($conn, $actorId, $validTrueKey, $trueAction, $trueHash, $expectedTrue);
     $conn->commit();
-    response_expect(platform_response_find($conn, $actorId, $validTrueKey) === $expectedTrue, 'A valid ok=true response must replay exactly.');
+    response_expect(savora_idempotency_find($conn, $actorId, $validTrueKey, $trueAction, $trueHash) === $expectedTrue, 'A valid ok=true response must replay exactly.');
 
+    $falseAction = 'valid_false_response';
+    $falseHash = savora_idempotency_hash($falseAction, []);
     $expectedFalse = ['ok' => false, 'message' => 'Stored failure.'];
     $conn->begin_transaction();
-    platform_response_store($conn, $actorId, $validFalseKey, 'valid_false_response', $expectedFalse);
+    savora_idempotency_store($conn, $actorId, $validFalseKey, $falseAction, $falseHash, $expectedFalse);
     $conn->commit();
-    response_expect(platform_response_find($conn, $actorId, $validFalseKey) === $expectedFalse, 'A valid ok=false response must replay exactly.');
-    response_expect(platform_response_find($conn, $actorId, 'task4-missing-' . bin2hex(random_bytes(4))) === null, 'Missing idempotency keys must not replay.');
+    response_expect(savora_idempotency_find($conn, $actorId, $validFalseKey, $falseAction, $falseHash) === $expectedFalse, 'A valid ok=false response must replay exactly.');
+    response_expect(savora_idempotency_find($conn, $actorId, 'task4-missing-' . bin2hex(random_bytes(4)), $falseAction, $falseHash) === null, 'Missing idempotency keys must not replay.');
 
     $action = 'corrupt_response';
-    $corrupt = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,response_json) VALUES(?,?,?,?)');
+    $requestHash = savora_idempotency_hash($action, []);
+    $corrupt = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,request_hash,response_json) VALUES(?,?,?,?,?)');
     $invalidResponses = [
         'invalid-json' => '',
         'list' => '[]',
@@ -70,10 +75,10 @@ try {
     ];
     foreach ($invalidResponses as $label => $corruptJson) {
         $corruptKey = $keyPrefix . '-invalid-' . $label;
-        $corrupt->bind_param('isss', $actorId, $corruptKey, $action, $corruptJson);
+        $corrupt->bind_param('issss', $actorId, $corruptKey, $action, $requestHash, $corruptJson);
         $corrupt->execute();
         try {
-            platform_response_find($conn, $actorId, $corruptKey);
+            savora_idempotency_find($conn, $actorId, $corruptKey, $action, $requestHash);
             throw new RuntimeException("Invalid {$label} response replayed successfully.");
         } catch (JsonException) {
         }

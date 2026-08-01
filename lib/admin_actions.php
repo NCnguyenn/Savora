@@ -1,28 +1,6 @@
 <?php
 declare(strict_types=1);
-
-function admin_idempotency_response(mysqli $conn, int $actorId, string $idempotencyKey): ?array
-{
-    $lookup = $conn->prepare('SELECT response_json FROM idempotency_keys WHERE actor_user_id = ? AND idempotency_key = ? LIMIT 1');
-    $lookup->bind_param('is', $actorId, $idempotencyKey);
-    $lookup->execute();
-    $existing = $lookup->get_result()->fetch_assoc();
-    $lookup->close();
-    if (!$existing) {
-        return null;
-    }
-    $decoded = json_decode((string) $existing['response_json'], true);
-    return is_array($decoded) ? $decoded : ['ok' => false, 'message' => 'Stored response is invalid.'];
-}
-
-function admin_store_idempotency(mysqli $conn, int $actorId, string $key, string $action, array $response): void
-{
-    $json = json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-    $stmt = $conn->prepare('INSERT INTO idempotency_keys (actor_user_id, idempotency_key, action, response_json) VALUES (?, ?, ?, ?)');
-    $stmt->bind_param('isss', $actorId, $key, $action, $json);
-    $stmt->execute();
-    $stmt->close();
-}
+require_once __DIR__ . '/idempotency.php';
 
 function admin_append_audit(mysqli $conn, int $actorId, string $action, string $entityType, ?int $entityId, mixed $before, mixed $after, string $reason, string $referenceId): void
 {
@@ -97,7 +75,7 @@ function admin_update_setting(mysqli $conn, array $payload, int $actorId, string
         $after = ['setting_value' => $value, 'version' => $expectedVersion + 1];
         admin_append_audit($conn, $actorId, 'update_setting', 'platform_setting', null, $before, $after, mb_substr($reason, 0, 500), $referenceId);
         $response = ['ok' => true, 'message' => 'Platform setting updated.', 'data' => ['setting_key' => $key] + $after, 'referenceId' => $referenceId];
-        admin_store_idempotency($conn, $actorId, $idempotencyKey, 'update_setting', $response);
+        savora_idempotency_store($conn, $actorId, $idempotencyKey, 'update_setting', savora_idempotency_hash('update_setting', $payload), $response);
         $conn->commit();
         return $response;
     } catch (Throwable $exception) {
@@ -135,7 +113,7 @@ function admin_update_notification_template(mysqli $conn, array $payload, int $a
         $after = ['subject' => $subject, 'message_template' => $message, 'channel' => $channel, 'enabled' => $enabled, 'version' => $expectedVersion + 1];
         admin_append_audit($conn, $actorId, 'update_notification_template', 'notification_template', null, $before, $after, 'Notification policy updated', $referenceId);
         $response = ['ok' => true, 'message' => 'Notification template updated.', 'data' => ['template_key' => $key] + $after, 'referenceId' => $referenceId];
-        admin_store_idempotency($conn, $actorId, $idempotencyKey, 'update_notification_template', $response);
+        savora_idempotency_store($conn, $actorId, $idempotencyKey, 'update_notification_template', savora_idempotency_hash('update_notification_template', $payload), $response);
         $conn->commit();
         return $response;
     } catch (Throwable $exception) {
@@ -236,7 +214,7 @@ function admin_account_action(mysqli $conn, string $action, array $payload, int 
         $responseData = ['user_id' => $targetId, 'status' => $after['status'], 'version' => $after['version']];
         if ($recoveryUrl !== null) $responseData['recovery_url'] = $recoveryUrl;
         $response = ['ok' => true, 'message' => 'Account security action completed.', 'data' => $responseData, 'referenceId' => $referenceId];
-        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        savora_idempotency_store($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload), $response);
         $conn->commit();
         return $response;
     } catch (Throwable $exception) {
@@ -325,7 +303,7 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
         }
         admin_append_audit($conn, $actorId, $action, $role . '_application', $applicationId, $before, $after, $note ?: 'All required checks passed', $referenceId);
         $response = ['ok' => true, 'message' => ucfirst($role) . ' application ' . str_replace('_', ' ', $decision) . '.', 'data' => ['application_id' => $applicationId, 'status' => $decision, 'user_id' => $newUserId, 'version' => $expectedVersion + 1], 'referenceId' => $referenceId];
-        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        savora_idempotency_store($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload), $response);
         $conn->commit();
         return $response;
     } catch (Throwable $exception) {
@@ -359,7 +337,7 @@ function admin_operations_action(mysqli $conn,string $action,array $payload,int 
             elseif($action==='schedule_fee_rule'){$name=mb_substr(trim((string)($payload['name']??'')),0,120);$amount=(float)($payload['amount']??0);$effective=(string)($payload['effective_at']??'');if($name===''||$amount<0||strtotime($effective)<=time())throw new RuntimeException('A future-effective fee rule is required.');$type='platform_commission';$unit='percent';$stmt=$conn->prepare("INSERT INTO fee_rules(rule_type,name,amount,unit,effective_at,status,created_by) VALUES(?,?,?, ?,?,'scheduled',?)");$stmt->bind_param('ssdssi',$type,$name,$amount,$unit,$effective,$actorId);$stmt->execute();$entityId=$stmt->insert_id;$stmt->close();$after=['name'=>$name,'effective_at'=>$effective];}
             else{$id=max(0,(int)($payload['service_area_id']??0));$status=in_array(($payload['status']??''),['active','paused'],true)?$payload['status']:'paused';$stmt=$conn->prepare('UPDATE service_areas SET status=?,version=version+1 WHERE id=?');$stmt->bind_param('si',$status,$id);$stmt->execute();if($stmt->affected_rows!==1)throw new RuntimeException('Service area not found.');$stmt->close();$entityId=$id;$after=['status'=>$status];}
         }else throw new RuntimeException('Unsupported operations action.');
-        admin_append_audit($conn,$actorId,$action,$entityType,$entityId,$before,$after,$reason,$referenceId);$response=['ok'=>true,'message'=>'Controlled operation completed.','data'=>$after,'referenceId'=>$referenceId];admin_store_idempotency($conn,$actorId,$idempotencyKey,$action,$response);$conn->commit();return $response;
+        admin_append_audit($conn,$actorId,$action,$entityType,$entityId,$before,$after,$reason,$referenceId);$response=['ok'=>true,'message'=>'Controlled operation completed.','data'=>$after,'referenceId'=>$referenceId];savora_idempotency_store($conn,$actorId,$idempotencyKey,$action,savora_idempotency_hash($action,$payload),$response);$conn->commit();return $response;
     }catch(Throwable $exception){$conn->rollback();return ['ok'=>false,'message'=>'The controlled operation could not be completed.','errors'=>['reason'=>$exception->getMessage()],'referenceId'=>$referenceId];}
 }
 
@@ -519,7 +497,7 @@ function admin_operations_action_v2(mysqli $conn, string $action, array $payload
 
         admin_append_audit($conn, $actorId, $action, $entityType, $entityId, $before, $after, $reason, $referenceId);
         $response = ['ok' => true, 'message' => 'Controlled operation completed.', 'data' => $after, 'referenceId' => $referenceId];
-        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        savora_idempotency_store($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload), $response);
         $conn->commit(); return $response;
     } catch (Throwable $exception) {
         $conn->rollback();
@@ -529,7 +507,7 @@ function admin_operations_action_v2(mysqli $conn, string $action, array $payload
 
 function admin_execute_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
 {
-    $existing = admin_idempotency_response($conn, $actorId, $idempotencyKey);
+    $existing = savora_idempotency_find($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload));
     if ($existing !== null) {
         return $existing;
     }

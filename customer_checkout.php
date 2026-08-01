@@ -228,7 +228,10 @@
                     promoCode: appliedPromoCode
                 }, window.SavoraRestaurantState ? window.SavoraRestaurantState.load() : null);
                 if (!window.SavoraPlatformBridge) throw new Error('The platform connection is not ready. Please try again.');
-                await window.SavoraPlatformBridge.command('place_order', result.order);
+                const intentKey = sessionStorage.getItem('savora_checkout_intent') || ('role-' + window.crypto.randomUUID());
+                sessionStorage.setItem('savora_checkout_intent', intentKey);
+                await window.SavoraPlatformBridge.command('place_order', result.order, intentKey);
+                sessionStorage.removeItem('savora_checkout_intent');
                 window.SavoraState.persist(result.state);
                 if (window.SavoraUI && typeof window.SavoraUI.refreshChrome === 'function') window.SavoraUI.refreshChrome();
 

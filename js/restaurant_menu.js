@@ -246,7 +246,9 @@
         const item = menuItemFromDraft(draft);
         if (!root.SavoraPlatformBridge) { showValidation(form, { name: 'The platform connection is not ready.' }); return; }
         try {
-          await root.SavoraPlatformBridge.command('restaurant_sync_menu', item);
+          const intentScope = 'restaurant-menu-' + item.id;
+          await root.SavoraPlatformBridge.command('restaurant_sync_menu', item, root.SavoraApi.intentKey(intentScope));
+          root.SavoraApi.clearIntentKey(intentScope);
         } catch (error) {
           showValidation(form, { name: error.message || 'Unable to synchronize this menu item.' });
           return;

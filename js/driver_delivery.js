@@ -133,7 +133,9 @@
     try {
       const result = DriverState.updateMilestone(state, CustomerState.load(), delivery.orderId, milestone, Date.now());
       if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
-      await root.SavoraPlatformBridge.command('driver_milestone', { reference_code: delivery.orderId, milestone });
+      const intentScope = 'driver-milestone-' + delivery.orderId + '-' + milestone;
+      await root.SavoraPlatformBridge.command('driver_milestone', { reference_code: delivery.orderId, milestone }, root.SavoraApi.intentKey(intentScope));
+      root.SavoraApi.clearIntentKey(intentScope);
       DriverState.persist(result.state);
       CustomerState.persist(result.customerState);
       ui.showToast(`${ui.titleCase(milestone)} confirmed.`);
