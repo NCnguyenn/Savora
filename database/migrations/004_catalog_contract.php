@@ -132,7 +132,7 @@ return static function (mysqli $conn): void {
         ],
     ];
     $columnLookup = $conn->prepare(
-        'SELECT COLUMN_TYPE, IS_NULLABLE, EXTRA, COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?'
+        'SELECT COLUMN_TYPE, IS_NULLABLE, DATA_TYPE, EXTRA, COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?'
     );
     try {
         foreach ($requiredColumns as $table => $columns) {
@@ -143,9 +143,13 @@ return static function (mysqli $conn): void {
                 $columnLookup->bind_param('sss', $database, $table, $column);
                 $columnLookup->execute();
                 $existing = $columnLookup->get_result()->fetch_assoc();
+                $integerType = in_array($type, ['bigint', 'int', 'tinyint'], true);
+                $typeMatches = $integerType
+                    ? strtolower((string) ($existing['DATA_TYPE'] ?? '')) === $type
+                    : strtolower((string) ($existing['COLUMN_TYPE'] ?? '')) === $type;
                 if (
                     !$existing
-                    || strtolower((string) $existing['COLUMN_TYPE']) !== $type
+                    || !$typeMatches
                     || $existing['IS_NULLABLE'] !== $nullable
                     || ($extra !== null && strtolower((string) $existing['EXTRA']) !== $extra)
                     || ($columnKey !== null && (string) $existing['COLUMN_KEY'] !== $columnKey)

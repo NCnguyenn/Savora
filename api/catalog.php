@@ -43,25 +43,32 @@ $payload['version'] = $expectedVersion;
 $requestHash = savora_idempotency_hash($action, $payload);
 
 savora_idempotency_lock($conn, (int) $actor['userId'], $idempotencyKey);
-$stored = null;
+$response = null;
+$httpError = null;
 try {
     $stored = savora_idempotency_find($conn, (int) $actor['userId'], $idempotencyKey, $action, $requestHash);
+    $response = $stored ?? catalog_execute_action(
+        $conn,
+        (int) $actor['userId'],
+        $action,
+        $payload,
+        $expectedVersion,
+        $idempotencyKey
+    );
 } catch (SavoraIdempotencyConflict) {
-    savora_idempotency_unlock($conn, (int) $actor['userId'], $idempotencyKey);
-    savora_error(409, 'Idempotency key was already used for a different request.');
+    $httpError = [409, 'Idempotency key was already used for a different request.'];
 } catch (JsonException) {
+    $httpError = [500, 'Stored response is invalid.'];
+} catch (Throwable) {
+    $httpError = [500, 'Catalog request could not be completed.'];
+} finally {
     savora_idempotency_unlock($conn, (int) $actor['userId'], $idempotencyKey);
-    savora_error(500, 'Stored response is invalid.');
-}
-if ($stored !== null) {
-    savora_idempotency_unlock($conn, (int) $actor['userId'], $idempotencyKey);
-    $status = (int) ($stored['status'] ?? 200);
-    unset($stored['status']);
-    savora_json($stored, $status);
 }
 
-$response = catalog_execute_action($conn, (int) $actor['userId'], $action, $payload, $expectedVersion, $idempotencyKey);
-savora_idempotency_unlock($conn, (int) $actor['userId'], $idempotencyKey);
+if ($httpError !== null) {
+    savora_error($httpError[0], $httpError[1]);
+}
+
 $status = (int) ($response['status'] ?? 200);
 unset($response['status']);
 savora_json($response, $status);

@@ -21,7 +21,8 @@ test('catalog migration is registered after idempotency and defines the catalog 
   assert.match(migration, /fk_option_group_item[\s\S]*ON DELETE CASCADE/);
   assert.match(migration, /fk_option_choice_group[\s\S]*ON DELETE CASCADE/);
   assert.match(migration, /'id'\s*=>\s*\['bigint',\s*'NO',\s*'auto_increment',\s*'PRI'\]/);
-  assert.match(migration, /EXTRA,\s*COLUMN_KEY/);
+  assert.match(migration, /DATA_TYPE,\s*EXTRA,\s*COLUMN_KEY/);
+  assert.match(migration, /\$existing\['DATA_TYPE'\]/);
 });
 
 test('catalog API delegates filtered customer reads and guarded Restaurant mutations to the service', () => {
@@ -70,5 +71,18 @@ test('catalog endpoint exposes bounded filters and explicit HTTP security failur
   assert.match(api, /savora_error\(405,\s*'Method not allowed\.'/);
   assert.match(api, /savora_require_csrf[\s\S]*savora_error\(403/);
   assert.match(api, /savora_require_idempotency_key[\s\S]*savora_error\(422/);
-  assert.match(api, /SavoraIdempotencyConflict[\s\S]*savora_error\(409/);
+  assert.match(api, /SavoraIdempotencyConflict[\s\S]*\$httpError\s*=\s*\[409/);
+  assert.match(api, /savora_error\(\$httpError\[0\],\s*\$httpError\[1\]\)/);
+  assert.match(api, /try\s*\{[\s\S]*savora_idempotency_find[\s\S]*\}\s*finally\s*\{[\s\S]*savora_idempotency_unlock/);
+});
+
+test('catalog HTTP behavior is covered by an executable CGI endpoint test', () => {
+  const endpointTest = read('tests/catalog_api_endpoint_test.php');
+  assert.match(endpointTest, /php-cgi\.exe/);
+  assert.match(endpointTest, /api\/catalog\.php/);
+  assert.match(endpointTest, /REQUEST_METHOD/);
+  assert.match(endpointTest, /QUERY_STRING/);
+  assert.match(endpointTest, /invalid CSRF/i);
+  assert.match(endpointTest, /Idempotency key required\./);
+  assert.match(endpointTest, /different request/);
 });
