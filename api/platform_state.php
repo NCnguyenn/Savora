@@ -51,14 +51,20 @@ $command = (string) ($body['command'] ?? '');
 $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
 $requestHash = savora_idempotency_hash($command, $payload);
 
+savora_idempotency_lock($conn, $userId, $key);
 try {
     $storedResponse = savora_idempotency_find($conn, $userId, $key, $command, $requestHash);
 } catch (SavoraIdempotencyConflict) {
+    savora_idempotency_unlock($conn, $userId, $key);
     savora_error(409, 'Idempotency key was already used for a different request.');
 } catch (JsonException) {
+    savora_idempotency_unlock($conn, $userId, $key);
     savora_error(500, 'Stored response is invalid.');
 }
-if ($storedResponse !== null) savora_json($storedResponse);
+if ($storedResponse !== null) {
+    savora_idempotency_unlock($conn, $userId, $key);
+    savora_json($storedResponse);
+}
 
 $conn->begin_transaction();
 try {
@@ -243,11 +249,14 @@ try {
     $response = ['ok' => true, 'message' => 'Platform state synchronized.', 'data' => $result];
     savora_idempotency_store($conn, $userId, $key, $command, $requestHash, $response);
     $conn->commit();
+    savora_idempotency_unlock($conn, $userId, $key);
     savora_json($response);
 } catch (JsonException) {
     $conn->rollback();
+    savora_idempotency_unlock($conn, $userId, $key);
     savora_error(500, 'Response serialization failed.');
 } catch (Throwable $error) {
     $conn->rollback();
+    savora_idempotency_unlock($conn, $userId, $key);
     savora_error(422, $error->getMessage());
 }

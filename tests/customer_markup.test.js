@@ -222,7 +222,7 @@ test('checkout stacks on tablet screens and uses the state-backed wallet checkou
   assert.doesNotMatch(checkout, /window\.cart\s*=\s*\[\]/);
   assert.match(checkout, /SavoraState\.load\(\)/);
   assert.match(checkout, /SavoraState\.placeDemoOrder\(/);
-  assert.match(checkout, /SavoraState\.persist\(result\.state\)/);
+  assert.match(checkout, /SavoraState\.persist\(checkout\.state\)/);
   assert.doesNotMatch(css, /\.checkout-order-summary\s*\{\s*grid-row:\s*1;/);
 });
 

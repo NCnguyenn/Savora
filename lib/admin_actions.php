@@ -507,27 +507,34 @@ function admin_operations_action_v2(mysqli $conn, string $action, array $payload
 
 function admin_execute_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
 {
-    $existing = savora_idempotency_find($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload));
-    if ($existing !== null) {
-        return $existing;
+    savora_idempotency_lock($conn, $actorId, $idempotencyKey);
+    try {
+        $existing = savora_idempotency_find($conn, $actorId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload));
+        if ($existing !== null) {
+            return $existing;
+        }
+        if ($action === 'update_setting') {
+            return admin_update_setting($conn, $payload, $actorId, $idempotencyKey);
+        }
+        if ($action === 'update_notification_template') {
+            return admin_update_notification_template($conn, $payload, $actorId, $idempotencyKey);
+        }
+        if (in_array($action, ['suspend_account', 'reactivate_account', 'block_account', 'revoke_sessions', 'reset_password'], true)) {
+            return admin_account_action($conn, $action, $payload, $actorId, $idempotencyKey);
+        }
+        if (in_array($action, ['approve_restaurant', 'request_restaurant_changes', 'reject_restaurant', 'approve_driver', 'request_driver_changes', 'reject_driver'], true)) {
+            return admin_partner_application_action($conn, $action, $payload, $actorId, $idempotencyKey);
+        }
+        if (in_array($action, ['reassign_driver', 'cancel_order', 'open_incident', 'request_case_information', 'resolve_case', 'issue_refund', 'hold_payout', 'release_payout', 'settle_cod', 'save_promotion', 'pause_promotion', 'schedule_fee_rule', 'set_service_area_status'], true)) {
+            return admin_operations_action_v2($conn, $action, $payload, $actorId, $idempotencyKey);
+        }
+        return [
+            'ok' => false,
+            'message' => 'Unsupported Admin action.',
+            'errors' => ['action' => "The action {$action} is not available."],
+            'referenceId' => admin_reference_id(),
+        ];
+    } finally {
+        savora_idempotency_unlock($conn, $actorId, $idempotencyKey);
     }
-    if ($action === 'update_setting') {
-        return admin_update_setting($conn, $payload, $actorId, $idempotencyKey);
-    }
-    if ($action === 'update_notification_template') {
-        return admin_update_notification_template($conn, $payload, $actorId, $idempotencyKey);
-    }
-    if (in_array($action, ['suspend_account', 'reactivate_account', 'block_account', 'revoke_sessions', 'reset_password'], true)) {
-        return admin_account_action($conn, $action, $payload, $actorId, $idempotencyKey);
-    }
-    if (in_array($action, ['approve_restaurant', 'request_restaurant_changes', 'reject_restaurant', 'approve_driver', 'request_driver_changes', 'reject_driver'], true)) {
-        return admin_partner_application_action($conn, $action, $payload, $actorId, $idempotencyKey);
-    }
-    if(in_array($action,['reassign_driver','cancel_order','open_incident','request_case_information','resolve_case','issue_refund','hold_payout','release_payout','settle_cod','save_promotion','pause_promotion','schedule_fee_rule','set_service_area_status'],true))return admin_operations_action_v2($conn,$action,$payload,$actorId,$idempotencyKey);
-    return [
-        'ok' => false,
-        'message' => 'Unsupported Admin action.',
-        'errors' => ['action' => "The action {$action} is not available."],
-        'referenceId' => admin_reference_id(),
-    ];
 }

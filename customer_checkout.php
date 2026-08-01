@@ -1,4 +1,5 @@
 <?php include 'components/customer_header.php'; ?>
+<script src="js/checkout_intent.js"></script>
 
 <main class="container checkout-page">
     <header class="checkout-title-row">
@@ -221,18 +222,19 @@
             try {
                 const address = validateCheckout();
                 const payment = document.querySelector('input[name="payment"]:checked');
-                const result = window.SavoraState.placeDemoOrder(window.SavoraState.load(), {
-                    address,
-                    deliveryNote: document.getElementById('checkout-note').value,
-                    paymentMethod: payment ? payment.value : 'cash',
-                    promoCode: appliedPromoCode
-                }, window.SavoraRestaurantState ? window.SavoraRestaurantState.load() : null);
-                if (!window.SavoraPlatformBridge) throw new Error('The platform connection is not ready. Please try again.');
-                const intentKey = sessionStorage.getItem('savora_checkout_intent') || ('role-' + window.crypto.randomUUID());
-                sessionStorage.setItem('savora_checkout_intent', intentKey);
-                await window.SavoraPlatformBridge.command('place_order', result.order, intentKey);
-                sessionStorage.removeItem('savora_checkout_intent');
-                window.SavoraState.persist(result.state);
+                if (!window.SavoraPlatformBridge || !window.SavoraCheckoutIntent) throw new Error('The platform connection is not ready. Please try again.');
+                const checkout = await window.SavoraCheckoutIntent.submit({
+                    storage: sessionStorage,
+                    randomUUID: () => window.crypto.randomUUID(),
+                    buildOrder: () => window.SavoraState.placeDemoOrder(window.SavoraState.load(), {
+                        address,
+                        deliveryNote: document.getElementById('checkout-note').value,
+                        paymentMethod: payment ? payment.value : 'cash',
+                        promoCode: appliedPromoCode
+                    }, window.SavoraRestaurantState ? window.SavoraRestaurantState.load() : null),
+                    command: (order, intentKey) => window.SavoraPlatformBridge.command('place_order', order, intentKey)
+                });
+                window.SavoraState.persist(checkout.state);
                 if (window.SavoraUI && typeof window.SavoraUI.refreshChrome === 'function') window.SavoraUI.refreshChrome();
 
                 document.getElementById('checkout-success').hidden = false;

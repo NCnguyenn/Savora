@@ -128,6 +128,11 @@ try {
 
     $validTrueReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
     endpoint_expect($validTrueReplayResponse['status'] === 200 && $validTrueReplayResponse['body'] === $validTrueReplay, 'A valid ok=true platform response must replay exactly.');
+    $mismatchedReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{"changed":true}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
+    endpoint_expect(
+        $mismatchedReplayResponse === ['status' => 409, 'raw' => '{"ok":false,"message":"Idempotency key was already used for a different request."}', 'body' => ['ok' => false, 'message' => 'Idempotency key was already used for a different request.']],
+        'A reused platform key with a different payload must return 409 without replaying the stored response.'
+    );
     $validFalseReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validFalseReplayKey);
     endpoint_expect($validFalseReplayResponse['status'] === 200 && $validFalseReplayResponse['body'] === $validFalseReplay, 'A valid ok=false platform response must replay exactly.');
 

@@ -5,6 +5,33 @@ final class SavoraIdempotencyConflict extends RuntimeException
 {
 }
 
+function savora_idempotency_lock_name(int $actorId, string $key): string
+{
+    return 'savora:idempotency:' . substr(hash('sha256', $actorId . "\n" . $key), 0, 40);
+}
+
+function savora_idempotency_lock(mysqli $conn, int $actorId, string $key, int $timeoutSeconds = 30): void
+{
+    $lockName = savora_idempotency_lock_name($actorId, $key);
+    $lock = $conn->prepare('SELECT GET_LOCK(?, ?) AS acquired');
+    $lock->bind_param('si', $lockName, $timeoutSeconds);
+    $lock->execute();
+    $acquired = (int) ($lock->get_result()->fetch_assoc()['acquired'] ?? 0);
+    $lock->close();
+    if ($acquired !== 1) {
+        throw new RuntimeException('Unable to acquire idempotency lock.');
+    }
+}
+
+function savora_idempotency_unlock(mysqli $conn, int $actorId, string $key): void
+{
+    $lockName = savora_idempotency_lock_name($actorId, $key);
+    $unlock = $conn->prepare('SELECT RELEASE_LOCK(?)');
+    $unlock->bind_param('s', $lockName);
+    $unlock->execute();
+    $unlock->close();
+}
+
 function savora_idempotency_canonicalize(mixed $value): mixed
 {
     if (!is_array($value)) {

@@ -18,10 +18,12 @@ test('platform commands require a stable caller-owned idempotency key', () => {
 
 test('checkout retains its intent key until its order request completes', () => {
   const checkout = read('customer_checkout.php');
-  assert.match(checkout, /sessionStorage\.getItem\('savora_checkout_intent'\)/);
-  assert.match(checkout, /sessionStorage\.setItem\('savora_checkout_intent'/);
-  assert.match(checkout, /sessionStorage\.removeItem\('savora_checkout_intent'\)/);
-  assert.match(checkout, /SavoraPlatformBridge\.command\('place_order',\s*result\.order,\s*intentKey\)/);
+  const intent = read('js/checkout_intent.js');
+  assert.match(checkout, /SavoraCheckoutIntent\.submit/);
+  assert.match(intent, /savora_checkout_intent/);
+  assert.match(intent, /savora_checkout_draft_/);
+  assert.match(intent, /storage\.removeItem\('savora_checkout_intent'\)/);
+  assert.match(checkout, /SavoraPlatformBridge\.command\('place_order',\s*order,\s*intentKey\)/);
 });
 
 test('admin confirmation actions retain a dialog-owned key rather than minting retry keys', () => {
