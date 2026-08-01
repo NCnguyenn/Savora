@@ -144,6 +144,94 @@ function admin_update_notification_template(mysqli $conn, array $payload, int $a
     }
 }
 
+function admin_account_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
+{
+    $targetId = max(0, (int) ($payload['user_id'] ?? 0));
+    $expectedVersion = max(1, (int) ($payload['version'] ?? 0));
+    $reason = mb_substr(trim((string) ($payload['reason'] ?? '')), 0, 500);
+    $statusActions = ['suspend_account' => 'suspended', 'reactivate_account' => 'active', 'block_account' => 'blocked'];
+    if ($targetId === 0 || (($action !== 'reset_password') && $reason === '')) {
+        return ['ok' => false, 'message' => 'A target account and audit reason are required.', 'errors' => ['reason' => 'Explain why this intervention is needed.'], 'referenceId' => admin_reference_id()];
+    }
+    $referenceId = admin_reference_id();
+    $conn->begin_transaction();
+    try {
+        $lock = $conn->prepare('SELECT id, username, role, full_name, email, status, session_version, version FROM users WHERE id = ? FOR UPDATE');
+        $lock->bind_param('i', $targetId);
+        $lock->execute();
+        $before = $lock->get_result()->fetch_assoc();
+        $lock->close();
+        if (!$before) {
+            throw new RuntimeException('Account not found.');
+        }
+        if ($before['role'] === 'admin') {
+            throw new RuntimeException('The only full-access Admin account is protected from account interventions.');
+        }
+        if ((int) $before['version'] !== $expectedVersion) {
+            throw new RuntimeException('Account has a stale version. Refresh before retrying.');
+        }
+
+        $after = $before;
+        if (isset($statusActions[$action])) {
+            $nextStatus = $statusActions[$action];
+            if ($before['status'] === $nextStatus) {
+                throw new RuntimeException('Account is already in that status.');
+            }
+            $update = $conn->prepare('UPDATE users SET status = ?, session_version = session_version + 1, version = version + 1 WHERE id = ? AND version = ?');
+            $update->bind_param('sii', $nextStatus, $targetId, $expectedVersion);
+            $update->execute();
+            $update->close();
+            $history = $conn->prepare('INSERT INTO account_status_history (user_id, previous_status, next_status, actor_user_id, reason) VALUES (?, ?, ?, ?, ?)');
+            $history->bind_param('issis', $targetId, $before['status'], $nextStatus, $actorId, $reason);
+            $history->execute();
+            $history->close();
+            $after['status'] = $nextStatus;
+            $after['version'] = $expectedVersion + 1;
+            $after['session_version'] = (int) $before['session_version'] + 1;
+        } elseif ($action === 'revoke_sessions') {
+            $revoke = $conn->prepare('UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL');
+            $revoke->bind_param('i', $targetId);
+            $revoke->execute();
+            $revokedCount = $revoke->affected_rows;
+            $revoke->close();
+            $update = $conn->prepare('UPDATE users SET session_version = session_version + 1, version = version + 1 WHERE id = ? AND version = ?');
+            $update->bind_param('ii', $targetId, $expectedVersion);
+            $update->execute();
+            $update->close();
+            $after['revoked_sessions'] = $revokedCount;
+            $after['version'] = $expectedVersion + 1;
+        } elseif ($action === 'reset_password') {
+            $temporarySecret = bin2hex(random_bytes(16));
+            $passwordHash = password_hash($temporarySecret, PASSWORD_DEFAULT);
+            $update = $conn->prepare('UPDATE users SET password = ?, session_version = session_version + 1, version = version + 1 WHERE id = ? AND version = ?');
+            $update->bind_param('sii', $passwordHash, $targetId, $expectedVersion);
+            $update->execute();
+            $update->close();
+            $after['credential_reset'] = true;
+            $after['version'] = $expectedVersion + 1;
+            $reason = $reason ?: 'Administrator initiated secure credential recovery';
+        } else {
+            throw new RuntimeException('Unsupported account action.');
+        }
+
+        $notification = $conn->prepare('INSERT INTO notifications (user_id, event_type, title, message, entity_type, entity_id) VALUES (?, ?, ?, ?, ?, ?)');
+        $title = 'Account security update';
+        $message = 'An account security action was completed. Contact support if you did not expect this change.';
+        $entityType = 'user';
+        $notification->bind_param('issssi', $targetId, $action, $title, $message, $entityType, $targetId);
+        $notification->execute();
+        $notification->close();
+        admin_append_audit($conn, $actorId, $action, 'user', $targetId, $before, $after, $reason, $referenceId);
+        $response = ['ok' => true, 'message' => 'Account security action completed.', 'data' => ['user_id' => $targetId, 'status' => $after['status'], 'version' => $after['version']], 'referenceId' => $referenceId];
+        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        $conn->commit();
+        return $response;
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        return ['ok' => false, 'message' => 'The account action could not be completed.', 'errors' => ['reason' => $exception->getMessage()], 'referenceId' => $referenceId];
+    }
+}
+
 function admin_execute_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
 {
     $existing = admin_idempotency_response($conn, $actorId, $idempotencyKey);
@@ -155,6 +243,9 @@ function admin_execute_action(mysqli $conn, string $action, array $payload, int 
     }
     if ($action === 'update_notification_template') {
         return admin_update_notification_template($conn, $payload, $actorId, $idempotencyKey);
+    }
+    if (in_array($action, ['suspend_account', 'reactivate_account', 'block_account', 'revoke_sessions', 'reset_password'], true)) {
+        return admin_account_action($conn, $action, $payload, $actorId, $idempotencyKey);
     }
     return [
         'ok' => false,

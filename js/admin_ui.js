@@ -234,6 +234,26 @@
             button.addEventListener('click', function printReport() { root.print(); });
         });
 
+        root.document.querySelectorAll('[data-admin-confirm-action]').forEach(function bindConfirmedAction(button) {
+            button.addEventListener('click', function requestConfirmedAction() {
+                const action = button.dataset.adminConfirmAction;
+                const label = button.textContent.trim();
+                const pageReason = root.document.querySelector('[data-admin-account-reason]');
+                openDialog({
+                    title: label,
+                    message: 'This controlled intervention will notify the affected user and append an immutable audit record.',
+                    confirmLabel: label,
+                    requireReason: action !== 'reset_password',
+                    onConfirm: async function performConfirmedAction(dialogReason) {
+                        const reason = (pageReason && pageReason.value.trim()) || dialogReason || 'Secure credential recovery';
+                        const result = await requestAction(action, { user_id: button.dataset.userId, version: button.dataset.version, reason: reason });
+                        showToast(result.message, 'success');
+                        root.setTimeout(function refreshIdentity() { root.location.reload(); }, 500);
+                    }
+                });
+            });
+        });
+
         const confirmButton = root.document.querySelector('[data-admin-confirm]');
         if (confirmButton) confirmButton.addEventListener('click', async function confirmAction() {
             const dialog = confirmButton.closest('[data-admin-confirmation]');

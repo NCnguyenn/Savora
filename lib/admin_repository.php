@@ -104,6 +104,61 @@ function admin_settings_data(mysqli $conn, array $filters): array
     ];
 }
 
+function admin_accounts_data(mysqli $conn, array $filters): array
+{
+    $role = in_array(($filters['role'] ?? ''), ['customer', 'restaurant', 'driver', 'admin'], true) ? (string) $filters['role'] : '';
+    $status = in_array(($filters['status'] ?? ''), ['active', 'suspended', 'blocked', 'pending'], true) ? (string) $filters['status'] : '';
+    $query = mb_substr(trim((string) ($filters['q'] ?? '')), 0, 80);
+    $like = '%' . $query . '%';
+    $accounts = admin_rows($conn, "SELECT id, username, role, full_name, email, phone, status, last_login_at, created_at, version FROM users WHERE (? = '' OR role = ?) AND (? = '' OR status = ?) AND (? = '' OR full_name LIKE ? OR username LIKE ? OR email LIKE ?) ORDER BY created_at DESC", 'ssssssss', [$role, $role, $status, $status, $query, $like, $like, $like]);
+    $summaryRows = admin_rows($conn, 'SELECT status, COUNT(*) AS total FROM users GROUP BY status');
+    $summary = ['all' => 0, 'active' => 0, 'suspended' => 0, 'blocked' => 0, 'pending' => 0];
+    foreach ($summaryRows as $row) {
+        $summary['all'] += (int) $row['total'];
+        $summary[$row['status']] = (int) $row['total'];
+    }
+    $selectedId = max(0, (int) ($filters['id'] ?? 0));
+    if ($selectedId === 0 && $accounts) {
+        $selectedId = (int) $accounts[0]['id'];
+    }
+    $selected = $selectedId ? admin_one($conn, 'SELECT id, username, role, full_name, email, phone, status, session_version, last_login_at, created_at, updated_at, version FROM users WHERE id = ?', 'i', [$selectedId]) : [];
+    return [
+        'summary' => $summary,
+        'accounts' => $accounts,
+        'selected' => $selected,
+        'status_history' => $selectedId ? admin_rows($conn, 'SELECT h.previous_status, h.next_status, h.reason, h.created_at, u.full_name AS actor_name FROM account_status_history h JOIN users u ON u.id = h.actor_user_id WHERE h.user_id = ? ORDER BY h.created_at DESC LIMIT 10', 'i', [$selectedId]) : [],
+        'sessions' => $selectedId ? admin_rows($conn, 'SELECT id, ip_address, user_agent, revoked_at, last_seen_at, created_at FROM user_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', 'i', [$selectedId]) : [],
+    ];
+}
+
+function admin_customers_data(mysqli $conn, array $filters): array
+{
+    $query = mb_substr(trim((string) ($filters['q'] ?? '')), 0, 80);
+    $like = '%' . $query . '%';
+    $customers = admin_rows($conn, "SELECT u.id, u.full_name, u.username, u.email, u.phone, u.status, u.last_login_at, u.created_at, u.version, COALESCE(p.wallet_balance, 0) AS wallet_balance, COUNT(DISTINCT o.id) AS order_count, COALESCE(SUM(CASE WHEN o.status = 'delivered' THEN o.total ELSE 0 END), 0) AS lifetime_value, MAX(o.placed_at) AS last_order_at, COUNT(DISTINCT c.id) AS open_cases FROM users u LEFT JOIN customer_profiles p ON p.user_id = u.id LEFT JOIN orders o ON o.customer_user_id = u.id LEFT JOIN support_cases c ON c.reporting_user_id = u.id AND c.status NOT IN ('resolved','closed') WHERE u.role = 'customer' AND (? = '' OR u.full_name LIKE ? OR u.email LIKE ?) GROUP BY u.id, u.full_name, u.username, u.email, u.phone, u.status, u.last_login_at, u.created_at, u.version, p.wallet_balance ORDER BY u.created_at DESC", 'sss', [$query, $like, $like]);
+    $summary = admin_one($conn, "SELECT COUNT(DISTINCT u.id) AS total_customers, COALESCE(AVG(order_totals.average_order), 0) AS average_order_value, COALESCE(SUM(c.status NOT IN ('resolved','closed')), 0) AS open_cases, COALESCE(SUM(p.wallet_balance), 0) AS wallet_balance FROM users u LEFT JOIN customer_profiles p ON p.user_id = u.id LEFT JOIN (SELECT customer_user_id, AVG(total) AS average_order FROM orders GROUP BY customer_user_id) order_totals ON order_totals.customer_user_id = u.id LEFT JOIN support_cases c ON c.reporting_user_id = u.id WHERE u.role = 'customer'");
+    $selectedId = max(0, (int) ($filters['id'] ?? 0));
+    if ($selectedId === 0 && $customers) {
+        $selectedId = (int) $customers[0]['id'];
+    }
+    $selected = [];
+    foreach ($customers as $customer) {
+        if ((int) $customer['id'] === $selectedId) {
+            $selected = $customer;
+            break;
+        }
+    }
+    return [
+        'summary' => $summary,
+        'customers' => $customers,
+        'selected' => $selected,
+        'orders' => $selectedId ? admin_rows($conn, 'SELECT id, reference_code, status, total, payment_method, placed_at FROM orders WHERE customer_user_id = ? ORDER BY placed_at DESC LIMIT 12', 'i', [$selectedId]) : [],
+        'wallet' => $selectedId ? admin_rows($conn, 'SELECT id, type, amount, description, created_at FROM wallet_transactions WHERE customer_user_id = ? ORDER BY created_at DESC LIMIT 12', 'i', [$selectedId]) : [],
+        'cases' => $selectedId ? admin_rows($conn, 'SELECT id, reference_code, priority, status, subject, created_at FROM support_cases WHERE reporting_user_id = ? ORDER BY created_at DESC LIMIT 10', 'i', [$selectedId]) : [],
+        'sessions' => $selectedId ? admin_rows($conn, 'SELECT id, ip_address, user_agent, revoked_at, last_seen_at, created_at FROM user_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', 'i', [$selectedId]) : [],
+    ];
+}
+
 function admin_page_data(mysqli $conn, string $page, array $filters = []): array
 {
     $data = ['page' => $page, 'filters' => $filters];
@@ -115,6 +170,12 @@ function admin_page_data(mysqli $conn, string $page, array $filters = []): array
     }
     if ($page === 'settings') {
         return array_merge($data, admin_settings_data($conn, $filters));
+    }
+    if ($page === 'accounts') {
+        return array_merge($data, admin_accounts_data($conn, $filters));
+    }
+    if ($page === 'customers') {
+        return array_merge($data, admin_customers_data($conn, $filters));
     }
     $data['accounts'] = admin_account_rows($conn, $filters);
     return $data;
