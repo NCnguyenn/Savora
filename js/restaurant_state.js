@@ -5,7 +5,7 @@
 }(typeof window === 'undefined' ? null : window, function createRestaurantState() {
   'use strict';
 
-  const KEY = 'savora_restaurant_state_v1';
+  const KEY = 'savora_restaurant_preferences_v2';
   const ORDER_TRANSITIONS = {
     pending: ['confirmed', 'cancelled'],
     confirmed: ['preparing', 'cancelled'],
@@ -96,40 +96,22 @@
       status: source.status === 'draft' ? 'draft' : 'published'
     };
   };
-  const defaultState = () => ({
-    version: 1,
-    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '', locationMethod: 'manual', latitude: null, longitude: null },
-    operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 5, minimumOrder: 0, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(), specialHours: [] },
-    menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, compareAtPrice: 0, taxCategory: '', optionGroups: [], addOns: [], available: true, stockTracking: false, stock: 0, prepTime: 20, dietaryTags: [], status: 'published' }],
-    reviews: []
-  });
+  const defaultState = () => ({ version: 2, preferences: { menuView: 'grid' }, menuDrafts: {}, reviews: [] });
 
   function normalize(raw) {
     const state = defaultState();
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    const profile = source.profile && typeof source.profile === 'object' ? source.profile : {};
-    PROFILE_KEYS.forEach(key => { state.profile[key] = key === 'image' ? localCatalogImage(profile[key]) : text(profile[key]); });
-    state.profile.id = state.profile.id || 'savora-kitchen';
-    state.profile.name = state.profile.name || 'Savora Kitchen';
-    const coordinates = coordinatePair(profile.latitude, profile.longitude);
-    state.profile.locationMethod = profile.locationMethod === 'current' && coordinates ? 'current' : 'manual';
-    state.profile.latitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.latitude : null;
-    state.profile.longitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.longitude : null;
-    const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
-    state.operations.acceptingOrders = operations.acceptingOrders !== false;
-    state.operations.prepMinutes = bounded(operations.prepMinutes, 1, 180, state.operations.prepMinutes);
-    state.operations.deliveryRadius = bounded(operations.deliveryRadius, 0.1, 50, state.operations.deliveryRadius);
-    state.operations.minimumOrder = Object.hasOwn(operations, 'minimumOrder') ? nonNegative(operations.minimumOrder) : state.operations.minimumOrder;
-    state.operations.capacity = bounded(operations.capacity, 1, 500, state.operations.capacity);
-    state.operations.deliveryEnabled = operations.deliveryEnabled !== false;
-    state.operations.pickupEnabled = operations.pickupEnabled !== false;
-    state.operations.pickupInstructions = text(operations.pickupInstructions);
-    state.operations.weeklyHours = normalizeWeeklyHours(operations.weeklyHours);
-    state.operations.specialHours = normalizeSpecialHours(operations.specialHours);
-    state.menuItems = Array.isArray(source.menuItems)
-      ? source.menuItems.map(item => normalizeMenuItem(item, state.profile)).filter(item => item.id)
-      : state.menuItems;
-    if (!state.menuItems.length) state.menuItems = defaultState().menuItems;
+    const preferences = source.preferences && typeof source.preferences === 'object' ? source.preferences : {};
+    state.preferences.menuView = preferences.menuView === 'list' ? 'list' : 'grid';
+    const drafts = source.menuDrafts && typeof source.menuDrafts === 'object' ? source.menuDrafts : {};
+    Object.entries(drafts).slice(0, 10).forEach(([id, draft]) => {
+      const safeId = text(id);
+      if (!safeId || !draft || typeof draft !== 'object') return;
+      state.menuDrafts[safeId] = {
+        id: safeId, name: text(draft.name), description: text(draft.description), category: text(draft.category), price: nonNegative(draft.price),
+        available: draft.available !== false, optionGroups: normalizeOptionGroups(draft.optionGroups), addOns: normalizeOptions(draft.addOns)
+      };
+    });
     state.reviews = Array.isArray(source.reviews) ? source.reviews.map(review => {
       const id = text(review && review.id);
       if (!id) return null;
@@ -164,63 +146,13 @@
     order.statusHistory = history;
     return next;
   }
-  function setMenuItem(state, item) {
-    const next = normalize(state);
-    const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
-    const id = text(source.id);
-    if (!id) throw new Error('Menu item id is required');
-    const index = next.menuItems.findIndex(entry => entry.id === id);
-    const current = index >= 0 ? next.menuItems[index] : {};
-    const patch = normalizeMenuItem({ ...current, ...source, id }, next.profile);
-    if (index >= 0) next.menuItems[index] = patch;
-    else next.menuItems.push(patch);
+  function saveMenuDraft(state, id, draft) {
+    const next = normalize(state); const draftId = text(id);
+    if (!draftId) throw new Error('Menu draft id is required');
+    next.menuDrafts[draftId] = normalize({ menuDrafts: { [draftId]: { ...draft, id: draftId } } }).menuDrafts[draftId];
     return normalize(next);
   }
-  function setItemAvailability(state, id, available) {
-    const next = normalize(state);
-    const itemId = text(id);
-    const item = next.menuItems.find(entry => entry.id === itemId);
-    if (item) item.available = available !== false;
-    else next.menuItems.push(normalizeMenuItem({ id: itemId, available }, next.profile));
-    return normalize(next);
-  }
-  function setProfile(state, patch) {
-    const next = normalize(state);
-    const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
-    PROFILE_KEYS.forEach(key => {
-      if (Object.hasOwn(source, key)) next.profile[key] = key === 'image' ? localCatalogImage(source[key]) : text(source[key]);
-    });
-    next.profile.id = next.profile.id || 'savora-kitchen';
-    next.profile.name = next.profile.name || 'Savora Kitchen';
-    const locationChanged = Object.hasOwn(source, 'locationMethod') || Object.hasOwn(source, 'latitude') || Object.hasOwn(source, 'longitude');
-    if (locationChanged) {
-      const hasLatitude = Object.hasOwn(source, 'latitude'); const hasLongitude = Object.hasOwn(source, 'longitude');
-      const coordinates = source.locationMethod === 'current' && !hasLatitude && !hasLongitude && next.profile.locationMethod === 'current'
-        ? coordinatePair(next.profile.latitude, next.profile.longitude)
-        : source.locationMethod === 'current' ? coordinatePair(source.latitude, source.longitude) : null;
-      next.profile.locationMethod = coordinates ? 'current' : 'manual';
-      next.profile.latitude = coordinates ? coordinates.latitude : null;
-      next.profile.longitude = coordinates ? coordinates.longitude : null;
-    }
-    next.menuItems = next.menuItems.map(item => normalizeMenuItem(item, next.profile));
-    return next;
-  }
-  function setOperations(state, patch) {
-    const next = normalize(state);
-    const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
-    if (Object.hasOwn(source, 'acceptingOrders')) next.operations.acceptingOrders = source.acceptingOrders !== false;
-    if (Object.hasOwn(source, 'prepMinutes')) next.operations.prepMinutes = bounded(source.prepMinutes, 1, 180, next.operations.prepMinutes);
-    if (Object.hasOwn(source, 'deliveryRadius')) next.operations.deliveryRadius = bounded(source.deliveryRadius, 0.1, 50, next.operations.deliveryRadius);
-    if (Object.hasOwn(source, 'minimumOrder')) next.operations.minimumOrder = nonNegative(source.minimumOrder);
-    if (Object.hasOwn(source, 'capacity')) next.operations.capacity = bounded(source.capacity, 1, 500, next.operations.capacity);
-    ['deliveryEnabled', 'pickupEnabled'].forEach(key => {
-      if (Object.hasOwn(source, key)) next.operations[key] = source[key] !== false;
-    });
-    if (Object.hasOwn(source, 'pickupInstructions')) next.operations.pickupInstructions = text(source.pickupInstructions);
-    if (Object.hasOwn(source, 'weeklyHours')) next.operations.weeklyHours = normalizeWeeklyHours(source.weeklyHours);
-    if (Object.hasOwn(source, 'specialHours')) next.operations.specialHours = normalizeSpecialHours(source.specialHours);
-    return next;
-  }
+  function clearMenuDraft(state, id) { const next = normalize(state); delete next.menuDrafts[text(id)]; return next; }
   function setReviewReply(state, reviewId, reply, status = 'published') {
     const next = normalize(state);
     const id = text(reviewId);
@@ -309,5 +241,5 @@
       kitchen: { averagePrepMinutes: prepTimes.length ? prepTimes.reduce((sum, value) => sum + value, 0) / prepTimes.length : 0 }
     };
   }
-  return { KEY, ORDER_TRANSITIONS, defaultState, normalize, load, persist, updateOrderStatus, setMenuItem, setItemAvailability, setProfile, setOperations, setReviewReply, deriveFinance, deriveAnalytics };
+  return { KEY, ORDER_TRANSITIONS, defaultState, normalize, load, persist, updateOrderStatus, saveMenuDraft, clearMenuDraft, setReviewReply, deriveFinance, deriveAnalytics };
 }));

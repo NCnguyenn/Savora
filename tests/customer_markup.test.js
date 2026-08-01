@@ -298,12 +298,12 @@ test('checkout persists delivery notes and orders render them as text context', 
   assert.doesNotMatch(dashboard, /innerHTML\s*=/);
 });
 
-test('catalog product records keep restaurant-specific detail data', () => {
+test('catalog product records are populated from server responses', () => {
   const Catalog = require('../js/customer_catalog.js');
-  const pizza = Catalog.products['2'];
-  assert.equal(pizza.restaurant, 'Pizza Hut');
-  assert.notEqual(pizza.ingredients.join('|'), Catalog.products['1'].ingredients.join('|'));
-  assert.ok(pizza.addOns.every(option => option.productId === pizza.id));
+  const product = Catalog.itemFromRecord({ publicId: 'pizza-1', name: 'Pizza', basePrice: 14, restaurant: { id: 2, name: 'Pizza Hut', cuisine: 'Italian' }, optionGroups: [] });
+  assert.equal(product.restaurant, 'Pizza Hut');
+  assert.equal(product.restaurantId, '2');
+  assert.equal(product.addOns.length, 0);
 });
 
 test('discovery source contains no hard-coded active-order number', () => {
@@ -485,17 +485,15 @@ test('wallet uses event-driven safe rendering and an accessible top-up form', ()
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.wallet-layout\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
-test('Customer discovery renders bridged restaurant storefront and accepting status safely', () => {
+test('Customer discovery hydrates its catalog from the server safely', () => {
   const dashboard = read('customer_dashboard.php');
   const catalog = read('js/customer_catalog.js');
 
-  assert.match(catalog, /description:\s*text\(source\.description\)/);
-  assert.match(catalog, /acceptingOrders/);
-  assert.match(catalog, /weeklyHours/);
-  assert.match(catalog, /specialHours/);
+  assert.match(catalog, /SavoraApi\.get/);
+  assert.match(catalog, /replaceRecords/);
+  assert.match(dashboard, /await catalog\.hydrate\(\)/);
+  assert.match(dashboard, /Catalog is temporarily unavailable/);
   assert.match(dashboard, /restaurant\.acceptingOrders === false/);
-  assert.match(dashboard, /restaurant\.description/);
-  assert.match(dashboard, /restaurant\.address/);
   assert.match(dashboard, /text:\s*restaurant\.status/);
   assert.doesNotMatch(dashboard, /innerHTML\s*=/);
 });

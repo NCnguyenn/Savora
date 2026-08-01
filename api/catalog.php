@@ -8,6 +8,17 @@ require_once __DIR__ . '/../lib/services/catalog_service.php';
 
 $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if ($method === 'GET') {
+    if ((string) ($_GET['scope'] ?? '') === 'restaurant') {
+        $actor = savora_request_actor($conn, ['restaurant']);
+        $snapshot = catalog_for_restaurant($conn, (int) $actor['userId']);
+        $status = (int) ($snapshot['status'] ?? 200);
+        unset($snapshot['status']);
+        if (($snapshot['ok'] ?? false) !== true) {
+            savora_json($snapshot, $status);
+        }
+        unset($snapshot['ok']);
+        savora_json(['ok' => true, 'data' => $snapshot], $status);
+    }
     $items = catalog_for_customer($conn, [
         'q' => (string) ($_GET['q'] ?? ''),
         'restaurant' => (string) ($_GET['restaurant'] ?? ''),

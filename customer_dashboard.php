@@ -83,12 +83,20 @@
     </div>
 </main>
 
+<script src="js/api_client.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const catalog = window.SavoraCatalog;
     const stateApi = window.SavoraState;
     const ui = window.SavoraUI;
     if (!catalog || !stateApi || !ui) return;
+    try {
+        await catalog.hydrate();
+    } catch (error) {
+        const message = document.getElementById('product-result-count');
+        if (message) message.textContent = error.message || 'Catalog is temporarily unavailable.';
+        return;
+    }
 
     const products = Object.values(SavoraCatalog.products);
     const restaurants = Object.values(SavoraCatalog.restaurants).map(restaurant => {

@@ -39,6 +39,7 @@
         <aside class="restaurant-card restaurant-customer-preview" aria-labelledby="storefront-preview-title"><h2 id="storefront-preview-title">Customer preview</h2><div data-storefront-preview aria-live="polite"></div><p class="restaurant-field-hint">This preview uses the same local Restaurant state as the Customer catalog.</p></aside>
     </div>
 </main>
+<script src="js/api_client.js"></script>
 <script defer src="assets/vendor/leaflet/leaflet.js"></script>
 <script defer src="js/restaurant_storefront.js"></script>
 <?php require_once __DIR__ . '/components/restaurant_footer.php'; ?>

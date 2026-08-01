@@ -15,5 +15,6 @@
     <p class="restaurant-empty" data-menu-feedback aria-live="polite" aria-atomic="true"></p>
     <section class="restaurant-menu-grid" data-menu-list data-view="grid" aria-label="Menu items"></section>
 </main>
+<script src="js/api_client.js"></script>
 <script defer src="js/restaurant_menu.js"></script>
 <?php require_once __DIR__ . '/components/restaurant_footer.php'; ?>

@@ -76,14 +76,13 @@ test('adds compatible cart lines and calculates a demo order once', () => {
   assert.equal(result.order.total, 27);
 });
 
-test('rejects placement when the owning Restaurant has paused accepting orders', () => {
+test('Restaurant operations no longer provide a Customer-local checkout authority', () => {
   const customer = State.addCartLine(State.defaultState(), {
     id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: 'Pasta', price: 12
   }, 1, []);
-  const pausedRestaurant = RestaurantState.setOperations(RestaurantState.defaultState(), { acceptingOrders: false });
 
-  assert.throws(() => State.placeDemoOrder(customer, { address: '12 Food Street', paymentMethod: 'cash' }, pausedRestaurant), /not accepting orders/i);
-  assert.equal(customer.cart.length, 1);
+  assert.equal(Object.hasOwn(RestaurantState.defaultState(), 'operations'), false);
+  assert.equal(State.placeDemoOrder(customer, { address: '12 Food Street', paymentMethod: 'cash' }).order.status, 'pending');
 });
 
 test('customer cart rejects items from a second restaurant', () => {

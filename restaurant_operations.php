@@ -24,5 +24,6 @@
         <aside class="restaurant-card restaurant-customer-preview" aria-labelledby="operations-preview-title"><h2 id="operations-preview-title">Customer status preview</h2><div data-operations-preview aria-live="polite"></div><p class="restaurant-field-hint">The shared accepting-orders control updates immediately after saving.</p></aside>
     </div>
 </main>
+<script src="js/api_client.js"></script>
 <script defer src="js/restaurant_storefront.js"></script>
 <?php require_once __DIR__ . '/components/restaurant_footer.php'; ?>

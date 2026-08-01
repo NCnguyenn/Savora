@@ -275,9 +275,9 @@ test('Menu Management and Menu Item Editor use the shared shell with accessible 
   assert.match(editor, /data-menu-save="draft"/);
   assert.match(editor, /data-menu-save="publish"/);
 
-  assert.match(controller, /api\.setMenuItem/);
-  assert.match(controller, /api\.setItemAvailability/);
-  assert.match(controller, /api\.persist/);
+  assert.match(controller, /SavoraApi\.get\('api\/catalog\.php\?scope=restaurant'\)/);
+  assert.match(controller, /SavoraApi\.post\('api\/catalog\.php'/);
+  assert.match(controller, /clearIntentKey\(scope\)/);
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
@@ -325,9 +325,9 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   for (const field of ['accepting-orders', 'prep-minutes', 'capacity', 'delivery-enabled', 'pickup-enabled', 'pickup-instructions']) assert.match(operations, new RegExp(`name="${field}"`));
   assert.match(controller, /navigator\.geolocation\.getCurrentPosition/);
   assert.match(controller, /data-address-feedback/);
-  assert.match(controller, /api\.setProfile/);
-  assert.match(controller, /api\.setOperations/);
-  assert.match(controller, /api\.persist/);
+  assert.match(controller, /SavoraApi\.get\('api\/catalog\.php\?scope=restaurant'\)/);
+  assert.match(controller, /SavoraApi\.post\('api\/catalog\.php'/);
+  assert.match(controller, /clearIntentKey\(scope\)/);
   assert.match(controller, /data-special-open/);
   assert.match(controller, /data-special-close/);
   assert.match(controller, /prepMinutes/);

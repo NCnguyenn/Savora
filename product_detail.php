@@ -106,8 +106,9 @@ include 'components/customer_header.php';
     </div>
 </main>
 
+<script src="js/api_client.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const productId = <?php echo json_encode($product_id, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const catalog = window.SavoraCatalog;
     const stateApi = window.SavoraState;
@@ -117,7 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('product-detail-content');
 
     if (!catalog || !stateApi || !ui) {
-        loading.textContent = 'Product details are unavailable in this local demo.';
+        loading.textContent = 'Product details are unavailable.';
+        return;
+    }
+
+    try {
+        await catalog.hydrate();
+    } catch (error) {
+        loading.textContent = error.message || 'Product details are temporarily unavailable.';
         return;
     }
 

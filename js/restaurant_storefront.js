@@ -111,14 +111,30 @@
     host.append(create('p', { className: 'restaurant-empty' }, hasCoordinates ? `Saved location: ${Number(profile.latitude).toFixed(4)}, ${Number(profile.longitude).toFixed(4)}.` : 'No coordinates saved. Enter a manual address or use your current location.'));
   }
 
-  function initProfile() {
+  function stateFromSnapshot(snapshot) {
+    const restaurant = snapshot && snapshot.restaurant || {};
+    const weeklyHours = Object.fromEntries((Array.isArray(snapshot && snapshot.weeklyHours) ? snapshot.weeklyHours : []).map(row => [DAYS[Number(row.weekday)], {
+      open: text(row.opens_at || row.opensAt), close: text(row.closes_at || row.closesAt), closed: row.is_closed === true || Number(row.is_closed) === 1
+    }]).filter(([day]) => day));
+    const specialHours = (Array.isArray(snapshot && snapshot.specialHours) ? snapshot.specialHours : []).map(row => ({
+      date: text(row.special_date || row.date), open: text(row.opens_at || row.opensAt), close: text(row.closes_at || row.closesAt), closed: row.is_closed === true || Number(row.is_closed) === 1, note: text(row.note)
+    }));
+    const hasCoordinates = Number.isFinite(Number(restaurant.latitude)) && Number.isFinite(Number(restaurant.longitude));
+    return {
+      profile: { name: text(restaurant.name), cuisine: text(restaurant.cuisine), address: text(restaurant.address), city: text(restaurant.city), phone: text(restaurant.phone), addressLine1: text(restaurant.address), addressLine2: '', state: '', postalCode: '', country: '', latitude: hasCoordinates ? Number(restaurant.latitude) : null, longitude: hasCoordinates ? Number(restaurant.longitude) : null, locationMethod: hasCoordinates ? 'current' : 'manual', version: Number(restaurant.version || 0) },
+      operations: { acceptingOrders: restaurant.acceptingOrders !== false, prepMinutes: 20, deliveryRadius: 5, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(weeklyHours), specialHours }
+    };
+  }
+
+  async function initProfile() {
     const form = root.document.querySelector('[data-store-profile-form]');
-    if (!form || !root.SavoraRestaurantState) return;
-    const api = root.SavoraRestaurantState; const ui = root.SavoraRestaurantUI; let state = api.load();
+    if (!form || !root.SavoraApi) return;
+    const ui = root.SavoraRestaurantUI; let state;
     const feedback = root.document.querySelector('[data-profile-feedback]');
     const addressFeedback = root.document.querySelector('[data-address-feedback]');
     const preview = root.document.querySelector('[data-storefront-preview]');
-    const hydrate = () => {
+    const hydrate = async () => {
+      state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant'));
       const profile = state.profile || {}; const operations = state.operations || {};
       form.dataset.locationMethod = profile.locationMethod === 'current' ? 'current' : 'manual';
       setInput(form, 'profile-name', profile.name); setInput(form, 'profile-cuisine', profile.cuisine); setInput(form, 'profile-description', profile.description); setInput(form, 'profile-phone', profile.phone); setInput(form, 'profile-image', profile.image);
@@ -126,32 +142,34 @@
       setInput(form, 'delivery-radius', operations.deliveryRadius); setInput(form, 'minimum-order', operations.minimumOrder); setInput(form, 'profile-prep-minutes', operations.prepMinutes);
       renderProfilePreview(preview, state); renderMap(profile);
     };
+    try { await hydrate(); } catch (error) { setMessage(feedback, error.message || 'Store profile is unavailable.'); return; }
     const previewDraft = () => renderProfilePreview(preview, { ...state, profile: { ...state.profile, ...profilePatch(form) }, operations: { ...state.operations, deliveryRadius: Number(fields(form)('delivery-radius').value) || 0 } });
     form.addEventListener('input', previewDraft);
     const profileName = fields(form)('profile-name');
     if (profileName) profileName.addEventListener('input', () => { if (profileName.value.trim()) profileName.removeAttribute('aria-invalid'); });
-    form.addEventListener('submit', event => {
+    form.addEventListener('submit', async event => {
       event.preventDefault();
       const patch = profilePatch(form); const deliveryRadius = Number(fields(form)('delivery-radius').value); const minimumOrder = Number(fields(form)('minimum-order').value); const prepMinutes = Number(fields(form)('profile-prep-minutes').value);
       const validation = validateOperations({ deliveryRadius, capacity: state.operations.capacity || 1, prepMinutes });
       if (!patch.name) { setMessage(feedback, 'Restaurant name is required.'); fields(form)('profile-name').setAttribute('aria-invalid', 'true'); return; }
       if (!validation.valid) { setMessage(feedback, validation.errors.deliveryRadius || validation.errors.prepMinutes); return; }
-      state = api.setProfile(state, patch);
-      state = api.setOperations(state, { deliveryRadius, minimumOrder, prepMinutes });
-      state = api.persist(state); if (ui) ui.refreshShell(); hydrate(); setMessage(feedback, 'Store profile saved locally.'); if (ui) ui.showToast('Store profile saved locally.');
+      const scope = 'restaurant-profile';
+      try {
+        await root.SavoraApi.post('api/catalog.php', { action: 'save_profile', payload: { name: patch.name, cuisine: patch.cuisine, address: patch.address, city: patch.city, phone: patch.phone, latitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.latitude) : null, longitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.longitude) : null, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
+        root.SavoraApi.clearIntentKey(scope); await hydrate(); setMessage(feedback, 'Store profile refreshed from the server.'); if (ui) ui.showToast('Store profile refreshed from the server.');
+      } catch (error) { setMessage(feedback, error.message || 'Store profile was not saved.'); }
     });
     const manual = root.document.querySelector('[data-manual-address]');
-    if (manual) manual.addEventListener('click', () => { form.dataset.locationMethod = 'manual'; state = api.persist(api.setProfile(state, { locationMethod: 'manual' })); renderMap(state.profile); setMessage(addressFeedback, 'Enter the address manually, then save your profile.'); fields(form)('address-line1').focus(); });
+    if (manual) manual.addEventListener('click', () => { form.dataset.locationMethod = 'manual'; delete form.dataset.latitude; delete form.dataset.longitude; renderMap({ locationMethod: 'manual' }); setMessage(addressFeedback, 'Enter the address manually, then save your profile.'); fields(form)('address-line1').focus(); });
     const locate = root.document.querySelector('[data-use-current-location]');
     if (locate) locate.addEventListener('click', () => {
       if (!root.navigator || !navigator.geolocation) { setMessage(addressFeedback, 'Current location is unavailable in this browser. You can enter the address manually.'); return; }
       setMessage(addressFeedback, 'Requesting your current location…');
       navigator.geolocation.getCurrentPosition(position => {
-        form.dataset.locationMethod = 'current'; state = api.setProfile(state, { latitude: position.coords.latitude, longitude: position.coords.longitude, locationMethod: 'current' });
-        state = api.persist(state); renderMap(state.profile); setMessage(addressFeedback, 'Current location saved. You can still update the manual address fields.'); if (ui) ui.showToast('Current location saved locally.');
+        form.dataset.locationMethod = 'current'; form.dataset.latitude = String(position.coords.latitude); form.dataset.longitude = String(position.coords.longitude);
+        renderMap({ locationMethod: 'current', latitude: position.coords.latitude, longitude: position.coords.longitude }); setMessage(addressFeedback, 'Current location selected. Save your profile to submit it.');
       }, () => setMessage(addressFeedback, 'Current location could not be used. You can enter the address manually.'));
     });
-    hydrate();
   }
 
   function specialRows(container, specialHours) {
@@ -195,23 +213,28 @@
     return normalizeWeeklyHours(source);
   }
 
-  function initOperations() {
+  async function initOperations() {
     const form = root.document.querySelector('[data-store-operations-form]');
-    if (!form || !root.SavoraRestaurantState) return;
-    const api = root.SavoraRestaurantState; const ui = root.SavoraRestaurantUI; let state = api.load(); const field = fields(form);
+    if (!form || !root.SavoraApi) return;
+    const ui = root.SavoraRestaurantUI; let state; const field = fields(form);
     const weekly = root.document.querySelector('[data-weekly-hours]'); const specials = root.document.querySelector('[data-special-hours]'); const feedback = root.document.querySelector('[data-operations-feedback]'); const warning = root.document.querySelector('[data-capacity-warning]'); const preview = root.document.querySelector('[data-operations-preview]');
     const updateWarning = () => { const capacity = Number(field('capacity').value); setMessage(warning, capacity > 0 && capacity < 5 ? 'Low capacity may pause orders during busy periods.' : ''); };
-    const hydrate = () => { const operations = state.operations || {}; setInput(form, 'accepting-orders', '', operations.acceptingOrders !== false); setInput(form, 'prep-minutes', operations.prepMinutes); setInput(form, 'capacity', operations.capacity); setInput(form, 'delivery-enabled', '', operations.deliveryEnabled !== false); setInput(form, 'pickup-enabled', '', operations.pickupEnabled !== false); setInput(form, 'pickup-instructions', operations.pickupInstructions); weeklyRows(weekly, normalizeWeeklyHours(operations.weeklyHours)); specialRows(specials, operations.specialHours || []); updateWarning(); renderOperationsPreview(preview, state); };
+    const hydrate = async () => { state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant')); const operations = state.operations || {}; setInput(form, 'accepting-orders', '', operations.acceptingOrders !== false); setInput(form, 'prep-minutes', operations.prepMinutes); setInput(form, 'capacity', operations.capacity); setInput(form, 'delivery-enabled', '', operations.deliveryEnabled !== false); setInput(form, 'pickup-enabled', '', operations.pickupEnabled !== false); setInput(form, 'pickup-instructions', operations.pickupInstructions); weeklyRows(weekly, normalizeWeeklyHours(operations.weeklyHours)); specialRows(specials, operations.specialHours || []); updateWarning(); renderOperationsPreview(preview, state); };
+    try { await hydrate(); } catch (error) { setMessage(feedback, error.message || 'Operations are unavailable.'); return; }
     field('capacity').addEventListener('input', updateWarning);
     root.document.querySelector('[data-copy-hours]').addEventListener('click', () => { const monday = weekly.querySelector('[data-weekday="monday"]'); const [open, close, closed] = monday.querySelectorAll('input'); weeklyRows(weekly, Object.fromEntries(DAYS.map(day => [day, { open: open.value, close: close.value, closed: closed.checked }]))); });
     root.document.querySelector('[data-add-special-hours]').addEventListener('click', () => { specialRows(specials, [...readSpecialHours(specials), { date: '', open: '09:00', close: '17:00', closed: false, note: '' }]); });
-    form.addEventListener('submit', event => {
+    form.addEventListener('submit', async event => {
       event.preventDefault(); const deliveryRadius = state.operations.deliveryRadius || 0; const capacity = Number(field('capacity').value); const prepMinutes = Number(field('prep-minutes').value); const validation = validateOperations({ deliveryRadius: deliveryRadius || 0.1, capacity, prepMinutes });
       if (!validation.valid) { setMessage(feedback, validation.errors.capacity || validation.errors.prepMinutes || validation.errors.deliveryRadius); return; }
-      state = api.setOperations(state, { acceptingOrders: field('accepting-orders').checked, prepMinutes, capacity, deliveryEnabled: field('delivery-enabled').checked, pickupEnabled: field('pickup-enabled').checked, pickupInstructions: text(field('pickup-instructions').value), weeklyHours: readWeeklyHours(weekly), specialHours: readSpecialHours(specials) });
-      state = api.persist(state); if (ui) ui.refreshShell(); renderOperationsPreview(preview, state); updateWarning(); setMessage(feedback, 'Operations and opening hours saved locally.'); if (ui) ui.showToast('Operations saved locally.');
+      const scope = 'restaurant-operations';
+      const weeklyHours = Object.entries(readWeeklyHours(weekly)).map(([day, hours]) => ({ weekday: DAYS.indexOf(day), opensAt: hours.open || null, closesAt: hours.close || null, isClosed: hours.closed === true }));
+      const specialHours = readSpecialHours(specials).map(hours => ({ date: hours.date, opensAt: hours.open || null, closesAt: hours.close || null, isClosed: hours.closed === true, note: hours.note }));
+      try {
+        await root.SavoraApi.post('api/catalog.php', { action: 'save_operations', payload: { acceptingOrders: field('accepting-orders').checked, weeklyHours, specialHours, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
+        root.SavoraApi.clearIntentKey(scope); await hydrate(); updateWarning(); setMessage(feedback, 'Operations refreshed from the server.'); if (ui) ui.showToast('Operations refreshed from the server.');
+      } catch (error) { setMessage(feedback, error.message || 'Operations were not saved.'); }
     });
-    hydrate();
   }
 
   function initialize() { if (!root || !root.document) return; initProfile(); initOperations(); }

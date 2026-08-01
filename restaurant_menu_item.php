@@ -31,5 +31,6 @@
         <aside class="restaurant-card restaurant-customer-preview" aria-labelledby="customer-preview-title"><h2 id="customer-preview-title">Customer preview</h2><div data-menu-customer-preview aria-live="polite"></div><p class="restaurant-field-hint">This is how the item will appear in the local Customer catalog.</p></aside>
     </div>
 </main>
+<script src="js/api_client.js"></script>
 <script defer src="js/restaurant_menu.js"></script>
 <?php require_once __DIR__ . '/components/restaurant_footer.php'; ?>
