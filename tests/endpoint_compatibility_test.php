@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/support/test_database.php';
 require_once __DIR__ . '/../lib/session_security.php';
+require_once __DIR__ . '/../lib/idempotency.php';
 
 function endpoint_expect(bool $value, string $message): void
 {
@@ -92,7 +93,8 @@ $validFalseReplayKey = $replayKeyPrefix . '-valid-false';
 $validTrueReplay = ['ok' => true, 'message' => 'Replay response.', 'data' => ['replayed' => true]];
 $validFalseReplay = ['ok' => false, 'message' => 'Replay failure.'];
 $replayAction = 'replay_test';
-$replayHash = hash('sha256', $replayAction . "\n{}");
+/* Replay fixtures must use the endpoint's canonical hash; JSON {} decodes to PHP []. */
+$replayHash = savora_idempotency_hash($replayAction, []);
 $store = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,request_hash,response_json) VALUES(?,?,?,?,?)');
 $replayFixtures = [
     $validTrueReplayKey => json_encode($validTrueReplay, JSON_THROW_ON_ERROR),
@@ -127,7 +129,7 @@ try {
     endpoint_expect($platformCsrf === ['status' => 403, 'raw' => '{"ok":false,"message":"Secure session expired."}', 'body' => ['ok' => false, 'message' => 'Secure session expired.']], 'Platform CSRF must precede malformed JSON and remain exact.');
 
     $validTrueReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
-    endpoint_expect($validTrueReplayResponse['status'] === 200 && $validTrueReplayResponse['body'] === $validTrueReplay, 'A valid ok=true platform response must replay exactly.');
+    endpoint_expect($validTrueReplayResponse['status'] === 200 && $validTrueReplayResponse['body'] === $validTrueReplay, 'A valid ok=true platform response must replay exactly: ' . json_encode($validTrueReplayResponse, JSON_THROW_ON_ERROR));
     $mismatchedReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{"changed":true}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
     endpoint_expect(
         $mismatchedReplayResponse === ['status' => 409, 'raw' => '{"ok":false,"message":"Idempotency key was already used for a different request."}', 'body' => ['ok' => false, 'message' => 'Idempotency key was already used for a different request.']],
