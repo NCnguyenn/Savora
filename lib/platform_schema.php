@@ -125,6 +125,9 @@ function platform_migrate(mysqli $conn): void
         "CREATE TABLE IF NOT EXISTS platform_settings (
             setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT NOT NULL, value_type VARCHAR(30) NOT NULL DEFAULT 'string', updated_by INT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, version INT NOT NULL DEFAULT 1
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS notification_templates (
+            template_key VARCHAR(100) PRIMARY KEY, event_name VARCHAR(160) NOT NULL, audience VARCHAR(40) NOT NULL, channel VARCHAR(30) NOT NULL DEFAULT 'in_app', subject VARCHAR(200) NOT NULL, message_template TEXT NOT NULL, enabled TINYINT(1) NOT NULL DEFAULT 1, updated_by INT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, version INT NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         "CREATE TABLE IF NOT EXISTS audit_logs (
             id BIGINT AUTO_INCREMENT PRIMARY KEY, actor_user_id INT NOT NULL, action VARCHAR(100) NOT NULL, entity_type VARCHAR(60) NOT NULL, entity_id BIGINT NULL, before_summary TEXT, after_summary TEXT, reason VARCHAR(500), ip_address VARCHAR(64), session_id VARCHAR(128), result VARCHAR(30) NOT NULL DEFAULT 'success', reference_id VARCHAR(60) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
@@ -184,4 +187,138 @@ function platform_seed(mysqli $conn): void
         $setting->execute();
     }
     $setting->close();
+
+    $templates = [
+        ['order_status_customer', 'Order status update', 'customer', 'in_app', 'Your order has an update', 'Order {{order_reference}} is now {{status}}.'],
+        ['restaurant_application_decision', 'Restaurant application decision', 'restaurant', 'email', 'Your Savora application', 'Application {{application_reference}} is now {{status}}.'],
+        ['driver_application_decision', 'Driver application decision', 'driver', 'email', 'Your Savora driver application', 'Application {{application_reference}} is now {{status}}.'],
+        ['support_case_update', 'Support case update', 'all', 'in_app', 'Case {{case_reference}} updated', 'A new update is available for case {{case_reference}}.'],
+    ];
+    $template = $conn->prepare('INSERT IGNORE INTO notification_templates (template_key, event_name, audience, channel, subject, message_template) VALUES (?, ?, ?, ?, ?, ?)');
+    foreach ($templates as [$key, $event, $audience, $channel, $subject, $message]) {
+        $template->bind_param('ssssss', $key, $event, $audience, $channel, $subject, $message);
+        $template->execute();
+    }
+    $template->close();
+
+    platform_seed_operations($conn);
+}
+
+function platform_seed_operations(mysqli $conn): void
+{
+    $ids = [];
+    $userLookup = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    foreach (['customer', 'restaurant', 'driver', 'admin', 'driver-nearby-2', 'driver-nearby-3'] as $username) {
+        $userLookup->bind_param('s', $username);
+        $userLookup->execute();
+        $row = $userLookup->get_result()->fetch_assoc();
+        if ($row) {
+            $ids[$username] = (int) $row['id'];
+        }
+    }
+    $userLookup->close();
+    if (count($ids) < 6) {
+        return;
+    }
+
+    $customerProfile = $conn->prepare("INSERT IGNORE INTO customer_profiles (user_id, email, phone, address, wallet_balance) VALUES (?, 'customer@savora.test', '+1 555 0142', '28 Market Street, Central District', 128.50)");
+    $customerProfile->bind_param('i', $ids['customer']);
+    $customerProfile->execute();
+    $customerProfile->close();
+
+    $restaurant = $conn->prepare("INSERT IGNORE INTO restaurants (owner_user_id, name, cuisine, address, city, phone, status, accepting_orders, rating, cancellation_rate) VALUES (?, 'Savora Burger', 'Burgers', '80 Riverside Avenue', 'Central City', '+1 555 0188', 'active', 1, 4.82, 2.40)");
+    $restaurant->bind_param('i', $ids['restaurant']);
+    $restaurant->execute();
+    $restaurant->close();
+    $restaurantLookup = $conn->prepare('SELECT id FROM restaurants WHERE owner_user_id = ? LIMIT 1');
+    $restaurantLookup->bind_param('i', $ids['restaurant']);
+    $restaurantLookup->execute();
+    $restaurantId = (int) ($restaurantLookup->get_result()->fetch_assoc()['id'] ?? 0);
+    $restaurantLookup->close();
+    if ($restaurantId === 0) {
+        return;
+    }
+
+    $driverProfiles = [
+        [$ids['driver'], 'Motorbike', 'Honda Vision', 'SVR-1042', 'Central District', 'online', 4.91, 94.50, 98.20],
+        [$ids['driver-nearby-2'], 'Motorbike', 'Yamaha NMAX', 'SVR-2058', 'North District', 'online', 4.76, 91.20, 96.80],
+        [$ids['driver-nearby-3'], 'Bicycle', 'Urban Cargo', 'SVR-3091', 'East District', 'offline', 4.68, 88.40, 95.10],
+    ];
+    $driver = $conn->prepare("INSERT IGNORE INTO driver_profiles (user_id, city, vehicle_type, vehicle_model, license_plate, service_area, eligibility_status, availability_status, rating, acceptance_rate, completion_rate) VALUES (?, 'Central City', ?, ?, ?, ?, 'eligible', ?, ?, ?, ?)");
+    foreach ($driverProfiles as [$userId, $vehicleType, $model, $plate, $area, $availability, $rating, $acceptance, $completion]) {
+        $driver->bind_param('isssssddd', $userId, $vehicleType, $model, $plate, $area, $availability, $rating, $acceptance, $completion);
+        $driver->execute();
+    }
+    $driver->close();
+
+    $restaurantApplications = [
+        ['RA-2026-104', 'green-table', 'Ava Thompson', 'ava@greentable.test', 'Green Table Bistro', 'Mediterranean', 'pending', 'low'],
+        ['RA-2026-105', 'little-orchid', 'Noah Wilson', 'noah@orchid.test', 'Little Orchid Kitchen', 'Vietnamese', 'pending', 'medium'],
+    ];
+    $restaurantApplication = $conn->prepare("INSERT IGNORE INTO restaurant_applications (reference_code, username, password_hash, owner_name, owner_email, restaurant_name, cuisine, city, address, status, risk_level) VALUES (?, ?, ?, ?, ?, ?, ?, 'Central City', 'Application address pending review', ?, ?)");
+    foreach ($restaurantApplications as [$reference, $username, $owner, $email, $name, $cuisine, $status, $risk]) {
+        $hash = password_hash('123456', PASSWORD_DEFAULT);
+        $restaurantApplication->bind_param('sssssssss', $reference, $username, $hash, $owner, $email, $name, $cuisine, $status, $risk);
+        $restaurantApplication->execute();
+    }
+    $restaurantApplication->close();
+
+    $driverApplications = [
+        ['DA-2026-207', 'jamie-carter', 'Jamie Carter', 'jamie@driver.test', 'Motorbike', 'pending', 'low'],
+        ['DA-2026-208', 'morgan-lee', 'Morgan Lee', 'morgan@driver.test', 'Bicycle', 'pending', 'medium'],
+    ];
+    $driverApplication = $conn->prepare("INSERT IGNORE INTO driver_applications (reference_code, username, password_hash, full_name, email, city, vehicle_type, service_area, status, risk_level) VALUES (?, ?, ?, ?, ?, 'Central City', ?, 'Central District', ?, ?)");
+    foreach ($driverApplications as [$reference, $username, $name, $email, $vehicle, $status, $risk]) {
+        $hash = password_hash('123456', PASSWORD_DEFAULT);
+        $driverApplication->bind_param('ssssssss', $reference, $username, $hash, $name, $email, $vehicle, $status, $risk);
+        $driverApplication->execute();
+    }
+    $driverApplication->close();
+
+    $orders = [
+        ['SV-10482', 'delivered', 'wallet', 42.80, 3.90, 46.70, 0],
+        ['SV-10483', 'delivered', 'card', 68.40, 4.20, 72.60, 1],
+        ['SV-10484', 'preparing', 'cash', 31.20, 3.50, 34.70, 0],
+        ['SV-10485', 'ready_for_pickup', 'card', 54.60, 4.00, 58.60, 0],
+        ['SV-10486', 'assigned', 'wallet', 26.50, 3.20, 29.70, 0],
+        ['SV-10487', 'cancelled', 'card', 39.90, 3.60, 43.50, 2],
+        ['SV-10488', 'delivered', 'cash', 82.10, 4.80, 86.90, 3],
+        ['SV-10489', 'pending', 'wallet', 24.00, 3.00, 27.00, 0],
+    ];
+    $orderInsert = $conn->prepare("INSERT IGNORE INTO orders (reference_code, customer_user_id, restaurant_id, status, payment_method, subtotal, delivery_fee, total, delivery_address, placed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '28 Market Street, Central District', DATE_SUB(NOW(), INTERVAL ? DAY))");
+    foreach ($orders as [$reference, $status, $payment, $subtotal, $fee, $total, $daysAgo]) {
+        $orderInsert->bind_param('siissdddi', $reference, $ids['customer'], $restaurantId, $status, $payment, $subtotal, $fee, $total, $daysAgo);
+        $orderInsert->execute();
+    }
+    $orderInsert->close();
+
+    $ledger = $conn->prepare("INSERT IGNORE INTO ledger_entries (reference_code, order_id, entry_type, party_type, party_id, gross_amount, fee_amount, net_amount, payment_method, status, created_at) SELECT CONCAT('LED-', o.reference_code), o.id, 'order_sale', 'restaurant', ?, o.total, ROUND(o.total * 0.12, 2), ROUND(o.total * 0.88, 2), o.payment_method, 'completed', o.placed_at FROM orders o WHERE o.reference_code = ? AND o.status = 'delivered'");
+    foreach (['SV-10482', 'SV-10483', 'SV-10488'] as $reference) {
+        $ledger->bind_param('is', $restaurantId, $reference);
+        $ledger->execute();
+    }
+    $ledger->close();
+
+    $cases = [
+        ['CASE-1042', 'delivery_delay', 'customer', $ids['customer'], 'urgent', 'open', 'Order has not arrived', 20],
+        ['CASE-1043', 'payment_question', 'customer', $ids['customer'], 'medium', 'in_review', 'Duplicate payment concern', 360],
+    ];
+    $caseInsert = $conn->prepare('INSERT IGNORE INTO support_cases (reference_code, case_type, reporting_role, reporting_user_id, priority, status, subject, sla_due_at) VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))');
+    foreach ($cases as [$reference, $type, $role, $userId, $priority, $status, $subject, $minutes]) {
+        $caseInsert->bind_param('sssisssi', $reference, $type, $role, $userId, $priority, $status, $subject, $minutes);
+        $caseInsert->execute();
+    }
+    $caseInsert->close();
+
+    $audit = $conn->prepare("INSERT IGNORE INTO audit_logs (actor_user_id, action, entity_type, entity_id, after_summary, reason, ip_address, result, reference_id) VALUES (?, ?, ?, ?, ?, ?, '127.0.0.1', 'success', ?)");
+    $auditRows = [
+        ['admin_login', 'session', null, 'Administrator session authenticated', 'Successful secure login', 'ADM-SEED-LOGIN'],
+        ['review_application', 'restaurant_application', 1, 'Application entered review queue', 'Automated risk checks passed', 'ADM-SEED-APP'],
+        ['monitor_order', 'order', 1, 'Operational status reviewed', 'Live operations health check', 'ADM-SEED-ORDER'],
+    ];
+    foreach ($auditRows as [$action, $entityType, $entityId, $after, $reason, $reference]) {
+        $audit->bind_param('ississs', $ids['admin'], $action, $entityType, $entityId, $after, $reason, $reference);
+        $audit->execute();
+    }
+    $audit->close();
 }

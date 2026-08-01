@@ -142,6 +142,36 @@
         applyTableFilter(table, { query: data.get('q'), status: data.get('status') });
     }
 
+    function formPayload(form) {
+        const payload = {};
+        const data = new root.FormData(form);
+        data.forEach(function assignField(value, key) { payload[key] = value; });
+        form.querySelectorAll('input[type="checkbox"]').forEach(function assignCheckbox(input) {
+            payload[input.name] = input.checked;
+        });
+        return payload;
+    }
+
+    async function submitActionForm(form) {
+        const submit = form.querySelector('[type="submit"]');
+        const errorNode = form.querySelector('[data-admin-field-error]');
+        if (errorNode) errorNode.textContent = '';
+        if (submit) submit.disabled = true;
+        try {
+            const result = await requestAction(form.dataset.adminAction, formPayload(form));
+            const version = form.querySelector('[name="version"]');
+            if (version && result.data && result.data.version) version.value = String(result.data.version);
+            showToast(result.message || 'Changes saved.', 'success');
+        } catch (error) {
+            const details = error.details || {};
+            const errors = details.errors || {};
+            if (errorNode) errorNode.textContent = Object.values(errors)[0] || error.message;
+            showToast(error.message, 'error');
+        } finally {
+            if (submit) submit.disabled = false;
+        }
+    }
+
     function trapFocus(event, overlay) {
         if (event.key !== 'Tab') return;
         const items = focusableElements(overlay);
@@ -191,6 +221,17 @@
         root.document.querySelectorAll('[data-admin-filter]').forEach(function bindFilter(form) {
             form.addEventListener('input', function filterInput() { syncFilters(form); });
             form.addEventListener('change', function filterChange() { syncFilters(form); });
+        });
+
+        root.document.querySelectorAll('form[data-admin-action]').forEach(function bindActionForm(form) {
+            form.addEventListener('submit', function actionSubmit(event) {
+                event.preventDefault();
+                submitActionForm(form);
+            });
+        });
+
+        root.document.querySelectorAll('[data-admin-print]').forEach(function bindPrint(button) {
+            button.addEventListener('click', function printReport() { root.print(); });
         });
 
         const confirmButton = root.document.querySelector('[data-admin-confirm]');

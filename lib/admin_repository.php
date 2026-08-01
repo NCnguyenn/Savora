@@ -1,22 +1,121 @@
 <?php
 declare(strict_types=1);
 
-function admin_page_data(mysqli $conn, string $page, array $filters = []): array
+function admin_rows(mysqli $conn, string $sql, string $types = '', array $params = []): array
 {
-    $role = $filters['role'] ?? null;
-    if ($page === 'accounts' && is_string($role) && in_array($role, ['customer', 'restaurant', 'driver', 'admin'], true)) {
-        $stmt = $conn->prepare('SELECT id, username, role, full_name, email, phone, status, last_login_at, created_at, version FROM users WHERE role = ? ORDER BY created_at DESC');
-        $stmt->bind_param('s', $role);
-    } else {
-        $stmt = $conn->prepare('SELECT id, username, role, full_name, email, phone, status, last_login_at, created_at, version FROM users ORDER BY created_at DESC');
+    $stmt = $conn->prepare($sql);
+    if ($types !== '') {
+        $stmt->bind_param($types, ...$params);
     }
     $stmt->execute();
-    $accounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
+    return $rows;
+}
+
+function admin_one(mysqli $conn, string $sql, string $types = '', array $params = []): array
+{
+    return admin_rows($conn, $sql, $types, $params)[0] ?? [];
+}
+
+function admin_valid_date(mixed $value, string $fallback): string
+{
+    if (!is_string($value)) {
+        return $fallback;
+    }
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    return $date && $date->format('Y-m-d') === $value ? $value : $fallback;
+}
+
+function admin_account_rows(mysqli $conn, array $filters): array
+{
+    $role = $filters['role'] ?? null;
+    if (is_string($role) && in_array($role, ['customer', 'restaurant', 'driver', 'admin'], true)) {
+        return admin_rows($conn, 'SELECT id, username, role, full_name, email, phone, status, last_login_at, created_at, version FROM users WHERE role = ? ORDER BY created_at DESC', 's', [$role]);
+    }
+    return admin_rows($conn, 'SELECT id, username, role, full_name, email, phone, status, last_login_at, created_at, version FROM users ORDER BY created_at DESC');
+}
+
+function admin_overview_data(mysqli $conn): array
+{
+    $orderMetrics = admin_one($conn, "SELECT COUNT(*) AS total_orders, COALESCE(SUM(total), 0) AS gross_order_value, SUM(status IN ('pending','accepted','preparing','ready_for_pickup','assigned','picked_up','in_transit')) AS active_orders, SUM(status = 'cancelled') AS cancelled_orders FROM orders WHERE placed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    $revenue = admin_one($conn, "SELECT COALESCE(SUM(fee_amount), 0) AS platform_revenue FROM ledger_entries WHERE status = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    $restaurantPending = admin_one($conn, "SELECT COUNT(*) AS total FROM restaurant_applications WHERE status IN ('pending','in_review','changes_requested')");
+    $driverPending = admin_one($conn, "SELECT COUNT(*) AS total FROM driver_applications WHERE status IN ('pending','in_review','changes_requested')");
+
+    $liveOrders = admin_rows($conn, "SELECT o.id, o.reference_code, o.status, o.total, o.payment_method, o.placed_at, r.name AS restaurant_name, u.full_name AS customer_name, d.assigned_driver_user_id, du.full_name AS driver_name FROM orders o JOIN restaurants r ON r.id = o.restaurant_id JOIN users u ON u.id = o.customer_user_id LEFT JOIN delivery_dispatches d ON d.order_id = o.id LEFT JOIN users du ON du.id = d.assigned_driver_user_id WHERE o.status NOT IN ('delivered','cancelled','refunded') ORDER BY o.placed_at DESC LIMIT 6");
+    $restaurantQueue = admin_rows($conn, "SELECT id, reference_code, restaurant_name AS applicant_name, city, status, risk_level, submitted_at, 'restaurant' AS application_type FROM restaurant_applications WHERE status IN ('pending','in_review','changes_requested') ORDER BY submitted_at LIMIT 4");
+    $driverQueue = admin_rows($conn, "SELECT id, reference_code, full_name AS applicant_name, city, status, risk_level, submitted_at, 'driver' AS application_type FROM driver_applications WHERE status IN ('pending','in_review','changes_requested') ORDER BY submitted_at LIMIT 4");
+    $approvalQueue = array_slice(array_merge($restaurantQueue, $driverQueue), 0, 6);
+    usort($approvalQueue, static fn(array $a, array $b): int => strcmp((string) $a['submitted_at'], (string) $b['submitted_at']));
+
+    $trend = admin_rows($conn, "SELECT DATE_FORMAT(placed_at, '%a') AS label, DATE(placed_at) AS day, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue FROM orders WHERE placed_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY DATE(placed_at), DATE_FORMAT(placed_at, '%a') ORDER BY day");
+    $statusDistribution = admin_rows($conn, "SELECT status, COUNT(*) AS total FROM orders WHERE placed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY status ORDER BY total DESC");
+    $alerts = admin_rows($conn, "SELECT id, reference_code, subject, priority, status, sla_due_at FROM support_cases WHERE status NOT IN ('resolved','closed') ORDER BY FIELD(priority, 'urgent','high','medium','low'), sla_due_at LIMIT 5");
+    $activity = admin_rows($conn, "SELECT a.reference_id, a.action, a.entity_type, a.result, a.reason, a.created_at, u.full_name AS actor_name FROM audit_logs a JOIN users u ON u.id = a.actor_user_id ORDER BY a.created_at DESC LIMIT 6");
 
     return [
-        'page' => $page,
-        'filters' => $filters,
-        'accounts' => $accounts,
+        'metrics' => array_merge($orderMetrics, $revenue, ['pending_approvals' => (int) ($restaurantPending['total'] ?? 0) + (int) ($driverPending['total'] ?? 0)]),
+        'live_orders' => $liveOrders,
+        'approval_queue' => $approvalQueue,
+        'trend' => $trend,
+        'status_distribution' => $statusDistribution,
+        'alerts' => $alerts,
+        'activity' => $activity,
     ];
+}
+
+function admin_analytics_data(mysqli $conn, array $filters): array
+{
+    $fallbackTo = date('Y-m-d');
+    $fallbackFrom = date('Y-m-d', strtotime('-30 days'));
+    $from = admin_valid_date($filters['from'] ?? null, $fallbackFrom);
+    $to = admin_valid_date($filters['to'] ?? null, $fallbackTo);
+    if ($from > $to) {
+        [$from, $to] = [$to, $from];
+    }
+
+    $kpis = admin_one($conn, "SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS gross_order_value, ROUND(100 * SUM(status = 'delivered') / NULLIF(COUNT(*), 0), 1) AS completion_rate, ROUND(AVG(CASE WHEN status = 'delivered' THEN TIMESTAMPDIFF(MINUTE, placed_at, updated_at) END), 0) AS average_delivery_minutes FROM orders WHERE DATE(placed_at) BETWEEN ? AND ?", 'ss', [$from, $to]);
+    $trend = admin_rows($conn, "SELECT DATE(placed_at) AS day, DATE_FORMAT(placed_at, '%b %e') AS label, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue FROM orders WHERE DATE(placed_at) BETWEEN ? AND ? GROUP BY DATE(placed_at), DATE_FORMAT(placed_at, '%b %e') ORDER BY day", 'ss', [$from, $to]);
+    $funnel = admin_rows($conn, "SELECT status, COUNT(*) AS total FROM orders WHERE DATE(placed_at) BETWEEN ? AND ? GROUP BY status ORDER BY total DESC", 'ss', [$from, $to]);
+    $cancellations = admin_rows($conn, "SELECT COALESCE(NULLIF(h.reason, ''), 'Customer changed plans') AS reason, COUNT(*) AS total FROM orders o LEFT JOIN order_status_history h ON h.order_id = o.id AND h.status = 'cancelled' WHERE o.status = 'cancelled' AND DATE(o.placed_at) BETWEEN ? AND ? GROUP BY COALESCE(NULLIF(h.reason, ''), 'Customer changed plans') ORDER BY total DESC", 'ss', [$from, $to]);
+    $hourly = admin_rows($conn, "SELECT HOUR(placed_at) AS hour, COUNT(*) AS total FROM orders WHERE DATE(placed_at) BETWEEN ? AND ? GROUP BY HOUR(placed_at) ORDER BY hour", 'ss', [$from, $to]);
+    $restaurants = admin_rows($conn, "SELECT r.id, r.name, r.rating, r.cancellation_rate, COUNT(o.id) AS orders, COALESCE(SUM(CASE WHEN o.status = 'delivered' THEN o.total ELSE 0 END), 0) AS revenue FROM restaurants r LEFT JOIN orders o ON o.restaurant_id = r.id AND DATE(o.placed_at) BETWEEN ? AND ? GROUP BY r.id, r.name, r.rating, r.cancellation_rate ORDER BY revenue DESC LIMIT 6", 'ss', [$from, $to]);
+    $drivers = admin_rows($conn, "SELECT u.id, u.full_name, d.rating, d.acceptance_rate, d.completion_rate, COUNT(v.id) AS deliveries FROM driver_profiles d JOIN users u ON u.id = d.user_id LEFT JOIN deliveries v ON v.driver_user_id = d.user_id GROUP BY u.id, u.full_name, d.rating, d.acceptance_rate, d.completion_rate ORDER BY d.completion_rate DESC LIMIT 6");
+    $retention = admin_one($conn, "SELECT COUNT(*) AS active_customers, SUM(order_count > 1) AS repeat_customers, ROUND(100 * SUM(order_count > 1) / NULLIF(COUNT(*), 0), 1) AS repeat_rate FROM (SELECT customer_user_id, COUNT(*) AS order_count FROM orders WHERE placed_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP BY customer_user_id) customer_orders");
+
+    return compact('from', 'to', 'kpis', 'trend', 'funnel', 'cancellations', 'hourly', 'restaurants', 'drivers', 'retention');
+}
+
+function admin_settings_data(mysqli $conn, array $filters): array
+{
+    $auditQuery = trim((string) ($filters['q'] ?? ''));
+    if ($auditQuery !== '') {
+        $like = '%' . mb_substr($auditQuery, 0, 80) . '%';
+        $audit = admin_rows($conn, "SELECT a.id, a.reference_id, a.action, a.entity_type, a.entity_id, a.before_summary, a.after_summary, a.reason, a.ip_address, a.result, a.created_at, u.full_name AS actor_name FROM audit_logs a JOIN users u ON u.id = a.actor_user_id WHERE a.reference_id LIKE ? OR a.action LIKE ? OR u.full_name LIKE ? ORDER BY a.created_at DESC LIMIT 50", 'sss', [$like, $like, $like]);
+    } else {
+        $audit = admin_rows($conn, "SELECT a.id, a.reference_id, a.action, a.entity_type, a.entity_id, a.before_summary, a.after_summary, a.reason, a.ip_address, a.result, a.created_at, u.full_name AS actor_name FROM audit_logs a JOIN users u ON u.id = a.actor_user_id ORDER BY a.created_at DESC LIMIT 50");
+    }
+    return [
+        'settings' => admin_rows($conn, 'SELECT setting_key, setting_value, value_type, updated_at, version FROM platform_settings ORDER BY setting_key'),
+        'templates' => admin_rows($conn, 'SELECT template_key, event_name, audience, channel, subject, message_template, enabled, updated_at, version FROM notification_templates ORDER BY event_name'),
+        'audit' => $audit,
+        'security' => admin_one($conn, "SELECT COUNT(*) AS active_sessions, COUNT(DISTINCT user_id) AS active_users FROM user_sessions WHERE revoked_at IS NULL AND (last_seen_at IS NULL OR last_seen_at >= DATE_SUB(NOW(), INTERVAL 30 DAY))"),
+    ];
+}
+
+function admin_page_data(mysqli $conn, string $page, array $filters = []): array
+{
+    $data = ['page' => $page, 'filters' => $filters];
+    if ($page === 'overview') {
+        return array_merge($data, admin_overview_data($conn));
+    }
+    if ($page === 'analytics') {
+        return array_merge($data, admin_analytics_data($conn, $filters));
+    }
+    if ($page === 'settings') {
+        return array_merge($data, admin_settings_data($conn, $filters));
+    }
+    $data['accounts'] = admin_account_rows($conn, $filters);
+    return $data;
 }
