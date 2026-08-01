@@ -7,6 +7,7 @@ function savora_migrations(): array
         '001_existing_schema' => __DIR__ . '/../database/migrations/001_existing_schema.php',
         '002_core_integrity' => __DIR__ . '/../database/migrations/002_core_integrity.php',
         '003_idempotency_request_hash' => __DIR__ . '/../database/migrations/003_idempotency_request_hash.php',
+        '004_catalog_contract' => __DIR__ . '/../database/migrations/004_catalog_contract.php',
     ];
 }
 

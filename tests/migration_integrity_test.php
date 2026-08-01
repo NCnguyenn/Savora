@@ -99,9 +99,9 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract'], 'Migration registry order is incorrect.');
 
-$conn->query("DELETE FROM schema_migrations WHERE version IN ('001_existing_schema', '002_core_integrity', '003_idempotency_request_hash')");
+$conn->query("DELETE FROM schema_migrations WHERE version IN ('001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract')");
 migration_expect(savora_apply_migrations($conn) === $versions, 'Both migrations must apply in registry order.');
 migration_expect(savora_apply_migrations($conn) === [], 'A second migration pass must be a no-op.');
 migration_expect(
