@@ -17,6 +17,7 @@ test('migration and seed are explicit CLI-only entry points', () => {
   const seed = read('scripts/seed.php');
   assert.match(migrate, /PHP_SAPI !== 'cli'/);
   assert.match(seed, /PHP_SAPI !== 'cli'/);
-  assert.match(migrate, /platform_migrate/);
+  assert.match(migrate, /savora_apply_migrations/);
+  assert.doesNotMatch(migrate, /platform_migrate\(\$conn\)/);
   assert.match(seed, /platform_seed/);
 });

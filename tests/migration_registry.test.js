@@ -1,0 +1,38 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+test('migration registry is explicit and core relationships are constrained', () => {
+  const registry = fs.readFileSync('lib/migrations.php', 'utf8');
+  const migrate = fs.readFileSync('scripts/migrate.php', 'utf8');
+  const integrity = fs.readFileSync('database/migrations/002_core_integrity.php', 'utf8');
+
+  const existingSchema = registry.indexOf('001_existing_schema');
+  const coreIntegrity = registry.indexOf('002_core_integrity');
+  assert.ok(existingSchema >= 0, 'existing schema migration must be registered');
+  assert.ok(coreIntegrity > existingSchema, 'core integrity migration must follow the existing schema migration');
+  assert.match(migrate, /savora_apply_migrations\(\$conn\)/);
+  assert.doesNotMatch(migrate, /platform_migrate\(\$conn\)/);
+
+  for (const name of [
+    'fk_orders_customer',
+    'fk_orders_restaurant',
+    'fk_order_items_order',
+    'fk_order_history_order',
+    'fk_payments_order',
+    'fk_deliveries_order',
+    'fk_user_sessions_user',
+    'fk_restaurant_documents_application',
+    'fk_driver_documents_application',
+    'fk_notifications_user',
+    'fk_refunds_order',
+    'fk_payout_items_payout',
+    'fk_case_messages_case',
+  ]) {
+    assert.match(integrity, new RegExp(name));
+  }
+
+  assert.match(integrity, /'RESTRICT'/);
+  assert.match(integrity, /'CASCADE'/);
+});

@@ -6,7 +6,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../lib/database.php';
-require_once __DIR__ . '/../lib/platform_schema.php';
+require_once __DIR__ . '/../lib/migrations.php';
 
 $config = savora_database_config();
 $conn = savora_database_connect(false);
@@ -19,4 +19,11 @@ if (!$conn->select_db($config['name'])) {
     throw new RuntimeException('Unable to select the Savora database.');
 }
 
-platform_migrate($conn);
+$applied = savora_apply_migrations($conn);
+if ($applied === []) {
+    echo "No migrations to apply.\n";
+} else {
+    foreach ($applied as $version) {
+        echo "Applied migration: {$version}\n";
+    }
+}
