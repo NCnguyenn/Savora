@@ -11,6 +11,44 @@ function lock_expect(bool $condition, string $message): void
     }
 }
 
+function lock_schema_blocker(mysqli $conn): ?string
+{
+    $database = savora_test_selected_database($conn);
+    $tables = $conn->prepare(
+        'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN (\'idempotency_keys\',\'schema_migrations\')'
+    );
+    $tables->bind_param('s', $database);
+    $tables->execute();
+    $presentTables = array_column($tables->get_result()->fetch_all(MYSQLI_ASSOC), 'TABLE_NAME');
+    $tables->close();
+    if (!in_array('idempotency_keys', $presentTables, true) || !in_array('schema_migrations', $presentTables, true)) {
+        return 'savora_test is missing the idempotency migration metadata tables.';
+    }
+
+    $column = $conn->prepare(
+        'SELECT COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=\'idempotency_keys\' AND COLUMN_NAME=\'request_hash\''
+    );
+    $column->bind_param('s', $database);
+    $column->execute();
+    $definition = $column->get_result()->fetch_assoc();
+    $column->close();
+    if ($definition !== ['COLUMN_TYPE' => 'char(64)', 'IS_NULLABLE' => 'NO']) {
+        return 'savora_test is missing idempotency_keys.request_hash CHAR(64) NOT NULL.';
+    }
+
+    $migration = $conn->prepare('SELECT 1 FROM schema_migrations WHERE version=? LIMIT 1');
+    $version = '003_idempotency_request_hash';
+    $migration->bind_param('s', $version);
+    $migration->execute();
+    $applied = $migration->get_result()->fetch_assoc();
+    $migration->close();
+    if (!$applied) {
+        return 'savora_test has not recorded migration 003_idempotency_request_hash.';
+    }
+
+    return null;
+}
+
 $first = null;
 $second = null;
 $actorId = null;
@@ -19,6 +57,11 @@ $eventType = null;
 $firstTransactionOpen = false;
 try {
     $first = savora_test_database();
+    $blocker = lock_schema_blocker($first);
+    if ($blocker !== null) {
+        echo "BLOCKED: {$blocker}\n";
+        return;
+    }
     $second = savora_test_database();
     $admin = $first->query("SELECT id FROM users WHERE role='admin' AND status='active' LIMIT 1")->fetch_assoc();
     if (!$admin) {
