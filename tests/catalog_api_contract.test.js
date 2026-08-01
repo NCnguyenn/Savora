@@ -20,6 +20,8 @@ test('catalog migration is registered after idempotency and defines the catalog 
   assert.match(migration, /menu_option_choices/);
   assert.match(migration, /fk_option_group_item[\s\S]*ON DELETE CASCADE/);
   assert.match(migration, /fk_option_choice_group[\s\S]*ON DELETE CASCADE/);
+  assert.match(migration, /'id'\s*=>\s*\['bigint',\s*'NO',\s*'auto_increment',\s*'PRI'\]/);
+  assert.match(migration, /EXTRA,\s*COLUMN_KEY/);
 });
 
 test('catalog API delegates filtered customer reads and guarded Restaurant mutations to the service', () => {
@@ -47,4 +49,26 @@ test('catalog API delegates filtered customer reads and guarded Restaurant mutat
   assert.match(repository, /m\.is_available=1/);
   assert.match(repository, /optionGroups/);
   assert.match(repository, /optionChoices/);
+});
+
+test('catalog operations reject a lost version race before replacing hours', () => {
+  const service = read('lib/services/catalog_service.php');
+  const start = service.indexOf('function catalog_save_operations_mutation');
+  const end = service.indexOf('function catalog_save_profile', start);
+  const operation = service.slice(start, end);
+  const affectedCheck = operation.indexOf('$affected !== 1');
+  const weeklyDelete = operation.indexOf('DELETE FROM restaurant_weekly_hours');
+  assert.match(operation, /\$affected\s*=\s*\$update->affected_rows/);
+  assert.ok(affectedCheck >= 0 && affectedCheck < weeklyDelete, 'lost version race must return 409 before replacing hours');
+});
+
+test('catalog endpoint exposes bounded filters and explicit HTTP security failures', () => {
+  const api = read('api/catalog.php');
+  const service = read('lib/services/catalog_service.php');
+  assert.match(service, /\['q'\][\s\S]*mb_substr[\s\S]*0,\s*80/);
+  assert.match(service, /\['restaurant'\][\s\S]*mb_substr[\s\S]*0,\s*120/);
+  assert.match(api, /savora_error\(405,\s*'Method not allowed\.'/);
+  assert.match(api, /savora_require_csrf[\s\S]*savora_error\(403/);
+  assert.match(api, /savora_require_idempotency_key[\s\S]*savora_error\(422/);
+  assert.match(api, /SavoraIdempotencyConflict[\s\S]*savora_error\(409/);
 });

@@ -82,7 +82,16 @@ try {
     $priceB = 9.50;
     $item->bind_param('sisd', $itemB, $restaurantB, $itemBName, $priceB);
     $item->execute();
+    $itemBId = $conn->insert_id;
     $item->close();
+
+    $hiddenItem = $prefix . '-item-hidden';
+    $hiddenName = 'Catalog Fixture Hidden';
+    $hiddenPrice = 7.25;
+    $hidden = $conn->prepare('INSERT INTO menu_items(public_id,restaurant_id,name,price,is_available,version) VALUES(?,?,?,?,0,1)');
+    $hidden->bind_param('sisd', $hiddenItem, $restaurantA, $hiddenName, $hiddenPrice);
+    $hidden->execute();
+    $hidden->close();
 
     $group = $conn->prepare("INSERT INTO menu_option_groups(menu_item_id,name,selection_type,minimum_choices,maximum_choices,sort_order) VALUES(?,'Add-ons','multiple',0,2,1)");
     $group->bind_param('i', $itemAId);
@@ -104,6 +113,11 @@ try {
         'available' => true,
     ], 1);
     catalog_expect(($denied['ok'] ?? true) === false && ($denied['status'] ?? 0) === 403, 'Cross-Restaurant menu update must be denied.');
+    $foreignState = $conn->query("SELECT name,price,version FROM menu_items WHERE id={$itemBId}")->fetch_assoc();
+    catalog_expect(
+        $foreignState !== null && $foreignState['name'] === $itemBName && (float) $foreignState['price'] === $priceB && (int) $foreignState['version'] === 1,
+        'A cross-Restaurant rejection must leave the foreign item unchanged.'
+    );
 
     $stale = catalog_save_item($conn, $ownerA, [
         'publicId' => $itemA,
@@ -112,9 +126,37 @@ try {
         'available' => true,
     ], 0);
     catalog_expect(($stale['ok'] ?? true) === false && ($stale['status'] ?? 0) === 409, 'Stale menu versions must be rejected.');
+    $itemState = $conn->query("SELECT name,price,is_available,version FROM menu_items WHERE id={$itemAId}")->fetch_assoc();
+    catalog_expect(
+        $itemState !== null && $itemState['name'] === $itemAName && (float) $itemState['price'] === $priceA && (int) $itemState['is_available'] === 1 && (int) $itemState['version'] === 1,
+        'A stale item rejection must leave the owned item unchanged.'
+    );
 
-    $customer = catalog_for_customer($conn, ['q' => 'Fixture Bowl']);
-    catalog_expect(count($customer) === 1, 'Customer reads must include the active matching item only.');
+    $weekly = $conn->prepare("INSERT INTO restaurant_weekly_hours(restaurant_id,weekday,opens_at,closes_at,is_closed) VALUES(?,1,'09:00:00','17:00:00',0)");
+    $weekly->bind_param('i', $restaurantA);
+    $weekly->execute();
+    $weekly->close();
+    $staleOperations = catalog_save_operations($conn, $ownerA, [
+        'acceptingOrders' => false,
+        'weeklyHours' => [['weekday' => 1, 'opensAt' => '10:00:00', 'closesAt' => '18:00:00', 'isClosed' => false]],
+        'specialHours' => [],
+    ], 0);
+    catalog_expect(($staleOperations['ok'] ?? true) === false && ($staleOperations['status'] ?? 0) === 409, 'Stale operations versions must be rejected.');
+    $operationsState = $conn->query("SELECT r.accepting_orders,r.version,h.opens_at,h.closes_at FROM restaurants r JOIN restaurant_weekly_hours h ON h.restaurant_id=r.id AND h.weekday=1 WHERE r.id={$restaurantA}")->fetch_assoc();
+    catalog_expect(
+        $operationsState !== null && (int) $operationsState['accepting_orders'] === 1 && (int) $operationsState['version'] === 1 && $operationsState['opens_at'] === '09:00:00' && $operationsState['closes_at'] === '17:00:00',
+        'A stale operations rejection must not replace hours or Restaurant state.'
+    );
+
+    $staleProfile = catalog_save_profile($conn, $ownerA, ['name' => 'Stale profile overwrite'], 0);
+    catalog_expect(($staleProfile['ok'] ?? true) === false && ($staleProfile['status'] ?? 0) === 409, 'Stale profile versions must be rejected.');
+    $profileState = $conn->query("SELECT name,version FROM restaurants WHERE id={$restaurantA}")->fetch_assoc();
+    catalog_expect($profileState !== null && $profileState['name'] === $restaurantAName && (int) $profileState['version'] === 1, 'A stale profile rejection must leave the Restaurant unchanged.');
+
+    $conn->query("UPDATE restaurants SET status='suspended' WHERE id={$restaurantB}");
+
+    $customer = catalog_for_customer($conn, ['q' => 'Catalog Fixture']);
+    catalog_expect(count($customer) === 1, 'Customer reads must exclude unavailable items and items owned by inactive Restaurants.');
     $entry = $customer[0];
     catalog_expect(
         isset($entry['restaurant']['id'], $entry['restaurant']['operationalAvailable'], $entry['publicId'], $entry['basePrice'], $entry['version'], $entry['available'], $entry['optionGroups'][0]['optionChoices'][0]['publicId']),
@@ -126,14 +168,15 @@ try {
     catalog_expect(count($restaurantCatalog['items'] ?? []) === 1 && $restaurantCatalog['items'][0]['publicId'] === $itemA, 'Restaurant reads must resolve the owner to only its own catalog.');
 } finally {
     if ($conn instanceof mysqli && $ownerA !== null && $ownerB !== null) {
-        $deleteGroups = $conn->prepare('DELETE g FROM menu_option_groups g JOIN menu_items m ON m.id=g.menu_item_id WHERE m.public_id IN (?,?)');
+        $deleteGroups = $conn->prepare('DELETE g FROM menu_option_groups g JOIN menu_items m ON m.id=g.menu_item_id WHERE m.public_id IN (?,?,?)');
         $itemA ??= '';
         $itemB ??= '';
-        $deleteGroups->bind_param('ss', $itemA, $itemB);
+        $hiddenItem ??= '';
+        $deleteGroups->bind_param('sss', $itemA, $itemB, $hiddenItem);
         $deleteGroups->execute();
         $deleteGroups->close();
-        $deleteItems = $conn->prepare('DELETE FROM menu_items WHERE public_id IN (?,?)');
-        $deleteItems->bind_param('ss', $itemA, $itemB);
+        $deleteItems = $conn->prepare('DELETE FROM menu_items WHERE public_id IN (?,?,?)');
+        $deleteItems->bind_param('sss', $itemA, $itemB, $hiddenItem);
         $deleteItems->execute();
         $deleteItems->close();
         $deleteRestaurants = $conn->prepare('DELETE FROM restaurants WHERE owner_user_id IN (?,?)');

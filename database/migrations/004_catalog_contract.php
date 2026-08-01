@@ -111,38 +111,67 @@ return static function (mysqli $conn): void {
 
     $requiredColumns = [
         'restaurant_weekly_hours' => [
+            'id' => ['bigint', 'NO', 'auto_increment', 'PRI'],
             'restaurant_id' => ['int', 'NO'], 'weekday' => ['tinyint', 'NO'], 'opens_at' => ['time', 'YES'],
             'closes_at' => ['time', 'YES'], 'is_closed' => ['tinyint(1)', 'NO'], 'version' => ['int', 'NO'],
         ],
         'restaurant_special_hours' => [
+            'id' => ['bigint', 'NO', 'auto_increment', 'PRI'],
             'restaurant_id' => ['int', 'NO'], 'special_date' => ['date', 'NO'], 'opens_at' => ['time', 'YES'],
             'closes_at' => ['time', 'YES'], 'is_closed' => ['tinyint(1)', 'NO'], 'note' => ['varchar(255)', 'YES'], 'version' => ['int', 'NO'],
         ],
         'menu_option_groups' => [
+            'id' => ['bigint', 'NO', 'auto_increment', 'PRI'],
             'menu_item_id' => ['bigint', 'NO'], 'name' => ['varchar(120)', 'NO'], 'selection_type' => ['varchar(20)', 'NO'],
             'minimum_choices' => ['int', 'NO'], 'maximum_choices' => ['int', 'NO'], 'sort_order' => ['int', 'NO'], 'version' => ['int', 'NO'],
         ],
         'menu_option_choices' => [
+            'id' => ['bigint', 'NO', 'auto_increment', 'PRI'],
             'option_group_id' => ['bigint', 'NO'], 'public_id' => ['varchar(60)', 'NO'], 'name' => ['varchar(120)', 'NO'],
             'price_delta' => ['decimal(12,2)', 'NO'], 'available' => ['tinyint(1)', 'NO'], 'sort_order' => ['int', 'NO'], 'version' => ['int', 'NO'],
         ],
     ];
     $columnLookup = $conn->prepare(
-        'SELECT COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?'
+        'SELECT COLUMN_TYPE, IS_NULLABLE, EXTRA, COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?'
     );
     try {
         foreach ($requiredColumns as $table => $columns) {
-            foreach ($columns as $column => [$type, $nullable]) {
+            foreach ($columns as $column => $definition) {
+                [$type, $nullable] = $definition;
+                $extra = $definition[2] ?? null;
+                $columnKey = $definition[3] ?? null;
                 $columnLookup->bind_param('sss', $database, $table, $column);
                 $columnLookup->execute();
                 $existing = $columnLookup->get_result()->fetch_assoc();
-                if (!$existing || strtolower((string) $existing['COLUMN_TYPE']) !== $type || $existing['IS_NULLABLE'] !== $nullable) {
+                if (
+                    !$existing
+                    || strtolower((string) $existing['COLUMN_TYPE']) !== $type
+                    || $existing['IS_NULLABLE'] !== $nullable
+                    || ($extra !== null && strtolower((string) $existing['EXTRA']) !== $extra)
+                    || ($columnKey !== null && (string) $existing['COLUMN_KEY'] !== $columnKey)
+                ) {
                     throw new RuntimeException("Existing catalog table {$table}.{$column} does not match the migration definition.");
                 }
             }
         }
     } finally {
         $columnLookup->close();
+    }
+
+    $primaryLookup = $conn->prepare(
+        "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND INDEX_NAME='PRIMARY' ORDER BY SEQ_IN_INDEX"
+    );
+    try {
+        foreach (array_keys($requiredColumns) as $table) {
+            $primaryLookup->bind_param('ss', $database, $table);
+            $primaryLookup->execute();
+            $primaryColumns = array_column($primaryLookup->get_result()->fetch_all(MYSQLI_ASSOC), 'COLUMN_NAME');
+            if ($primaryColumns !== ['id']) {
+                throw new RuntimeException("Existing catalog table {$table} primary key does not match the migration definition.");
+            }
+        }
+    } finally {
+        $primaryLookup->close();
     }
 
     $constraintLookup = $conn->prepare(

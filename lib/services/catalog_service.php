@@ -276,7 +276,11 @@ function catalog_save_operations_mutation(mysqli $conn, int $ownerUserId, array 
     $update = $conn->prepare('UPDATE restaurants SET accepting_orders=?,version=version+1 WHERE id=? AND version=?');
     $update->bind_param('iii', $accepting, $restaurantId, $expectedVersion);
     $update->execute();
+    $affected = $update->affected_rows;
     $update->close();
+    if ($affected !== 1) {
+        return catalog_error(409, 'Restaurant operations changed. Refresh before retrying.');
+    }
     $deleteWeekly = $conn->prepare('DELETE FROM restaurant_weekly_hours WHERE restaurant_id=?');
     $deleteWeekly->bind_param('i', $restaurantId);
     $deleteWeekly->execute();
