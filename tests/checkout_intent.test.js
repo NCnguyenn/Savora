@@ -28,12 +28,14 @@ test('checkout retries send the exact same payload and clear intent only after s
   let builds = 0;
   let calls = 0;
   const payloads = [];
+  const intentKeys = [];
   const buildOrder = () => ({
     order: { id: `SVR-${++builds}`, createdAt: `2026-08-01T00:00:0${builds}.000Z` },
     state: { orderNumber: builds },
   });
-  const command = async (payload) => {
+  const command = async (payload, intentKey) => {
     payloads.push(JSON.stringify(payload));
+    intentKeys.push(intentKey);
     calls += 1;
     if (calls === 1) throw new Error('network retry');
     return { ok: true };
@@ -41,10 +43,11 @@ test('checkout retries send the exact same payload and clear intent only after s
 
   await assert.rejects(() => intent.submit({ storage, randomUUID: () => 'intent-1', buildOrder, command }), /network retry/);
   assert.equal(storage.getItem('savora_checkout_intent'), 'role-intent-1');
-  await intent.submit({ storage, randomUUID: () => 'intent-2', buildOrder, command });
+  await intent.submit({ storage, randomUUID: () => 'intent-2-must-not-be-used', buildOrder, command });
 
   assert.equal(builds, 1, 'the local order must be built once per intent');
   assert.equal(payloads[0], payloads[1], 'retry payload must be byte-for-byte stable');
+  assert.deepEqual(intentKeys, ['role-intent-1', 'role-intent-1'], 'retry must send the original idempotency intent key even when a new UUID is available');
   assert.equal(storage.getItem('savora_checkout_intent'), null, 'success must clear the checkout intent');
 });
 
@@ -56,4 +59,14 @@ test('checkout cancellation clears the intent and draft without invoking the com
   intent.cancel({ storage });
   assert.equal(storage.getItem('savora_checkout_intent'), null);
   assert.equal(storage.getItem('savora_checkout_draft_intent-cancel'), null);
+});
+
+test('checkout offers a cancellable path that abandons the saved intent and draft before returning to cart', () => {
+  const checkoutPage = fs.readFileSync('customer_checkout.php', 'utf8');
+  assert.match(checkoutPage, /id="cancel-checkout-button"[^>]*type="button"/);
+  assert.match(checkoutPage, /Cancel checkout to discard the saved order draft and start over from your cart\./);
+  assert.match(checkoutPage, /cancelButton\.disabled = pending/);
+  assert.match(checkoutPage, /catch \(error\) \{\s+setSubmitting\(false\);/);
+  assert.match(checkoutPage, /SavoraCheckoutIntent\.cancel\(\{ storage: sessionStorage \}\)/);
+  assert.match(checkoutPage, /window\.location\.assign\('customer_cart\.php'\)/);
 });

@@ -11,16 +11,26 @@ function lock_expect(bool $condition, string $message): void
     }
 }
 
-$first = savora_test_database();
-$second = savora_test_database();
-$admin = $first->query("SELECT id FROM users WHERE role='admin' AND status='active' LIMIT 1")->fetch_assoc();
-if (!$admin) {
-    throw new RuntimeException('Active admin fixture is missing.');
-}
-$actorId = (int) $admin['id'];
-$key = 'task6-lock-' . bin2hex(random_bytes(6));
-
+$first = null;
+$second = null;
+$actorId = null;
+$key = null;
+$eventType = null;
+$firstTransactionOpen = false;
 try {
+    $first = savora_test_database();
+    $second = savora_test_database();
+    $admin = $first->query("SELECT id FROM users WHERE role='admin' AND status='active' LIMIT 1")->fetch_assoc();
+    if (!$admin) {
+        throw new RuntimeException('Active admin fixture is missing.');
+    }
+    $actorId = (int) $admin['id'];
+    $key = 'task6-lock-replay-' . bin2hex(random_bytes(6));
+    $eventType = 'task6_lock_replay_' . bin2hex(random_bytes(6));
+    $action = 'task6_lock_replay';
+    $requestHash = savora_idempotency_hash($action, ['eventType' => $eventType]);
+    $response = ['ok' => true, 'data' => ['eventType' => $eventType]];
+
     savora_idempotency_lock($first, $actorId, $key, 1);
     try {
         savora_idempotency_lock($second, $actorId, $key, 1);
@@ -28,14 +38,72 @@ try {
     } catch (RuntimeException $expected) {
         lock_expect(str_contains($expected->getMessage(), 'lock'), 'Lock timeout must be descriptive.');
     }
+
+    $first->begin_transaction();
+    $firstTransactionOpen = true;
+    lock_expect(
+        savora_idempotency_find($first, $actorId, $key, $action, $requestHash) === null,
+        'The first request must not find a stored response.'
+    );
+    $mutation = $first->prepare("INSERT INTO notifications(user_id,event_type,title,message) VALUES(?,?,'Task 6 idempotency lock','Mutate exactly once')");
+    $mutation->bind_param('is', $actorId, $eventType);
+    $mutation->execute();
+    $mutation->close();
+    savora_idempotency_store($first, $actorId, $key, $action, $requestHash, $response);
+    $first->commit();
+    $firstTransactionOpen = false;
+
     savora_idempotency_unlock($first, $actorId, $key);
     savora_idempotency_lock($second, $actorId, $key, 1);
+    lock_expect(
+        savora_idempotency_find($second, $actorId, $key, $action, $requestHash) === $response,
+        'The second request must replay the committed response.'
+    );
+    $mutations = $second->prepare('SELECT COUNT(*) AS total FROM notifications WHERE user_id=? AND event_type=?');
+    $mutations->bind_param('is', $actorId, $eventType);
+    $mutations->execute();
+    lock_expect(
+        (int) $mutations->get_result()->fetch_assoc()['total'] === 1,
+        'A replay must not perform the domain mutation twice.'
+    );
+    $mutations->close();
+    $stored = $second->prepare('SELECT COUNT(*) AS total FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key=?');
+    $stored->bind_param('is', $actorId, $key);
+    $stored->execute();
+    lock_expect(
+        (int) $stored->get_result()->fetch_assoc()['total'] === 1,
+        'The replay control flow must retain one stored response.'
+    );
+    $stored->close();
     savora_idempotency_unlock($second, $actorId, $key);
 } finally {
-    savora_idempotency_unlock($first, $actorId, $key);
-    savora_idempotency_unlock($second, $actorId, $key);
-    $first->close();
-    $second->close();
+    if ($first instanceof mysqli && $firstTransactionOpen) {
+        $first->rollback();
+    }
+    if ($first instanceof mysqli && $actorId !== null && $key !== null) {
+        savora_idempotency_unlock($first, $actorId, $key);
+    }
+    if ($second instanceof mysqli && $actorId !== null && $key !== null) {
+        savora_idempotency_unlock($second, $actorId, $key);
+    }
+    if ($first instanceof mysqli && $actorId !== null && $key !== null) {
+        $cleanup = $first->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key=?');
+        $cleanup->bind_param('is', $actorId, $key);
+        $cleanup->execute();
+        $cleanup->close();
+    }
+    if ($first instanceof mysqli && $actorId !== null && $eventType !== null) {
+        $cleanup = $first->prepare('DELETE FROM notifications WHERE user_id=? AND event_type=?');
+        $cleanup->bind_param('is', $actorId, $eventType);
+        $cleanup->execute();
+        $cleanup->close();
+    }
+    if ($first instanceof mysqli) {
+        $first->close();
+    }
+    if ($second instanceof mysqli) {
+        $second->close();
+    }
 }
 
-echo "idempotency lock contract ok\n";
+echo "idempotency lock replay contract ok\n";

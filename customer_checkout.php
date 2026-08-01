@@ -100,6 +100,8 @@
             <button id="place-order-button" class="primary-action summary-primary-action" type="submit">
                 <span>Place order</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
             </button>
+            <button id="cancel-checkout-button" class="secondary-action" type="button">Cancel checkout</button>
+            <p class="form-help">Changed your details? Cancel checkout to discard the saved order draft and start over from your cart.</p>
             <p class="secure-note"><i class="fa-solid fa-lock" aria-hidden="true"></i> By placing your order, you confirm this is a local demo.</p>
             <div id="checkout-success" class="checkout-success" role="status" aria-live="polite" hidden>
                 <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
@@ -126,8 +128,10 @@
         function setSubmitting(pending) {
             const form = document.getElementById('checkout-form');
             const submitButton = document.getElementById('place-order-button');
+            const cancelButton = document.getElementById('cancel-checkout-button');
             isSubmitting = pending;
             submitButton.disabled = pending;
+            cancelButton.disabled = pending;
             submitButton.setAttribute('aria-busy', pending ? 'true' : 'false');
             form.setAttribute('aria-busy', pending ? 'true' : 'false');
             submitButton.querySelector('span').textContent = pending ? 'Placing order…' : 'Place order';
@@ -247,6 +251,13 @@
             }
         }
 
+        function cancelCheckout() {
+            if (isSubmitting) return;
+            window.SavoraCheckoutIntent.cancel({ storage: sessionStorage });
+            showCheckoutToast('Checkout cancelled. Your saved order draft was discarded; start a new checkout from your cart.');
+            window.location.assign('customer_cart.php');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const promoFromCart = new URLSearchParams(window.location.search).get('promo');
             if (promoFromCart) {
@@ -258,6 +269,7 @@
             });
             document.getElementById('checkout-apply-promo').addEventListener('click', () => applyCheckoutPromo(true));
             document.getElementById('checkout-form').addEventListener('submit', handleCheckoutSubmit);
+            document.getElementById('cancel-checkout-button').addEventListener('click', cancelCheckout);
             renderCheckout();
         });
     })();
