@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/lib/session_security.php';
+savora_start_session();
 // Automatically initialize DB and create demo users if they don't exist
 require_once 'db.php';
 ?>

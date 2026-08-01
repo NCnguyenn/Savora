@@ -136,6 +136,12 @@ function platform_migrate(mysqli $conn): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         "CREATE TABLE IF NOT EXISTS user_sessions (
             id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, session_hash VARCHAR(128) NOT NULL UNIQUE, ip_address VARCHAR(64), user_agent VARCHAR(500), revoked_at DATETIME NULL, last_seen_at DATETIME NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, token_hash VARCHAR(128) NOT NULL UNIQUE, expires_at DATETIME NOT NULL, used_at DATETIME NULL, created_by INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS menu_items (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY, public_id VARCHAR(60) NOT NULL UNIQUE, restaurant_id INT NOT NULL, name VARCHAR(160) NOT NULL, price DECIMAL(12,2) NOT NULL, is_available TINYINT(1) NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     ];
 
@@ -158,12 +164,16 @@ function platform_seed(mysqli $conn): void
 {
     $users = [
         ['customer', 'customer@savora.test', 'customer', 'John Doe (Customer)'],
-        ['restaurant', 'restaurant@savora.test', 'restaurant', 'Savora Burger (Owner)'],
-        ['driver', 'driver@savora.test', 'driver', 'Mike Smith (Driver)'],
         ['admin', 'admin@savora.test', 'admin', 'System Admin'],
-        ['driver-nearby-2', 'alex@savora.test', 'driver', 'Alex Rivera (Driver)'],
-        ['driver-nearby-3', 'jordan@savora.test', 'driver', 'Jordan Lee (Driver)'],
     ];
+    if (getenv('SAVORA_SEED_DEMO') === '1') {
+        $users = array_merge($users, [
+            ['restaurant', 'restaurant@savora.test', 'restaurant', 'Savora Burger (Owner)'],
+            ['driver', 'driver@savora.test', 'driver', 'Mike Smith (Driver)'],
+            ['driver-nearby-2', 'alex@savora.test', 'driver', 'Alex Rivera (Driver)'],
+            ['driver-nearby-3', 'jordan@savora.test', 'driver', 'Jordan Lee (Driver)'],
+        ]);
+    }
     $stmt = $conn->prepare("INSERT IGNORE INTO users (username, password, role, full_name, email, status) VALUES (?, ?, ?, ?, ?, 'active')");
     foreach ($users as [$username, $email, $role, $fullName]) {
         $hash = password_hash('123456', PASSWORD_DEFAULT);
@@ -180,6 +190,7 @@ function platform_seed(mysqli $conn): void
         ['support_critical_minutes', '30', 'integer'],
         ['support_standard_hours', '24', 'integer'],
         ['maintenance_mode', '0', 'boolean'],
+        ['delivery_fee_flat', '2.00', 'decimal'],
     ];
     $setting = $conn->prepare('INSERT IGNORE INTO platform_settings (setting_key, setting_value, value_type) VALUES (?, ?, ?)');
     foreach ($settings as [$key, $value, $type]) {
@@ -201,7 +212,9 @@ function platform_seed(mysqli $conn): void
     }
     $template->close();
 
-    platform_seed_operations($conn);
+    if (getenv('SAVORA_SEED_DEMO') === '1') {
+        platform_seed_operations($conn);
+    }
 }
 
 function platform_seed_operations(mysqli $conn): void
@@ -238,6 +251,18 @@ function platform_seed_operations(mysqli $conn): void
     if ($restaurantId === 0) {
         return;
     }
+
+    $menu = $conn->prepare('INSERT IGNORE INTO menu_items (public_id, restaurant_id, name, price, is_available) VALUES (?, ?, ?, ?, 1)');
+    foreach ([
+        ['1', 'Mega Burger Feast Combo', 14.99],
+        ['2', 'Supreme Pepperoni Pizza 12"', 13.99],
+        ['3', 'Deluxe Salmon & Tuna Sushi Set', 24.99],
+        ['4', 'Brown Sugar Boba Milk Tea', 5.50],
+    ] as [$publicId, $name, $price]) {
+        $menu->bind_param('sisd', $publicId, $restaurantId, $name, $price);
+        $menu->execute();
+    }
+    $menu->close();
 
     $driverProfiles = [
         [$ids['driver'], 'Motorbike', 'Honda Vision', 'SVR-1042', 'Central District', 'online', 4.91, 94.50, 98.20],

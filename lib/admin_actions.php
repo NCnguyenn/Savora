@@ -172,6 +172,7 @@ function admin_account_action(mysqli $conn, string $action, array $payload, int 
         }
 
         $after = $before;
+        $recoveryUrl = null;
         if (isset($statusActions[$action])) {
             $nextStatus = $statusActions[$action];
             if ($before['status'] === $nextStatus) {
@@ -201,13 +202,23 @@ function admin_account_action(mysqli $conn, string $action, array $payload, int 
             $after['revoked_sessions'] = $revokedCount;
             $after['version'] = $expectedVersion + 1;
         } elseif ($action === 'reset_password') {
-            $temporarySecret = bin2hex(random_bytes(16));
-            $passwordHash = password_hash($temporarySecret, PASSWORD_DEFAULT);
-            $update = $conn->prepare('UPDATE users SET password = ?, session_version = session_version + 1, version = version + 1 WHERE id = ? AND version = ?');
-            $update->bind_param('sii', $passwordHash, $targetId, $expectedVersion);
+            $temporarySecret = bin2hex(random_bytes(32));
+            $tokenHash = hash('sha256', $temporarySecret);
+            $conn->query("UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = {$targetId} AND used_at IS NULL");
+            $token = $conn->prepare('INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_by) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE), ?)');
+            $token->bind_param('isi', $targetId, $tokenHash, $actorId);
+            $token->execute();
+            $token->close();
+            $update = $conn->prepare('UPDATE users SET session_version = session_version + 1, version = version + 1 WHERE id = ? AND version = ?');
+            $update->bind_param('ii', $targetId, $expectedVersion);
             $update->execute();
             $update->close();
+            $revoke = $conn->prepare('UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL');
+            $revoke->bind_param('i', $targetId);
+            $revoke->execute();
+            $revoke->close();
             $after['credential_reset'] = true;
+            $recoveryUrl = 'reset_password.php?token=' . $temporarySecret;
             $after['version'] = $expectedVersion + 1;
             $reason = $reason ?: 'Administrator initiated secure credential recovery';
         } else {
@@ -222,7 +233,9 @@ function admin_account_action(mysqli $conn, string $action, array $payload, int 
         $notification->execute();
         $notification->close();
         admin_append_audit($conn, $actorId, $action, 'user', $targetId, $before, $after, $reason, $referenceId);
-        $response = ['ok' => true, 'message' => 'Account security action completed.', 'data' => ['user_id' => $targetId, 'status' => $after['status'], 'version' => $after['version']], 'referenceId' => $referenceId];
+        $responseData = ['user_id' => $targetId, 'status' => $after['status'], 'version' => $after['version']];
+        if ($recoveryUrl !== null) $responseData['recovery_url'] = $recoveryUrl;
+        $response = ['ok' => true, 'message' => 'Account security action completed.', 'data' => $responseData, 'referenceId' => $referenceId];
         admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
         $conn->commit();
         return $response;
@@ -262,8 +275,14 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
             $documentQuery->execute();
             $documents = $documentQuery->get_result()->fetch_all(MYSQLI_ASSOC);
             $documentQuery->close();
-            if (count($documents) < 3) throw new RuntimeException('All three required documents must be uploaded.');
-            foreach ($documents as $document) {
+            $requiredDocuments = $isRestaurant
+                ? ['business_registration', 'food_safety_certificate', 'owner_identity']
+                : ['driver_license', 'vehicle_registration', 'background_check'];
+            $documentsByType = [];
+            foreach ($documents as $document) $documentsByType[(string) $document['document_type']] = $document;
+            foreach ($requiredDocuments as $requiredType) {
+                if (!isset($documentsByType[$requiredType])) throw new RuntimeException('A required document is missing: ' . str_replace('_', ' ', $requiredType) . '.');
+                $document = $documentsByType[$requiredType];
                 if ($document['verification_status'] !== 'verified' || ($document['expires_at'] && strtotime((string) $document['expires_at']) <= time())) throw new RuntimeException('Every required document must be verified and current.');
             }
             if (!$before['password_hash']) throw new RuntimeException('Application credentials were already consumed.');
@@ -291,8 +310,9 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
             $profile->execute();
             $profile->close();
         }
-        $update = $conn->prepare("UPDATE {$applicationTable} SET status = ?, reviewer_id = ?, reviewer_note = ?, decision_reason = ?, reviewed_at = NOW(), password_hash = NULL, version = version + 1 WHERE id = ? AND version = ?");
-        $update->bind_param('sissii', $decision, $actorId, $note, $note, $applicationId, $expectedVersion);
+        $consumeCredentials = in_array($decision, ['approved', 'rejected'], true) ? 1 : 0;
+        $update = $conn->prepare("UPDATE {$applicationTable} SET status = ?, reviewer_id = ?, reviewer_note = ?, decision_reason = ?, reviewed_at = NOW(), password_hash = IF(? = 1, NULL, password_hash), version = version + 1 WHERE id = ? AND version = ?");
+        $update->bind_param('sissiii', $decision, $actorId, $note, $note, $consumeCredentials, $applicationId, $expectedVersion);
         $update->execute();
         $update->close();
         $after = ['status' => $decision, 'reviewer_id' => $actorId, 'user_id' => $newUserId, 'version' => $expectedVersion + 1];
@@ -345,6 +365,168 @@ function admin_operations_action(mysqli $conn,string $action,array $payload,int 
 
 function admin_idempotency_scalar(mysqli $conn,string $sql,int $id):float{$stmt=$conn->prepare($sql);$stmt->bind_param('i',$id);$stmt->execute();$row=$stmt->get_result()->fetch_assoc();$stmt->close();return (float)($row['value']??0);}
 
+function admin_expected_version(array $payload): int
+{
+    $version = (int) ($payload['version'] ?? 0);
+    if ($version < 1) throw new RuntimeException('A record version is required. Refresh before retrying.');
+    return $version;
+}
+
+function admin_operations_action_v2(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
+{
+    $reason = mb_substr(trim((string) ($payload['reason'] ?? '')), 0, 500);
+    $referenceId = admin_reference_id();
+    if ($reason === '') return ['ok' => false, 'message' => 'An audit reason is required.', 'errors' => ['reason' => 'Explain the controlled intervention.'], 'referenceId' => $referenceId];
+    $conn->begin_transaction();
+    try {
+        $entityType = 'operation'; $entityId = null; $before = null; $after = [];
+        if (in_array($action, ['reassign_driver', 'cancel_order', 'open_incident'], true)) {
+            $orderId = max(0, (int) ($payload['order_id'] ?? 0));
+            $expectedVersion = admin_expected_version($payload);
+            $lock = $conn->prepare('SELECT * FROM orders WHERE id=? FOR UPDATE');
+            $lock->bind_param('i', $orderId); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+            if (!$before) throw new RuntimeException('Order not found.');
+            if ((int) $before['version'] !== $expectedVersion) throw new RuntimeException('Order has a stale version. Refresh before retrying.');
+            $entityType = 'order'; $entityId = $orderId;
+            if ($action === 'cancel_order') {
+                if (in_array($before['status'], ['delivered', 'cancelled', 'refunded'], true)) throw new RuntimeException('Final orders cannot be cancelled.');
+                $stmt = $conn->prepare("UPDATE orders SET status='cancelled',version=version+1 WHERE id=? AND version=?");
+                $stmt->bind_param('ii', $orderId, $expectedVersion); $stmt->execute();
+                if ($stmt->affected_rows !== 1) throw new RuntimeException('Order changed. Refresh before retrying.');
+                $stmt->close();
+                $history = $conn->prepare("INSERT INTO order_status_history(order_id,status,actor_role,actor_user_id,reason) VALUES(?,'cancelled','admin',?,?)");
+                $history->bind_param('iis', $orderId, $actorId, $reason); $history->execute(); $history->close();
+                $after = ['status' => 'cancelled', 'version' => $expectedVersion + 1];
+            } elseif ($action === 'reassign_driver') {
+                if (!in_array($before['status'], ['ready_for_pickup', 'assigned'], true)) throw new RuntimeException('Driver assignment is only allowed after the order is ready.');
+                $driverId = max(0, (int) ($payload['driver_user_id'] ?? 0));
+                $eligible = $conn->prepare("SELECT u.id FROM users u JOIN driver_profiles d ON d.user_id=u.id WHERE u.id=? AND u.status='active' AND d.eligibility_status='eligible' FOR UPDATE");
+                $eligible->bind_param('i', $driverId); $eligible->execute(); $ok = $eligible->get_result()->fetch_assoc(); $eligible->close();
+                if (!$ok) throw new RuntimeException('Selected Driver is not eligible.');
+                $dispatch = $conn->prepare("INSERT INTO delivery_dispatches(order_id,status,assigned_driver_user_id,attempt_count) VALUES(?,'assigned',?,1) ON DUPLICATE KEY UPDATE status='assigned',assigned_driver_user_id=VALUES(assigned_driver_user_id),attempt_count=attempt_count+1,version=version+1");
+                $dispatch->bind_param('ii', $orderId, $driverId); $dispatch->execute(); $dispatch->close();
+                $delivery = $conn->prepare("INSERT INTO deliveries(order_id,driver_user_id,status,accepted_at) VALUES(?,?,'assigned',NOW()) ON DUPLICATE KEY UPDATE driver_user_id=VALUES(driver_user_id),status='assigned',accepted_at=NOW(),delivered_at=NULL,version=version+1");
+                $delivery->bind_param('ii', $orderId, $driverId); $delivery->execute(); $delivery->close();
+                $order = $conn->prepare("UPDATE orders SET status='assigned',version=version+1 WHERE id=? AND version=?");
+                $order->bind_param('ii', $orderId, $expectedVersion); $order->execute();
+                if ($order->affected_rows !== 1) throw new RuntimeException('Order changed. Refresh before retrying.');
+                $order->close();
+                $history = $conn->prepare("INSERT INTO order_status_history(order_id,status,actor_role,actor_user_id,reason) VALUES(?,'assigned','admin',?,?)");
+                $history->bind_param('iis', $orderId, $actorId, $reason); $history->execute(); $history->close();
+                $after = ['driver_user_id' => $driverId, 'dispatch_status' => 'assigned', 'version' => $expectedVersion + 1];
+            } else {
+                $caseReference = 'CASE-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+                $subject = 'Admin incident for ' . $before['reference_code'];
+                $case = $conn->prepare("INSERT INTO support_cases(reference_code,order_id,case_type,reporting_role,reporting_user_id,priority,status,subject,sla_due_at) VALUES(?,?,'operational_incident','admin',?,'high','open',?,DATE_ADD(NOW(),INTERVAL 30 MINUTE))");
+                $case->bind_param('siis', $caseReference, $orderId, $actorId, $subject); $case->execute(); $entityId = $case->insert_id; $case->close();
+                $entityType = 'support_case'; $after = ['reference_code' => $caseReference, 'status' => 'open', 'version' => 1];
+            }
+        } elseif (in_array($action, ['request_case_information', 'resolve_case', 'issue_refund'], true)) {
+            $caseId = max(0, (int) ($payload['case_id'] ?? 0));
+            $expectedVersion = admin_expected_version($payload);
+            $lock = $conn->prepare('SELECT * FROM support_cases WHERE id=? FOR UPDATE');
+            $lock->bind_param('i', $caseId); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+            if (!$before) throw new RuntimeException('Case not found.');
+            if ((int) $before['version'] !== $expectedVersion) throw new RuntimeException('Case has a stale version. Refresh before retrying.');
+            if (in_array($before['status'], ['resolved', 'closed'], true) && $action !== 'request_case_information') throw new RuntimeException('This case is already final.');
+            $entityType = 'support_case'; $entityId = $caseId;
+            if ($action === 'request_case_information') {
+                $message = $conn->prepare("INSERT INTO case_messages(case_id,author_role,author_user_id,message,internal_only) VALUES(?,'admin',?,?,0)");
+                $message->bind_param('iis', $caseId, $actorId, $reason); $message->execute(); $message->close();
+                $update = $conn->prepare('UPDATE support_cases SET version=version+1 WHERE id=? AND version=?');
+                $update->bind_param('ii', $caseId, $expectedVersion); $update->execute();
+                if ($update->affected_rows !== 1) throw new RuntimeException('Case changed. Refresh before retrying.');
+                $update->close();
+                $after = ['status' => $before['status'], 'message_added' => true, 'version' => $expectedVersion + 1];
+            } elseif ($action === 'resolve_case') {
+                $stmt = $conn->prepare("UPDATE support_cases SET status='resolved',resolution=?,version=version+1 WHERE id=? AND version=?");
+                $stmt->bind_param('sii', $reason, $caseId, $expectedVersion); $stmt->execute();
+                if ($stmt->affected_rows !== 1) throw new RuntimeException('Case changed. Refresh before retrying.');
+                $stmt->close(); $after = ['status' => 'resolved', 'version' => $expectedVersion + 1];
+            } else {
+                $orderId = (int) ($before['order_id'] ?? 0); $amount = round((float) ($payload['amount'] ?? 0), 2);
+                $payment = $conn->prepare("SELECT amount,status FROM payments WHERE order_id=? AND status='paid' FOR UPDATE");
+                $payment->bind_param('i', $orderId); $payment->execute(); $paid = $payment->get_result()->fetch_assoc(); $payment->close();
+                $existing = (float) admin_idempotency_scalar($conn, 'SELECT COALESCE(SUM(amount),0) value FROM refunds WHERE order_id=?', $orderId);
+                if (!$paid || $amount <= 0 || $amount > ((float) $paid['amount'] - $existing)) throw new RuntimeException('Refund exceeds the remaining paid amount.');
+                $destination = in_array(($payload['destination'] ?? ''), ['original_payment', 'wallet'], true) ? (string) $payload['destination'] : 'original_payment';
+                $refund = $conn->prepare("INSERT INTO refunds(order_id,case_id,amount,destination,reason,status,actor_user_id) VALUES(?,?,?,?,?,'processed',?)");
+                $refund->bind_param('iidssi', $orderId, $caseId, $amount, $destination, $reason, $actorId); $refund->execute(); $refundId = $refund->insert_id; $refund->close();
+                $ledgerRef = 'REF-' . $refundId; $net = -$amount;
+                $ledger = $conn->prepare("INSERT INTO ledger_entries(reference_code,order_id,entry_type,party_type,gross_amount,net_amount,status) VALUES(?,?,'refund','customer',?,?,'completed')");
+                $ledger->bind_param('sidd', $ledgerRef, $orderId, $net, $net); $ledger->execute(); $ledger->close();
+                if (abs(($existing + $amount) - (float) $paid['amount']) < 0.01) {
+                    $orderUpdate = $conn->prepare("UPDATE orders SET status='refunded',version=version+1 WHERE id=?");
+                    $orderUpdate->bind_param('i', $orderId); $orderUpdate->execute(); $orderUpdate->close();
+                }
+                $caseUpdate = $conn->prepare('UPDATE support_cases SET version=version+1 WHERE id=? AND version=?');
+                $caseUpdate->bind_param('ii', $caseId, $expectedVersion); $caseUpdate->execute();
+                if ($caseUpdate->affected_rows !== 1) throw new RuntimeException('Case changed. Refresh before retrying.');
+                $caseUpdate->close(); $after = ['refund_id' => $refundId, 'amount' => $amount, 'version' => $expectedVersion + 1];
+            }
+        } elseif (in_array($action, ['hold_payout', 'release_payout'], true)) {
+            $id = max(0, (int) ($payload['payout_id'] ?? 0)); $expectedVersion = admin_expected_version($payload);
+            $lock = $conn->prepare('SELECT * FROM payouts WHERE id=? FOR UPDATE'); $lock->bind_param('i', $id); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+            if (!$before) throw new RuntimeException('Payout not found.');
+            if ((int) $before['version'] !== $expectedVersion) throw new RuntimeException('Payout has a stale version.');
+            $status = $action === 'hold_payout' ? 'held' : 'scheduled';
+            $stmt = $conn->prepare('UPDATE payouts SET status=?,hold_reason=?,version=version+1 WHERE id=? AND version=?');
+            $stmt->bind_param('ssii', $status, $reason, $id, $expectedVersion); $stmt->execute();
+            if ($stmt->affected_rows !== 1) throw new RuntimeException('Payout changed. Refresh before retrying.');
+            $stmt->close(); $entityType = 'payout'; $entityId = $id; $after = ['status' => $status, 'version' => $expectedVersion + 1];
+        } elseif ($action === 'settle_cod') {
+            $id = max(0, (int) ($payload['reconciliation_id'] ?? 0)); $amount = round((float) ($payload['amount'] ?? 0), 2); $expectedVersion = admin_expected_version($payload);
+            $lock = $conn->prepare('SELECT * FROM cod_reconciliations WHERE id=? FOR UPDATE'); $lock->bind_param('i', $id); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+            if (!$before) throw new RuntimeException('Valid COD reconciliation required.');
+            if ((int) $before['version'] !== $expectedVersion) throw new RuntimeException('COD reconciliation has a stale version.');
+            if ($amount <= 0) $amount = round((float) $before['due_amount'] - (float) $before['settled_amount'], 2);
+            if ($amount <= 0) throw new RuntimeException('This COD reconciliation is already settled.');
+            if ($amount > (float) $before['due_amount'] - (float) $before['settled_amount']) throw new RuntimeException('Settlement exceeds the outstanding COD amount.');
+            $stmt = $conn->prepare("UPDATE cod_reconciliations SET settled_amount=settled_amount+?,status=IF(settled_amount+?>=due_amount,'settled','open'),reconciled_at=NOW(),version=version+1 WHERE id=? AND version=?");
+            $stmt->bind_param('ddii', $amount, $amount, $id, $expectedVersion); $stmt->execute();
+            if ($stmt->affected_rows !== 1) throw new RuntimeException('COD reconciliation changed. Refresh before retrying.');
+            $stmt->close(); $entityType = 'cod_reconciliation'; $entityId = $id; $after = ['settled_amount' => (float) $before['settled_amount'] + $amount, 'version' => $expectedVersion + 1];
+        } elseif (in_array($action, ['save_promotion', 'pause_promotion', 'schedule_fee_rule', 'set_service_area_status'], true)) {
+            $entityType = 'commercial_rule';
+            if ($action === 'pause_promotion') {
+                $id = max(0, (int) ($payload['promotion_id'] ?? 0)); $expectedVersion = admin_expected_version($payload);
+                $lock = $conn->prepare('SELECT * FROM promotions WHERE id=? FOR UPDATE'); $lock->bind_param('i', $id); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+                if (!$before || (int) $before['version'] !== $expectedVersion) throw new RuntimeException('Promotion is missing or stale.');
+                $stmt = $conn->prepare("UPDATE promotions SET status='paused',version=version+1 WHERE id=? AND version=?"); $stmt->bind_param('ii', $id, $expectedVersion); $stmt->execute();
+                if ($stmt->affected_rows !== 1) throw new RuntimeException('Promotion changed. Refresh before retrying.');
+                $stmt->close(); $entityId = $id; $after = ['status' => 'paused', 'version' => $expectedVersion + 1];
+            } elseif ($action === 'save_promotion') {
+                $code = strtoupper(mb_substr(trim((string) ($payload['code'] ?? '')), 0, 50)); $value = (float) ($payload['discount_value'] ?? 0); $starts = (string) ($payload['starts_at'] ?? ''); $ends = (string) ($payload['ends_at'] ?? '');
+                if (!preg_match('/^[A-Z0-9_-]{3,50}$/', $code) || $value <= 0 || strtotime($ends) <= strtotime($starts)) throw new RuntimeException('Code, value and valid schedule are required.');
+                $audience = 'all_customers'; $type = 'percentage'; $budget = max(0, (float) ($payload['budget'] ?? 0));
+                $stmt = $conn->prepare("INSERT INTO promotions(code,audience,discount_type,discount_value,budget,starts_at,ends_at,status,scope) VALUES(?,?,?,?,?,?,?,'scheduled','all_restaurants')");
+                $stmt->bind_param('sssddss', $code, $audience, $type, $value, $budget, $starts, $ends); $stmt->execute(); $entityId = $stmt->insert_id; $stmt->close(); $after = ['code' => $code, 'status' => 'scheduled', 'version' => 1];
+            } elseif ($action === 'schedule_fee_rule') {
+                $name = mb_substr(trim((string) ($payload['name'] ?? '')), 0, 120); $amount = (float) ($payload['amount'] ?? 0); $effective = (string) ($payload['effective_at'] ?? '');
+                if ($name === '' || $amount < 0 || strtotime($effective) <= time()) throw new RuntimeException('A future-effective fee rule is required.');
+                $type = 'platform_commission'; $unit = 'percent';
+                $stmt = $conn->prepare("INSERT INTO fee_rules(rule_type,name,amount,unit,effective_at,status,created_by) VALUES(?,?,?,?,?,'scheduled',?)");
+                $stmt->bind_param('ssdssi', $type, $name, $amount, $unit, $effective, $actorId); $stmt->execute(); $entityId = $stmt->insert_id; $stmt->close(); $after = ['name' => $name, 'effective_at' => $effective];
+            } else {
+                $id = max(0, (int) ($payload['service_area_id'] ?? 0)); $expectedVersion = admin_expected_version($payload); $status = in_array(($payload['status'] ?? ''), ['active', 'paused'], true) ? (string) $payload['status'] : 'paused';
+                $lock = $conn->prepare('SELECT * FROM service_areas WHERE id=? FOR UPDATE'); $lock->bind_param('i', $id); $lock->execute(); $before = $lock->get_result()->fetch_assoc(); $lock->close();
+                if (!$before || (int) $before['version'] !== $expectedVersion) throw new RuntimeException('Service area is missing or stale.');
+                $stmt = $conn->prepare('UPDATE service_areas SET status=?,version=version+1 WHERE id=? AND version=?'); $stmt->bind_param('sii', $status, $id, $expectedVersion); $stmt->execute();
+                if ($stmt->affected_rows !== 1) throw new RuntimeException('Service area changed. Refresh before retrying.');
+                $stmt->close(); $entityId = $id; $after = ['status' => $status, 'version' => $expectedVersion + 1];
+            }
+        } else throw new RuntimeException('Unsupported operations action.');
+
+        admin_append_audit($conn, $actorId, $action, $entityType, $entityId, $before, $after, $reason, $referenceId);
+        $response = ['ok' => true, 'message' => 'Controlled operation completed.', 'data' => $after, 'referenceId' => $referenceId];
+        admin_store_idempotency($conn, $actorId, $idempotencyKey, $action, $response);
+        $conn->commit(); return $response;
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        return ['ok' => false, 'message' => 'The controlled operation could not be completed.', 'errors' => ['reason' => $exception->getMessage()], 'referenceId' => $referenceId];
+    }
+}
+
 function admin_execute_action(mysqli $conn, string $action, array $payload, int $actorId, string $idempotencyKey): array
 {
     $existing = admin_idempotency_response($conn, $actorId, $idempotencyKey);
@@ -363,7 +545,7 @@ function admin_execute_action(mysqli $conn, string $action, array $payload, int 
     if (in_array($action, ['approve_restaurant', 'request_restaurant_changes', 'reject_restaurant', 'approve_driver', 'request_driver_changes', 'reject_driver'], true)) {
         return admin_partner_application_action($conn, $action, $payload, $actorId, $idempotencyKey);
     }
-    if(in_array($action,['reassign_driver','cancel_order','open_incident','request_case_information','resolve_case','issue_refund','hold_payout','release_payout','settle_cod','save_promotion','pause_promotion','schedule_fee_rule','set_service_area_status'],true))return admin_operations_action($conn,$action,$payload,$actorId,$idempotencyKey);
+    if(in_array($action,['reassign_driver','cancel_order','open_incident','request_case_information','resolve_case','issue_refund','hold_payout','release_payout','settle_cod','save_promotion','pause_promotion','schedule_fee_rule','set_service_area_status'],true))return admin_operations_action_v2($conn,$action,$payload,$actorId,$idempotencyKey);
     return [
         'ok' => false,
         'message' => 'Unsupported Admin action.',

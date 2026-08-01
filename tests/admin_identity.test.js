@@ -45,7 +45,8 @@ test('Identity repository and commands use statuses, versions, sessions, history
   for (const action of ['suspend_account', 'reactivate_account', 'block_account', 'revoke_sessions', 'reset_password']) assert.match(actions, new RegExp(action));
   assert.match(actions, /FOR UPDATE/i);
   assert.match(actions, /session_version\s*=\s*session_version\s*\+\s*1/i);
-  assert.match(actions, /password_hash\s*\(/);
+  assert.match(actions, /password_reset_tokens/);
+  assert.match(actions, /recovery_url/);
   assert.match(actions, /INSERT INTO account_status_history/i);
   assert.doesNotMatch(actions, /UPDATE\s+customer_profiles\s+SET\s+wallet_balance/i);
 });

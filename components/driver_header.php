@@ -1,6 +1,10 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'driver') {
+require_once __DIR__ . '/../lib/session_security.php';
+require_once __DIR__ . '/../db.php';
+savora_start_session();
+$driver_session = savora_validate_session($conn, $_SESSION, session_id(), 'driver');
+if (!$driver_session['ok']) {
+    savora_end_session();
     header('Location: index.php');
     exit();
 }

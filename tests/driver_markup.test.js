@@ -26,8 +26,8 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
     'driver_profile.php'
   ];
 
-  assert.match(header, /session_status\(\)\s*===\s*PHP_SESSION_NONE/);
-  assert.match(header, /\(\$_SESSION\['role'\]\s*\?\?\s*''\)\s*!==\s*'driver'/);
+  assert.match(header, /savora_start_session\(\)/);
+  assert.match(header, /savora_validate_session\(\$conn,\s*\$_SESSION,\s*session_id\(\),\s*'driver'\)/);
   assert.match(header, /data-driver-session-id=/);
   assert.match(read('js/driver_dashboard.js'), /scheduleDispatchReconciliation/);
   for (const route of routeNames) assert.match(header, new RegExp(route.replace('.', '\\.')));
@@ -41,13 +41,14 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
   assert.match(footer, /js\/driver_ui\.js/);
 });
 
-test('Demo dispatch candidates have matching driver accounts', () => {
+test('Demo dispatch candidates are isolated behind the explicit demo seed flag', () => {
   const database = read('db.php');
   const schema = read('lib/platform_schema.php');
   const databaseBoundary = `${database}\n${schema}`;
   assert.match(databaseBoundary, /driver-nearby-2/);
   assert.match(databaseBoundary, /driver-nearby-3/);
   assert.match(databaseBoundary, /INSERT IGNORE INTO users/);
+  assert.match(schema, /SAVORA_SEED_DEMO/);
 });
 
 test('Database connection honors a configurable XAMPP MySQL port', () => {

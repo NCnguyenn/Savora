@@ -234,7 +234,7 @@
         renderEditorLists(form);
       }
     });
-    form.addEventListener('submit', event => {
+      form.addEventListener('submit', async event => {
       event.preventDefault();
       const submitter = event.submitter || documentRef.activeElement;
       const draft = collectDraft(form);
@@ -243,7 +243,15 @@
       clearValidationState(form);
       if (!result.valid) { showValidation(form, result.errors); return; }
       const api = stateApi(); if (!api) return;
-      api.persist(api.setMenuItem(api.load(), menuItemFromDraft(draft)));
+        const item = menuItemFromDraft(draft);
+        if (!root.SavoraPlatformBridge) { showValidation(form, { name: 'The platform connection is not ready.' }); return; }
+        try {
+          await root.SavoraPlatformBridge.command('restaurant_sync_menu', item);
+        } catch (error) {
+          showValidation(form, { name: error.message || 'Unable to synchronize this menu item.' });
+          return;
+        }
+        api.persist(api.setMenuItem(api.load(), item));
       const validation = get('[data-menu-validation]'); if (validation) validation.textContent = '';
       const status = get('[data-menu-status]'); if (status) status.textContent = draft.status === 'draft' ? 'Draft saved locally.' : 'Menu item published to the Customer catalog.';
       root.setTimeout(() => { root.location.assign('restaurant_menu.php'); }, 350);

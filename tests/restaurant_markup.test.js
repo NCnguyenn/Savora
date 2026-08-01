@@ -87,8 +87,8 @@ test('Restaurant Overview uses the shared authenticated shell and semantic data 
 
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['\"]\/components\/restaurant_header\.php['\"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['\"]\/components\/restaurant_footer\.php['\"]/);
-  assert.match(header, /session_status\(\)\s*===\s*PHP_SESSION_NONE/);
-  assert.match(header, /\(\$_SESSION\['role'\]\s*\?\?\s*''\)\s*!==\s*'restaurant'/);
+  assert.match(header, /savora_start_session\(\)/);
+  assert.match(header, /savora_validate_session\(\$conn,\s*\$_SESSION,\s*session_id\(\),\s*'restaurant'\)/);
   assert.equal((page.match(/<main\b/gi) || []).length, 1, 'Overview has one main landmark');
   assert.match(page, /<h1[^>]*>\s*Restaurant Overview\s*<\/h1>/);
   assert.match(page, /data-overview-kpis/);

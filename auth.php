@@ -1,15 +1,8 @@
 <?php
 declare(strict_types=1);
 
-$savoraSessionPath = getenv('SAVORA_SESSION_PATH');
-$savoraLocalSessionPath = __DIR__ . '/.sessions';
-if ((!is_string($savoraSessionPath) || $savoraSessionPath === '') && is_dir($savoraLocalSessionPath)) {
-    $savoraSessionPath = $savoraLocalSessionPath;
-}
-if (is_string($savoraSessionPath) && $savoraSessionPath !== '' && is_dir($savoraSessionPath)) {
-    session_save_path($savoraSessionPath);
-}
-session_start();
+require_once __DIR__ . '/lib/session_security.php';
+savora_start_session();
 require_once __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -50,6 +43,7 @@ $_SESSION['username'] = (string) $user['username'];
 $_SESSION['role'] = (string) $user['role'];
 $_SESSION['full_name'] = (string) $user['full_name'];
 $_SESSION['session_version'] = (int) $user['session_version'];
+savora_register_user_session($conn, (int) $user['id']);
 
 $update = $conn->prepare('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?');
 $update->bind_param('i', $_SESSION['user_id']);

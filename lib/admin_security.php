@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/session_security.php';
 
 function admin_escape(mixed $value): string
 {
@@ -9,8 +10,7 @@ function admin_escape(mixed $value): string
 function admin_csrf_token(): string
 {
     if (session_status() === PHP_SESSION_NONE) {
-        admin_configure_session_path();
-        session_start();
+        savora_start_session();
     }
     if (!isset($_SESSION['admin_csrf']) || !is_string($_SESSION['admin_csrf'])) {
         $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));
@@ -21,8 +21,7 @@ function admin_csrf_token(): string
 function admin_verify_csrf(string $token): bool
 {
     if (session_status() === PHP_SESSION_NONE) {
-        admin_configure_session_path();
-        session_start();
+        savora_start_session();
     }
     $stored = $_SESSION['admin_csrf'] ?? '';
     return is_string($stored) && $stored !== '' && hash_equals($stored, $token);
@@ -31,29 +30,24 @@ function admin_verify_csrf(string $token): bool
 function admin_require_role(): void
 {
     if (session_status() === PHP_SESSION_NONE) {
-        admin_configure_session_path();
-        session_start();
+        savora_start_session();
     }
-    if (!isset($_SESSION['user_id'])) {
+    global $conn;
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        http_response_code(500);
+        exit('Authentication service unavailable');
+    }
+    $validation = savora_validate_session($conn, $_SESSION, session_id(), 'admin');
+    if (!$validation['ok']) {
+        savora_end_session();
         header('Location: index.php');
         exit();
-    }
-    if (($_SESSION['role'] ?? '') !== 'admin') {
-        http_response_code(403);
-        exit('Forbidden');
     }
 }
 
 function admin_configure_session_path(): void
 {
-    $sessionPath = getenv('SAVORA_SESSION_PATH');
-    $localSessionPath = dirname(__DIR__) . '/.sessions';
-    if ((!is_string($sessionPath) || $sessionPath === '') && is_dir($localSessionPath)) {
-        $sessionPath = $localSessionPath;
-    }
-    if (is_string($sessionPath) && $sessionPath !== '' && is_dir($sessionPath)) {
-        session_save_path($sessionPath);
-    }
+    savora_configure_session_path();
 }
 
 function admin_reference_id(): string

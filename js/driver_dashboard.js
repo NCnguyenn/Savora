@@ -277,13 +277,15 @@
     renderAll(next);
   });
 
-  doc.querySelector('[data-accept-offer]')?.addEventListener('click', () => {
+  doc.querySelector('[data-accept-offer]')?.addEventListener('click', async () => {
     const states = currentStates();
     const offer = states.driver.currentOffer;
     if (!offer) return;
-    try {
-      const result = DriverState.acceptOffer(states.driver, states.customer, states.restaurant, offer.orderId, Date.now());
-      DriverState.persist(result.state);
+      try {
+        const result = DriverState.acceptOffer(states.driver, states.customer, states.restaurant, offer.orderId, Date.now());
+        if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
+        await root.SavoraPlatformBridge.command('driver_accept_order', { reference_code: offer.orderId });
+        DriverState.persist(result.state);
       CustomerState.persist(result.customerState);
       ui.announce(`Delivery ${offer.orderId} accepted.`);
       root.location.href = 'driver_delivery.php';

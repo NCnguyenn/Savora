@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+putenv('SAVORA_SEED_DEMO=1');
 putenv('SAVORA_DB_NAME='.(getenv('SAVORA_DB_NAME')?:'savora_test'));
 require_once __DIR__.'/../db.php'; require_once __DIR__.'/../lib/admin_security.php'; require_once __DIR__.'/../lib/admin_actions.php';
 $actor=(int)$conn->query("SELECT id FROM users WHERE role='admin' LIMIT 1")->fetch_assoc()['id'];

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+putenv('SAVORA_SEED_DEMO=1');
 
 putenv('SAVORA_DB_NAME=savora_test');
 require __DIR__ . '/../db.php';

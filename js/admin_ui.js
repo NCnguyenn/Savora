@@ -247,7 +247,8 @@
                     onConfirm: async function performConfirmedAction(dialogReason) {
                         const reason = (pageReason && pageReason.value.trim()) || dialogReason || 'Secure credential recovery';
                         const result = await requestAction(action, { user_id: button.dataset.userId, version: button.dataset.version, reason: reason });
-                        showToast(result.message, 'success');
+                        const recovery = result.data && result.data.recovery_url ? ` Recovery link: ${result.data.recovery_url}` : '';
+                        showToast(result.message + recovery, 'success');
                         root.setTimeout(function refreshIdentity() { root.location.reload(); }, 500);
                     }
                 });
@@ -275,7 +276,9 @@
                 openDialog({ title: button.textContent.trim() || 'Confirm operation', message: 'This operation is transactional and will append an immutable audit record.', confirmLabel: 'Confirm', requireReason: true, onConfirm: async function performOperation(dialogReason) {
                     const driver = root.document.querySelector('[data-admin-driver-target]');
                     const refund = root.document.querySelector('[data-admin-refund-amount]');
-                    const payload = { reason: (pageReason && pageReason.value.trim()) || dialogReason, order_id: button.dataset.orderId, case_id: button.dataset.caseId, payout_id: button.dataset.payoutId, reconciliation_id: button.dataset.reconciliationId, promotion_id: button.dataset.promotionId, driver_user_id: driver ? driver.value : undefined, amount: refund ? refund.value : undefined };
+                    const versions = root.SavoraAdminRecordVersions || {};
+                    const versionKey = button.dataset.orderId ? `order:${button.dataset.orderId}` : button.dataset.caseId ? `case:${button.dataset.caseId}` : button.dataset.payoutId ? `payout:${button.dataset.payoutId}` : button.dataset.reconciliationId ? `cod:${button.dataset.reconciliationId}` : button.dataset.promotionId ? `promotion:${button.dataset.promotionId}` : button.dataset.serviceAreaId ? `service_area:${button.dataset.serviceAreaId}` : '';
+                    const payload = { reason: (pageReason && pageReason.value.trim()) || dialogReason, version: button.dataset.version || versions[versionKey], order_id: button.dataset.orderId, case_id: button.dataset.caseId, payout_id: button.dataset.payoutId, reconciliation_id: button.dataset.reconciliationId, promotion_id: button.dataset.promotionId, service_area_id: button.dataset.serviceAreaId, status: button.dataset.status, driver_user_id: driver ? driver.value : undefined, amount: refund && refund.value ? refund.value : button.dataset.amount };
                     const result = await requestAction(action, payload);
                     showToast(result.message, 'success');
                     root.setTimeout(function refreshOperation() { root.location.reload(); }, 500);
