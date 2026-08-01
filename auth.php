@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib/session_security.php';
+require_once __DIR__ . '/lib/admin_security.php';
 savora_start_session();
 require_once __DIR__ . '/db.php';
 
@@ -43,6 +44,7 @@ $_SESSION['username'] = (string) $user['username'];
 $_SESSION['role'] = (string) $user['role'];
 $_SESSION['full_name'] = (string) $user['full_name'];
 $_SESSION['session_version'] = (int) $user['session_version'];
+admin_issue_csrf_token();
 savora_register_user_session($conn, (int) $user['id']);
 
 $update = $conn->prepare('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?');

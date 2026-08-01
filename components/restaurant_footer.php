@@ -6,7 +6,7 @@
     <script src="js/driver_state.js"></script>
     <script src="js/platform_bridge.js"></script>
     <script src="js/restaurant_ui.js"></script>
-    <?php require_once __DIR__ . '/../lib/admin_security.php'; $sessionHeartbeatCsrfToken = admin_csrf_token(); ?>
+    <?php $sessionHeartbeatCsrfToken = (string) ($_SESSION['admin_csrf'] ?? ''); ?>
     <script>
     (function () {
         const csrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

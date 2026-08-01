@@ -9,6 +9,12 @@ function admin_escape(mixed $value): string
 
 function admin_csrf_token(): string
 {
+    $token = $_SESSION['admin_csrf'] ?? '';
+    return is_string($token) ? $token : '';
+}
+
+function admin_issue_csrf_token(): string
+{
     if (session_status() === PHP_SESSION_NONE) {
         savora_start_session();
     }

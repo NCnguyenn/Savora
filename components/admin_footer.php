@@ -39,7 +39,7 @@
 <div class="admin-toast-region" aria-live="polite" aria-atomic="true" data-admin-toast-region></div>
 
 <script src="js/admin_ui.js"></script>
-<?php $sessionHeartbeatCsrfToken = admin_csrf_token(); ?>
+<?php $sessionHeartbeatCsrfToken = (string) ($_SESSION['admin_csrf'] ?? ''); ?>
 <script>
 (function () {
     const csrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
