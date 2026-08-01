@@ -117,7 +117,7 @@
     );
   }
 
-  function updateSelectedOrder(action) {
+  async function updateSelectedOrder(action) {
     const order = ordersForRestaurant().find(item => item.id === state.selectedLiveId);
     if (!order) return;
     const target = { accept: 'confirmed', reject: 'cancelled', prepare: 'preparing', ready: 'ready_for_pickup' }[action];
@@ -126,6 +126,8 @@
     try {
       const customer = root.SavoraState.load();
       const next = root.SavoraRestaurantState.updateOrderStatus(customer, order.id, target, { prepMinutes: prep ? prep.value : 20 });
+      if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
+      await root.SavoraPlatformBridge.command('restaurant_order_status', { reference_code: order.id, status: target });
       root.SavoraState.persist(next);
       announce('[data-order-feedback]', `${order.id} is now ${labels[target].toLowerCase()}. Saved to the local customer order.`);
       ui().showToast(`${order.id} updated locally.`);

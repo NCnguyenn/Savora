@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+$savoraSessionPath = getenv('SAVORA_SESSION_PATH');
+$savoraLocalSessionPath = __DIR__ . '/.sessions';
+if ((!is_string($savoraSessionPath) || $savoraSessionPath === '') && is_dir($savoraLocalSessionPath)) {
+    $savoraSessionPath = $savoraLocalSessionPath;
+}
+if (is_string($savoraSessionPath) && $savoraSessionPath !== '' && is_dir($savoraSessionPath)) {
+    session_save_path($savoraSessionPath);
+}
 session_start();
 require_once __DIR__ . '/db.php';
 

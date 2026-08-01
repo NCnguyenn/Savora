@@ -9,6 +9,7 @@ function admin_escape(mixed $value): string
 function admin_csrf_token(): string
 {
     if (session_status() === PHP_SESSION_NONE) {
+        admin_configure_session_path();
         session_start();
     }
     if (!isset($_SESSION['admin_csrf']) || !is_string($_SESSION['admin_csrf'])) {
@@ -20,6 +21,7 @@ function admin_csrf_token(): string
 function admin_verify_csrf(string $token): bool
 {
     if (session_status() === PHP_SESSION_NONE) {
+        admin_configure_session_path();
         session_start();
     }
     $stored = $_SESSION['admin_csrf'] ?? '';
@@ -29,6 +31,7 @@ function admin_verify_csrf(string $token): bool
 function admin_require_role(): void
 {
     if (session_status() === PHP_SESSION_NONE) {
+        admin_configure_session_path();
         session_start();
     }
     if (!isset($_SESSION['user_id'])) {
@@ -38,6 +41,18 @@ function admin_require_role(): void
     if (($_SESSION['role'] ?? '') !== 'admin') {
         http_response_code(403);
         exit('Forbidden');
+    }
+}
+
+function admin_configure_session_path(): void
+{
+    $sessionPath = getenv('SAVORA_SESSION_PATH');
+    $localSessionPath = dirname(__DIR__) . '/.sessions';
+    if ((!is_string($sessionPath) || $sessionPath === '') && is_dir($localSessionPath)) {
+        $sessionPath = $localSessionPath;
+    }
+    if (is_string($sessionPath) && $sessionPath !== '' && is_dir($sessionPath)) {
+        session_save_path($sessionPath);
     }
 }
 

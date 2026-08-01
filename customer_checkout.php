@@ -213,7 +213,7 @@
             return value;
         }
 
-        function handleCheckoutSubmit(event) {
+        async function handleCheckoutSubmit(event) {
             event.preventDefault();
             if (isSubmitting) return;
             setSubmitting(true);
@@ -227,6 +227,8 @@
                     paymentMethod: payment ? payment.value : 'cash',
                     promoCode: appliedPromoCode
                 }, window.SavoraRestaurantState ? window.SavoraRestaurantState.load() : null);
+                if (!window.SavoraPlatformBridge) throw new Error('The platform connection is not ready. Please try again.');
+                await window.SavoraPlatformBridge.command('place_order', result.order);
                 window.SavoraState.persist(result.state);
                 if (window.SavoraUI && typeof window.SavoraUI.refreshChrome === 'function') window.SavoraUI.refreshChrome();
 

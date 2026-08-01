@@ -125,13 +125,15 @@
     renderDelivery(DriverState.activeDelivery(state));
   }
 
-  doc.querySelector('[data-delivery-primary-action]')?.addEventListener('click', event => {
+  doc.querySelector('[data-delivery-primary-action]')?.addEventListener('click', async event => {
     const state = DriverState.load();
     const delivery = DriverState.activeDelivery(state);
     const milestone = event.currentTarget.dataset.milestone;
     if (!delivery || !milestone) return;
     try {
       const result = DriverState.updateMilestone(state, CustomerState.load(), delivery.orderId, milestone, Date.now());
+      if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
+      await root.SavoraPlatformBridge.command('driver_milestone', { reference_code: delivery.orderId, milestone });
       DriverState.persist(result.state);
       CustomerState.persist(result.customerState);
       ui.showToast(`${ui.titleCase(milestone)} confirmed.`);
