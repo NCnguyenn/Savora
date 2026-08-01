@@ -52,9 +52,9 @@ test('Demo dispatch candidates are isolated behind the explicit demo seed flag',
 });
 
 test('Database connection honors a configurable XAMPP MySQL port', () => {
-  const database = read('db.php');
+  const database = read('lib/database.php');
   assert.match(database, /SAVORA_DB_PORT/);
-  assert.match(database, /new mysqli\(\$host, \$username, \$password, '', \$dbPort\)/);
+  assert.match(database, /new mysqli\(\$config\['host'\], \$config\['user'\], \$config\['password'\], \$database, \$config\['port'\]\)/);
 });
 
 test('Driver stylesheet contains the approved palette, responsive navigation and visible focus', () => {

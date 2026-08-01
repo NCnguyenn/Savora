@@ -36,12 +36,12 @@ test('Admin platform exposes explicit migration, security, query and action boun
 
 test('database and authentication honor the shared account status contract', () => {
   const db = read('db.php');
+  const database = read('lib/database.php');
   const auth = read('auth.php');
 
-  assert.match(db, /getenv\(['"]SAVORA_DB_NAME['"]\)/);
-  assert.match(db, /require_once\s+__DIR__\s*\.\s*['"]\/lib\/platform_schema\.php['"]/);
-  assert.match(db, /platform_migrate\s*\(\$conn\)/);
-  assert.match(db, /platform_seed\s*\(\$conn\)/);
+  assert.match(db, /require_once\s+__DIR__\s*\.\s*['"]\/lib\/database\.php['"]/);
+  assert.match(db, /savora_database_connect\(\)/);
+  assert.match(database, /getenv\(['"]SAVORA_DB_NAME['"]\)/);
   assert.match(auth, /status/);
   assert.match(auth, /active/);
   assert.match(auth, /session_version/);
