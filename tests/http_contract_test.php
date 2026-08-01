@@ -55,12 +55,6 @@ function http_probe(string $mode, string $input = ''): array
 $read = http_probe('read', '{"command":"check","payload":{"count":2}}');
 http_expect($read === ['status' => 201, 'body' => ['ok' => true, 'data' => ['command' => 'check', 'payload' => ['count' => 2]]]], 'savora_read_json() must parse object input and savora_json() must emit it.');
 
-$platformMalformed = http_probe('platform_malformed', '{');
-http_expect($platformMalformed === ['status' => 400, 'body' => ['ok' => false, 'message' => 'Invalid JSON.']], 'Platform malformed-JSON compatibility must be exact.');
-
-$adminMalformed = http_probe('admin_malformed', '{');
-http_expect($adminMalformed === ['status' => 400, 'body' => ['ok' => false, 'message' => 'Invalid JSON request.', 'referenceId' => 'ADM-TEST-REF']], 'Admin malformed-JSON compatibility must retain a reference ID.');
-
 $error = http_probe('error');
 http_expect($error === ['status' => 422, 'body' => ['ok' => false, 'message' => 'Check the request.', 'errors' => ['field' => 'Required.'], 'referenceId' => 'REQ-1']], 'savora_error() must emit the canonical error envelope.');
 

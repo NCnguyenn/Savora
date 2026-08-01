@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/admin_security.php';
+require_once __DIR__ . '/../lib/platform_response.php';
 require_once __DIR__ . '/../lib/request_security.php';
 
 function platform_rows(mysqli $conn, string $sql, int $id): array
@@ -49,12 +50,12 @@ try {
 $command = (string) ($body['command'] ?? '');
 $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
 
-$lookup = $conn->prepare('SELECT response_json FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key=?');
-$lookup->bind_param('is', $userId, $key);
-$lookup->execute();
-$stored = $lookup->get_result()->fetch_assoc();
-$lookup->close();
-if ($stored) savora_json((array) json_decode((string) $stored['response_json'], true));
+try {
+    $storedResponse = platform_response_find($conn, $userId, $key);
+} catch (JsonException) {
+    savora_error(500, 'Stored response is invalid.');
+}
+if ($storedResponse !== null) savora_json($storedResponse);
 
 $conn->begin_transaction();
 try {
@@ -237,13 +238,12 @@ try {
     }
 
     $response = ['ok' => true, 'message' => 'Platform state synchronized.', 'data' => $result];
-    $json = json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    $store = $conn->prepare('INSERT INTO idempotency_keys(actor_user_id,idempotency_key,action,response_json) VALUES(?,?,?,?)');
-    $store->bind_param('isss', $userId, $key, $command, $json);
-    $store->execute();
-    $store->close();
+    platform_response_store($conn, $userId, $key, $command, $response);
     $conn->commit();
     savora_json($response);
+} catch (JsonException) {
+    $conn->rollback();
+    savora_error(500, 'Response serialization failed.');
 } catch (Throwable $error) {
     $conn->rollback();
     savora_error(422, $error->getMessage());

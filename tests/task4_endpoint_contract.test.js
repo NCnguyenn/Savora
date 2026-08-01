@@ -16,10 +16,11 @@ test('both action endpoints delegate idempotency header validation to the shared
   }
 });
 
-test('endpoint-specific malformed JSON and Admin CSRF responses remain compatible', () => {
-  const platform = read('api/platform_state.php');
-  const admin = read('admin_action.php');
-  assert.match(platform, /catch \(JsonException\)[\s\S]*savora_error\(400, 'Invalid JSON\.'\)/);
-  assert.match(admin, /catch \(JsonException\)[\s\S]*savora_error\(400, 'Invalid JSON request\.', \[\], admin_reference_id\(\)\)/);
-  assert.match(admin, /catch \(InvalidArgumentException\)[\s\S]*savora_error\(403, 'Your secure session expired\. Refresh and try again\.', \[\], admin_reference_id\(\)\)/);
+test('endpoint compatibility is owned by actual CGI endpoint coverage, not a duplicated probe', () => {
+  const behavioral = read('tests/endpoint_compatibility_test.php');
+  const probe = read('tests/support/http_contract_probe.php');
+  assert.match(behavioral, /admin_action\.php/);
+  assert.match(behavioral, /api\/platform_state\.php/);
+  assert.match(behavioral, /endpoint_request/);
+  assert.doesNotMatch(probe, /Invalid JSON request\.|Secure session expired\.|platform_malformed|admin_malformed/);
 });

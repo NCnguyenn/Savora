@@ -10,22 +10,6 @@ if ($mode === 'read') {
     savora_json(['ok' => true, 'data' => $body], 201);
 }
 
-if ($mode === 'platform_malformed') {
-    try {
-        savora_read_json();
-    } catch (JsonException) {
-        savora_error(400, 'Invalid JSON.');
-    }
-}
-
-if ($mode === 'admin_malformed') {
-    try {
-        savora_read_json();
-    } catch (JsonException) {
-        savora_error(400, 'Invalid JSON request.', [], 'ADM-TEST-REF');
-    }
-}
-
 if ($mode === 'error') {
     savora_error(422, 'Check the request.', ['field' => 'Required.'], 'REQ-1');
 }
