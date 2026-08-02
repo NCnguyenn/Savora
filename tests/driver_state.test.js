@@ -259,6 +259,21 @@ test('profile, location and preference setters preserve explicit safe fields', (
   assert.equal(state.preferences.avoidHighways, true);
 });
 
+test('resolved GPS addresses replace coordinate-only fallback and manual mode clears coordinates', () => {
+  const gps = DriverState.setLocation(DriverState.defaultState(), {
+    method: 'gps',
+    address: '12 GPS Road, Bangkok',
+    latitude: 13.7563,
+    longitude: 100.5018
+  });
+  assert.equal(gps.location.address, '12 GPS Road, Bangkok');
+  assert.equal(gps.location.method, 'gps');
+  const manual = DriverState.setLocation(gps, { method: 'manual', address: 'Manual Road' });
+  assert.equal(manual.location.method, 'manual');
+  assert.equal(manual.location.latitude, null);
+  assert.equal(manual.location.longitude, null);
+});
+
 test('derives completed history and earnings while reconciling cash separately', () => {
   const state = DriverState.normalize({
     deliveries: [

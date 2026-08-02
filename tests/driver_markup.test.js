@@ -201,3 +201,17 @@ test('Driver Profile exposes labelled personal, vehicle, document, location and 
   assert.match(page, /href="logout\.php"/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
 });
+
+test('Driver GPS controls use resolved shared location data', () => {
+  const dashboard = read('js/driver_dashboard.js');
+  const profile = read('js/driver_profile.js');
+  const dashboardPage = read('driver_dashboard.php');
+  const profilePage = read('driver_profile.php');
+  for (const source of [dashboard, profile]) {
+    assert.match(source, /SavoraLocationClient/);
+    assert.match(source, /savora:platform-state/);
+    assert.doesNotMatch(source, /Current GPS location/);
+    assert.doesNotMatch(source, /watchPosition/);
+  }
+  for (const page of [dashboardPage, profilePage]) assert.match(page, /Powered by Geoapify/);
+});

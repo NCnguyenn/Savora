@@ -6,6 +6,7 @@
   const DriverState = root.SavoraDriverState;
   const CustomerState = root.SavoraState;
   const RestaurantState = root.SavoraRestaurantState;
+  const LocationClient = root.SavoraLocationClient;
   const ui = root.SavoraDriverUI;
   const page = doc.querySelector('[data-driver-page="overview"]');
   if (!page || !DriverState || !CustomerState || !RestaurantState || !ui) return;
@@ -215,6 +216,17 @@
     renderOffer(state);
   }
 
+  function applyPlatformLocation(location) {
+    if (!location || !location.address) return DriverState.load();
+    return DriverState.persist(DriverState.setLocation(DriverState.load(), {
+      method: location.locationMethod || location.method,
+      address: location.address,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      updatedAt: location.locationUpdatedAt || location.updatedAt
+    }));
+  }
+
   doc.querySelector('[data-driver-availability]')?.addEventListener('click', event => {
     const current = DriverState.load();
     const next = DriverState.persist(DriverState.setAvailability(current, !current.online));
@@ -224,32 +236,28 @@
     event.currentTarget.focus();
   });
 
-  doc.querySelector('[data-use-driver-gps]')?.addEventListener('click', event => {
+  doc.querySelector('[data-use-driver-gps]')?.addEventListener('click', async event => {
     const button = event.currentTarget;
-    if (!root.navigator.geolocation) {
+    if (!LocationClient || !root.navigator.geolocation || !root.SavoraPlatformBridge) {
       ui.showToast('GPS is unavailable. Enter your address manually.', 'error');
       return;
     }
     button.disabled = true;
-    button.textContent = 'Locating…';
-    root.navigator.geolocation.getCurrentPosition(position => {
-      const current = DriverState.load();
-      const next = DriverState.setLocation(current, {
-        method: 'gps',
-        address: current.location.address || 'Current GPS location',
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      });
-      DriverState.persist(next);
-      button.disabled = false;
-      button.replaceChildren(ui.icon('fa-crosshairs'), 'Use GPS');
-      ui.showToast('Current GPS location saved.');
+    button.setAttribute('aria-busy', 'true');
+    button.replaceChildren(ui.icon('fa-spinner'), 'Locating…');
+    try {
+      const coordinates = await LocationClient.getPosition(root.navigator.geolocation);
+      const location = await LocationClient.saveGps(root.SavoraPlatformBridge, coordinates);
+      const next = applyPlatformLocation(location);
+      ui.showToast('Current GPS address saved.');
       renderAll(next);
-    }, () => {
+    } catch (error) {
+      ui.showToast(LocationClient.messageForGeolocationError(error), 'error');
+    } finally {
       button.disabled = false;
+      button.removeAttribute('aria-busy');
       button.replaceChildren(ui.icon('fa-crosshairs'), 'Use GPS');
-      ui.showToast('Location permission was not granted. Enter an address manually.', 'error');
-    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    }
   });
 
   doc.querySelector('[data-enter-driver-address]')?.addEventListener('click', event => {
@@ -258,7 +266,7 @@
     ui.openDialog('driver-address-dialog', event.currentTarget);
   });
 
-  doc.querySelector('[data-driver-address-form]')?.addEventListener('submit', event => {
+  doc.querySelector('[data-driver-address-form]')?.addEventListener('submit', async event => {
     event.preventDefault();
     const input = event.currentTarget.elements['driver-address'];
     const error = doc.querySelector('[data-driver-address-error]');
@@ -271,10 +279,17 @@
     }
     input.removeAttribute('aria-invalid');
     if (error) error.textContent = '';
-    const next = DriverState.persist(DriverState.setLocation(DriverState.load(), { method: 'manual', address }));
-    ui.closeDialog('driver-address-dialog');
-    ui.showToast('Current address saved.');
-    renderAll(next);
+    try {
+      const location = LocationClient && root.SavoraPlatformBridge
+        ? await LocationClient.saveManual(root.SavoraPlatformBridge, { address })
+        : { address, locationMethod: 'manual' };
+      const next = applyPlatformLocation(location);
+      ui.closeDialog('driver-address-dialog');
+      ui.showToast('Current address saved.');
+      renderAll(next);
+    } catch (saveError) {
+      if (error) error.textContent = saveError.message || 'Unable to save the current address.';
+    }
   });
 
   doc.querySelector('[data-accept-offer]')?.addEventListener('click', async () => {
@@ -309,5 +324,8 @@
   });
 
   root.addEventListener('storage', () => renderAll());
+  root.addEventListener('savora:platform-state', event => {
+    if (event.detail && event.detail.location) renderAll(applyPlatformLocation(event.detail.location));
+  });
   renderAll();
 }(typeof window === 'undefined' ? null : window));

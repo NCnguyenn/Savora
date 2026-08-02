@@ -28,6 +28,7 @@
                     <button class="driver-secondary-action" type="button" data-enter-driver-address aria-controls="driver-address-dialog">
                         <i class="fa-solid fa-pen" aria-hidden="true"></i>Enter manually
                     </button>
+                    <p class="driver-location-attribution">Powered by Geoapify for GPS-assisted addresses. You can always enter an address manually.</p>
                 </div>
             </article>
 

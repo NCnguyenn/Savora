@@ -94,7 +94,8 @@
       method: 'manual',
       address: '21 Oak Avenue, Downtown',
       latitude: null,
-      longitude: null
+      longitude: null,
+      updatedAt: ''
     },
     serviceRadiusKm: 8,
     preferences: defaultPreferences(),
@@ -237,7 +238,8 @@
       method: location.method === 'gps' && coordinates ? 'gps' : 'manual',
       address: text(location.address) || state.location.address,
       latitude: coordinates ? coordinates.latitude : null,
-      longitude: coordinates ? coordinates.longitude : null
+      longitude: coordinates ? coordinates.longitude : null,
+      updatedAt: iso(location.updatedAt || location.locationUpdatedAt)
     };
     state.serviceRadiusKm = bounded(source.serviceRadiusKm, 0.1, 50, state.serviceRadiusKm);
     const preferences = source.preferences && typeof source.preferences === 'object' && !Array.isArray(source.preferences) ? source.preferences : {};
@@ -307,7 +309,12 @@
       method: wantsGps && coordinates ? 'gps' : 'manual',
       address: Object.hasOwn(source, 'address') ? text(source.address).trim() : next.location.address,
       latitude: wantsGps && coordinates ? coordinates.latitude : null,
-      longitude: wantsGps && coordinates ? coordinates.longitude : null
+      longitude: wantsGps && coordinates ? coordinates.longitude : null,
+      updatedAt: wantsGps && coordinates
+        ? iso(source.updatedAt || source.locationUpdatedAt) || new Date().toISOString()
+        : (Object.hasOwn(source, 'updatedAt') || Object.hasOwn(source, 'locationUpdatedAt')
+          ? iso(source.updatedAt || source.locationUpdatedAt)
+          : new Date().toISOString())
     };
     if (!next.location.address) throw new Error('Current location address is required');
     if (Object.hasOwn(source, 'serviceRadiusKm')) {
