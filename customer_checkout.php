@@ -28,8 +28,13 @@
                 <div class="form-group">
                     <label for="checkout-address">Address</label>
                     <textarea id="checkout-address" name="address" rows="3" maxlength="300" required aria-describedby="checkout-address-help checkout-address-error" placeholder="Street, building and area"></textarea>
+                    <div class="checkout-location-actions">
+                        <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                        <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
+                    </div>
                     <p id="checkout-address-help" class="form-help">Include enough detail for a local demo delivery.</p>
                     <p id="checkout-address-error" class="field-error" aria-live="polite"></p>
+                    <p data-customer-location-status class="form-help" aria-live="polite"></p>
                 </div>
                 <div class="form-group">
                     <label for="checkout-note">Delivery note <span>(optional)</span></label>
@@ -220,6 +225,10 @@
 
             try {
                 const address = validateCheckout();
+                if (window.SavoraCustomerLocation && typeof window.SavoraCustomerLocation.saveManualAddress === 'function') {
+                    const savedAddress = window.SavoraState.load().profile.address || '';
+                    if (savedAddress.trim() !== address.trim()) await window.SavoraCustomerLocation.saveManualAddress(address);
+                }
                 const payment = document.querySelector('input[name="payment"]:checked');
                 const result = window.SavoraState.placeDemoOrder(window.SavoraState.load(), {
                     address,

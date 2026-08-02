@@ -13,10 +13,10 @@
                     <span class="sr-only">Search restaurants or dishes</span>
                     <input id="search-input" type="search" autocomplete="off" placeholder="Search restaurants, cuisines, or dishes">
                 </label>
-                <div class="delivery-location" aria-label="Delivery location">
+                <button class="delivery-location" type="button" aria-label="Delivery location" data-customer-location-trigger aria-controls="customer-location-dialog" aria-expanded="false">
                     <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-                    <span><small>Deliver to</small>123 Tech Park, Block C</span>
-                </div>
+                    <span><small>Deliver to</small><strong data-customer-location-label>Choose delivery address</strong></span>
+                </button>
                 <button class="primary-action" type="submit">Find food</button>
             </form>
 
@@ -26,6 +26,28 @@
                     <span>All</span>
                 </button>
             </div>
+        </div>
+    </section>
+
+    <section id="customer-location-dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="customer-location-title" hidden>
+        <div class="dialog-scrim" data-customer-location-close></div>
+        <div class="dialog-panel customer-location-dialog-panel" role="document">
+            <header class="modal-header">
+                <div><p class="eyebrow">Delivery location</p><h2 id="customer-location-title">Where should we deliver?</h2></div>
+                <button class="icon-button" type="button" aria-label="Close delivery location" data-customer-location-close><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <form data-customer-location-form>
+                <label class="form-field" for="customer-location-address">Delivery address
+                    <textarea id="customer-location-address" data-customer-location-input rows="3" maxlength="500" autocomplete="street-address" placeholder="Street, building and area"></textarea>
+                </label>
+                <p class="form-help" data-customer-location-status aria-live="polite" aria-atomic="true"></p>
+                <div class="dialog-actions customer-location-actions">
+                    <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                    <button class="primary-action" type="submit">Save address</button>
+                    <button class="secondary-action" type="button" data-customer-location-skip>Skip</button>
+                </div>
+                <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
+            </form>
         </div>
     </section>
 

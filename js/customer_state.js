@@ -87,7 +87,17 @@
   function normalize(raw) {
     const state = defaultState();
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    state.profile = Object.fromEntries(profileKeys.map(key => [key, text(source.profile && source.profile[key])]));
+    const profileSource = source.profile && typeof source.profile === 'object' ? source.profile : {};
+    state.profile = Object.fromEntries(profileKeys.map(key => [key, text(profileSource[key])]));
+    const latitude = Number(profileSource.latitude);
+    const longitude = Number(profileSource.longitude);
+    const hasGps = profileSource.locationMethod === 'gps'
+      && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+      && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+    state.profile.latitude = hasGps ? latitude : null;
+    state.profile.longitude = hasGps ? longitude : null;
+    state.profile.locationMethod = hasGps ? 'gps' : 'manual';
+    state.profile.locationUpdatedAt = text(profileSource.locationUpdatedAt);
     state.wallet.balance = Math.max(0, number(source.wallet && source.wallet.balance));
     state.wallet.transactions = Array.isArray(source.wallet && source.wallet.transactions)
       ? source.wallet.transactions.map(item => ({
@@ -196,6 +206,17 @@
     const next = normalize(state);
     const source = patch && typeof patch === 'object' ? patch : {};
     for (const key of profileKeys) if (Object.hasOwn(source, key)) next.profile[key] = text(source[key]);
+    if (Object.hasOwn(source, 'locationMethod') || Object.hasOwn(source, 'latitude') || Object.hasOwn(source, 'longitude')) {
+      const latitude = Number(source.latitude);
+      const longitude = Number(source.longitude);
+      const hasGps = source.locationMethod === 'gps'
+        && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+        && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+      next.profile.latitude = hasGps ? latitude : null;
+      next.profile.longitude = hasGps ? longitude : null;
+      next.profile.locationMethod = hasGps ? 'gps' : 'manual';
+    }
+    if (Object.hasOwn(source, 'locationUpdatedAt')) next.profile.locationUpdatedAt = text(source.locationUpdatedAt);
     return next;
   }
   function topUpWallet(state, amount) {

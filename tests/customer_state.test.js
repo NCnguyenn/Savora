@@ -14,6 +14,29 @@ test('normalizes malformed persisted state without copying unsafe fields', () =>
   assert.equal(Object.hasOwn(state.cart[0], 'onerror'), false);
 });
 
+test('preserves only complete GPS profile coordinates and clears them for manual mode', () => {
+  const gps = State.setProfile(State.normalize({}), {
+    address: 'GPS Road, Bangkok',
+    latitude: 13.7563,
+    longitude: 100.5018,
+    locationMethod: 'gps',
+    locationUpdatedAt: '2026-08-02T10:00:00Z'
+  });
+  assert.equal(gps.profile.latitude, 13.7563);
+  assert.equal(gps.profile.longitude, 100.5018);
+  assert.equal(gps.profile.locationMethod, 'gps');
+  const manual = State.setProfile(gps, {
+    address: 'Manual Road',
+    locationMethod: 'manual',
+    latitude: null,
+    longitude: null
+  });
+  assert.equal(manual.profile.address, 'Manual Road');
+  assert.equal(manual.profile.latitude, null);
+  assert.equal(manual.profile.longitude, null);
+  assert.equal(manual.profile.locationMethod, 'manual');
+});
+
 test('preserves bounded customer identity and verified review data for restaurant insights', () => {
   const state = State.normalize({
     orders: [{

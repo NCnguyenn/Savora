@@ -87,6 +87,7 @@
     <script src="js/driver_state.js"></script>
     <script src="js/platform_bridge.js"></script>
     <script src="js/customer_ui.js"></script>
+    <script src="js/customer_location.js"></script>
     <script src="assets/vendor/leaflet/leaflet.js"></script>
 </body>
 </html>

@@ -47,9 +47,13 @@
                     <div class="form-field profile-address-field">
                         <label for="profile-address">Delivery address</label>
                         <textarea id="profile-address" name="address" autocomplete="street-address" rows="3" maxlength="300" placeholder="Street, building and delivery notes"></textarea>
+                        <div class="profile-location-actions">
+                            <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                            <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
+                        </div>
                     </div>
                 </div>
-                <p class="form-help" id="profile-local-help">These details are local demo data and are not sent to a Savora server.</p>
+                <p class="form-help" id="profile-local-help" data-customer-location-status aria-live="polite">Saved locally on this device and synced to your Savora profile. You can enter an address manually or use your current location.</p>
                 <div class="profile-form-actions">
                     <button class="primary-action" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i>Save profile</button>
                     <p id="profile-save-status" class="profile-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -114,21 +118,32 @@
 
         renderProfile(SavoraState.load().profile || {});
 
-        form.addEventListener('submit', function (event) {
+        form.addEventListener('submit', async function (event) {
             event.preventDefault();
             if (!form.reportValidity()) return;
-
-            const state = SavoraState.setProfile(SavoraState.load(), {
-                fullName: fullNameInput.value.trim(),
-                email: emailInput.value.trim(),
-                phone: phoneInput.value.trim(),
-                address: addressInput.value.trim()
-            });
-            SavoraState.persist(state);
-            SavoraUI.refreshChrome();
-            renderProfile(state.profile);
-            saveStatus.textContent = 'Profile settings saved locally on this device for this demo.';
-            SavoraUI.showToast('Profile settings saved locally on this device for this demo.');
+            try {
+                const location = window.SavoraCustomerLocation
+                    ? await window.SavoraCustomerLocation.saveManualAddress(addressInput.value)
+                    : { address: addressInput.value.trim(), locationMethod: 'manual', latitude: null, longitude: null };
+                const state = SavoraState.setProfile(SavoraState.load(), {
+                    fullName: fullNameInput.value.trim(),
+                    email: emailInput.value.trim(),
+                    phone: phoneInput.value.trim(),
+                    address: location.address,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    locationMethod: location.locationMethod,
+                    locationUpdatedAt: location.locationUpdatedAt
+                });
+                SavoraState.persist(state);
+                SavoraUI.refreshChrome();
+                renderProfile(state.profile);
+                saveStatus.textContent = 'Profile settings saved.';
+                SavoraUI.showToast('Profile settings saved.');
+            } catch (error) {
+                saveStatus.textContent = error.message || 'Profile settings could not be saved.';
+                SavoraUI.showToast(saveStatus.textContent, 'error');
+            }
         });
     });
 </script>
