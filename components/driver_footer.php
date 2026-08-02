@@ -27,7 +27,8 @@
 
     <script src="js/customer_state.js"></script>
     <script src="js/restaurant_state.js"></script>
-    <script src="js/driver_state.js"></script>
+<script src="js/driver_state.js"></script>
+<script src="js/location_client.js"></script>
     <script src="js/platform_bridge.js"></script>
     <script src="js/driver_ui.js"></script>
     <?php

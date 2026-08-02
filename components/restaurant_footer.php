@@ -2,7 +2,8 @@
     </div>
     <div id="restaurant-toast-container" class="restaurant-toast-container" aria-live="polite" aria-atomic="true"></div>
     <script src="js/customer_state.js"></script>
-    <script src="js/restaurant_state.js"></script>
+<script src="js/restaurant_state.js"></script>
+<script src="js/location_client.js"></script>
     <script src="js/driver_state.js"></script>
     <script src="js/platform_bridge.js"></script>
     <script src="js/restaurant_ui.js"></script>
