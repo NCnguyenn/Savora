@@ -17,6 +17,7 @@
             <section class="restaurant-card" aria-labelledby="restaurant-address-title"><h2 id="restaurant-address-title">Restaurant address</h2>
                 <p class="restaurant-field-hint">Choose a current location only when you want to share it. You can always enter the address manually.</p>
                 <div class="restaurant-editor-actions"><button type="button" data-use-current-location><i class="fa-solid fa-location-arrow" aria-hidden="true"></i>Use current location</button><button type="button" data-manual-address><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Enter address manually</button></div>
+                <p class="restaurant-field-hint">Powered by Geoapify for GPS-assisted addresses. You can always enter an address manually.</p>
                 <p class="restaurant-form-summary" data-address-feedback aria-live="polite" aria-atomic="true"></p>
                 <div class="restaurant-form-two-column">
                     <label class="restaurant-field"><span>Address line 1</span><input name="address-line1" maxlength="150" autocomplete="address-line1"></label>

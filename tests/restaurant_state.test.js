@@ -270,6 +270,23 @@ test('storefront coordinates require a complete valid pair and manual address mo
   assert.equal(manual.profile.longitude, null);
 });
 
+test('resolved restaurant GPS addresses persist coordinates and manual edits clear them', () => {
+  let state = RestaurantState.setProfile(RestaurantState.defaultState(), {
+    addressLine1: '12 GPS Road', city: 'Bangkok', country: 'Thailand',
+    address: '12 GPS Road, Bangkok, Thailand', locationMethod: 'current',
+    latitude: 13.7563, longitude: 100.5018
+  });
+  assert.equal(state.profile.locationMethod, 'current');
+  assert.equal(state.profile.address, '12 GPS Road, Bangkok, Thailand');
+  assert.equal(state.profile.latitude, 13.7563);
+  state = RestaurantState.setProfile(state, {
+    addressLine1: '88 Manual Street', address: '88 Manual Street', locationMethod: 'manual'
+  });
+  assert.equal(state.profile.locationMethod, 'manual');
+  assert.equal(state.profile.latitude, null);
+  assert.equal(state.profile.longitude, null);
+});
+
 test('storefront operations clamp persisted values and preserve timed special hours', () => {
   const state = RestaurantState.normalize({
     operations: {

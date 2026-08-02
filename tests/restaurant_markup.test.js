@@ -323,7 +323,11 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(operations, /<h1[^>]*>\s*Operations &amp; Opening Hours\s*<\/h1>/);
   for (const hook of ['data-store-status', 'data-weekly-hours', 'data-copy-hours', 'data-special-hours', 'data-capacity-warning', 'data-operations-preview']) assert.match(operations, new RegExp(hook));
   for (const field of ['accepting-orders', 'prep-minutes', 'capacity', 'delivery-enabled', 'pickup-enabled', 'pickup-instructions']) assert.match(operations, new RegExp(`name="${field}"`));
-  assert.match(controller, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(controller, /SavoraLocationClient/);
+  assert.match(controller, /savora:platform-state/);
+  assert.doesNotMatch(controller, /navigator\.geolocation\.getCurrentPosition/);
+  assert.doesNotMatch(controller, /watchPosition/);
+  assert.match(profile, /Powered by Geoapify/);
   assert.match(controller, /data-address-feedback/);
   assert.match(controller, /api\.setProfile/);
   assert.match(controller, /api\.setOperations/);

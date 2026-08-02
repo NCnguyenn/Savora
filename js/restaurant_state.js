@@ -15,7 +15,7 @@
     completed: [],
     cancelled: []
   };
-  const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'locationMethod'];
+  const PROFILE_KEYS = ['id', 'name', 'address', 'description', 'cuisine', 'phone', 'image', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'locationMethod', 'locationUpdatedAt'];
   const OPERATION_KEYS = ['acceptingOrders', 'prepMinutes', 'deliveryRadius', 'minimumOrder', 'capacity', 'deliveryEnabled', 'pickupEnabled', 'pickupInstructions'];
   const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
@@ -98,7 +98,7 @@
   };
   const defaultState = () => ({
     version: 1,
-    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '', locationMethod: 'manual', latitude: null, longitude: null },
+    profile: { id: 'savora-kitchen', name: 'Savora Kitchen', address: '', description: '', cuisine: '', phone: '', image: '', addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '', locationMethod: 'manual', locationUpdatedAt: '', latitude: null, longitude: null },
     operations: { acceptingOrders: true, prepMinutes: 20, deliveryRadius: 5, minimumOrder: 0, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(), specialHours: [] },
     menuItems: [{ id: '1', restaurantId: 'savora-kitchen', restaurantName: 'Savora Kitchen', name: '', description: '', category: '', image: '', price: 0, compareAtPrice: 0, taxCategory: '', optionGroups: [], addOns: [], available: true, stockTracking: false, stock: 0, prepTime: 20, dietaryTags: [], status: 'published' }],
     reviews: []
@@ -113,6 +113,7 @@
     state.profile.name = state.profile.name || 'Savora Kitchen';
     const coordinates = coordinatePair(profile.latitude, profile.longitude);
     state.profile.locationMethod = profile.locationMethod === 'current' && coordinates ? 'current' : 'manual';
+    state.profile.locationUpdatedAt = text(profile.locationUpdatedAt);
     state.profile.latitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.latitude : null;
     state.profile.longitude = coordinates && state.profile.locationMethod === 'current' ? coordinates.longitude : null;
     const operations = source.operations && typeof source.operations === 'object' ? source.operations : {};
@@ -201,6 +202,8 @@
       next.profile.locationMethod = coordinates ? 'current' : 'manual';
       next.profile.latitude = coordinates ? coordinates.latitude : null;
       next.profile.longitude = coordinates ? coordinates.longitude : null;
+      if (Object.hasOwn(source, 'locationUpdatedAt')) next.profile.locationUpdatedAt = text(source.locationUpdatedAt);
+      else if (!coordinates) next.profile.locationUpdatedAt = '';
     }
     next.menuItems = next.menuItems.map(item => normalizeMenuItem(item, next.profile));
     return next;
