@@ -158,6 +158,19 @@ function platform_migrate(mysqli $conn): void
     platform_add_column($conn, 'users', 'last_login_at', 'DATETIME NULL');
     platform_add_column($conn, 'users', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
     platform_add_column($conn, 'users', 'version', 'INT NOT NULL DEFAULT 1');
+
+    foreach (['customer_profiles', 'restaurants', 'driver_profiles'] as $table) {
+        platform_add_column($conn, $table, 'latitude', 'DECIMAL(10,7) NULL');
+        platform_add_column($conn, $table, 'longitude', 'DECIMAL(10,7) NULL');
+        platform_add_column($conn, $table, 'location_method', "VARCHAR(10) NOT NULL DEFAULT 'manual'");
+        platform_add_column($conn, $table, 'location_updated_at', 'DATETIME NULL');
+    }
+    platform_add_column($conn, 'driver_profiles', 'address', 'VARCHAR(500) NULL');
+    platform_add_column($conn, 'restaurants', 'address_line1', 'VARCHAR(150) NULL');
+    platform_add_column($conn, 'restaurants', 'address_line2', 'VARCHAR(150) NULL');
+    platform_add_column($conn, 'restaurants', 'state', 'VARCHAR(100) NULL');
+    platform_add_column($conn, 'restaurants', 'postal_code', 'VARCHAR(30) NULL');
+    platform_add_column($conn, 'restaurants', 'country', 'VARCHAR(100) NULL');
 }
 
 function platform_seed(mysqli $conn): void

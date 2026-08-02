@@ -71,6 +71,24 @@ foreach ($requiredTables as $table) {
 }
 $stmt->close();
 
+$locationColumns = [
+    'customer_profiles' => ['latitude', 'longitude', 'location_method', 'location_updated_at'],
+    'driver_profiles' => ['address', 'latitude', 'longitude', 'location_method', 'location_updated_at'],
+    'restaurants' => ['address_line1', 'address_line2', 'state', 'postal_code', 'country', 'latitude', 'longitude', 'location_method', 'location_updated_at'],
+];
+$columnStmt = $conn->prepare('SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = ?');
+foreach ($locationColumns as $table => $columns) {
+    foreach ($columns as $column) {
+        $columnStmt->bind_param('sss', $dbname, $table, $column);
+        $columnStmt->execute();
+        $columnStmt->bind_result($columnCount);
+        $columnStmt->fetch();
+        $columnStmt->free_result();
+        admin_schema_assert((int) $columnCount === 1, "missing location column {$table}.{$column}");
+    }
+}
+$columnStmt->close();
+
 $result = $conn->query("SELECT username, COUNT(*) AS total FROM users GROUP BY username HAVING COUNT(*) > 1");
 admin_schema_assert($result !== false && $result->num_rows === 0, 'demo usernames must remain unique');
 

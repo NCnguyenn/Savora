@@ -3,6 +3,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../lib/admin_security.php';
 require_once __DIR__ . '/../lib/session_security.php';
+require_once __DIR__ . '/../lib/location_service.php';
+require_once __DIR__ . '/../lib/profile_locations.php';
 
 header('Content-Type: application/json; charset=utf-8');
 savora_start_session();
@@ -44,7 +46,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     } else {
         $orders = [];
     }
-    platform_json(['ok' => true, 'csrfToken' => admin_csrf_token(), 'role' => $role, 'orders' => $orders, 'serverTime' => date(DATE_ATOM)]);
+    platform_json(['ok' => true, 'csrfToken' => admin_csrf_token(), 'role' => $role, 'orders' => $orders, 'location' => $requiredRole ? savora_profile_location($conn, $requiredRole, $userId) : null, 'serverTime' => date(DATE_ATOM)]);
 }
 
 if (!admin_verify_csrf((string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) platform_json(['ok' => false, 'message' => 'Secure session expired.'], 403);
@@ -65,7 +67,13 @@ if ($stored) platform_json((array) json_decode((string) $stored['response_json']
 $conn->begin_transaction();
 try {
     $result = [];
-    if ($command === 'place_order' && $role === 'customer') {
+    if ($command === 'save_gps_location' && $requiredRole !== null) {
+        $coordinates = savora_validate_coordinates($payload['latitude'] ?? null, $payload['longitude'] ?? null);
+        $resolved = savora_reverse_geocode($coordinates['latitude'], $coordinates['longitude']);
+        $result = savora_save_gps_location($conn, $requiredRole, $userId, $resolved, $coordinates['latitude'], $coordinates['longitude']);
+    } elseif ($command === 'save_manual_location' && $requiredRole !== null) {
+        $result = savora_save_manual_location($conn, $requiredRole, $userId, $payload);
+    } elseif ($command === 'place_order' && $role === 'customer') {
         $reference = mb_substr((string) ($payload['id'] ?? ''), 0, 40);
         $address = mb_substr(trim((string) ($payload['address'] ?? '')), 0, 500);
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
