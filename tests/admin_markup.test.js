@@ -88,3 +88,16 @@ test('Admin stylesheet defines the approved palette and responsive behavior', ()
   }
 });
 
+test('Admin can read role GPS addresses without receiving GPS controls', () => {
+  const repository = read('lib/admin_repository.php');
+  const customer = read('admin_customers.php');
+  const driver = read('admin_drivers.php');
+  const restaurant = read('admin_restaurants.php');
+  for (const column of ['latitude', 'longitude', 'location_method', 'location_updated_at']) assert.match(repository, new RegExp(column));
+  for (const page of [customer, driver, restaurant]) {
+    assert.match(page, /GPS address/);
+    assert.match(page, /location_address/);
+    assert.doesNotMatch(page, /data-use-current-location|data-profile-use-gps|data-use-driver-gps/);
+  }
+});
+
