@@ -83,3 +83,26 @@ test('product details render restaurant description, tags, and ingredient metada
   assert.match(page, /item\.allergens/);
   assert.match(page, /item\.ingredients/);
 });
+
+test('category labels stay paired with their own IDs and brand paths stay local', () => {
+  const catalog = require(path.join(root, 'js/customer_catalog.js'));
+  catalog.replaceRecords([
+    {
+      publicId: 'food-1', name: 'Cao Lau', category: 'Regional Noodles', itemType: 'food', basePrice: 14,
+      restaurant: { id: 7, publicId: 'demo-hoi-an-garden', name: 'Hoi An Garden', cuisine: 'Vietnamese', slogan: 'Regional flavors in full bloom.', logoPath: 'assets/images/brands/hoi-an-garden.svg' }
+    },
+    {
+      publicId: 'drink-1', name: 'Lotus Tea', category: 'Tea', itemType: 'drink', basePrice: 4,
+      restaurant: { id: 7, publicId: 'demo-hoi-an-garden', name: 'Hoi An Garden', cuisine: 'Vietnamese', slogan: 'Regional flavors in full bloom.', logoPath: 'assets/images/brands/hoi-an-garden.svg' }
+    }
+  ]);
+  assert.deepEqual(catalog.categories, [
+    { id: 'regional-noodles', label: 'Regional Noodles' },
+    { id: 'tea', label: 'Tea' }
+  ]);
+  assert.equal(catalog.products['drink-1'].itemType, 'drink');
+  assert.equal(catalog.products['drink-1'].restaurantPublicId, 'demo-hoi-an-garden');
+  assert.equal(catalog.restaurants['Hoi An Garden'].publicId, 'demo-hoi-an-garden');
+  assert.equal(catalog.logoFor(catalog.restaurants['Hoi An Garden']), 'assets/images/brands/hoi-an-garden.svg');
+  assert.match(catalog.logoFor({ logoPath: 'https://invalid.example/logo.svg' }), /restaurant-placeholder\.svg$/);
+});
