@@ -36,8 +36,32 @@
     button.dataset.command = next ? next[0] : '';
     button.dataset.deliveryId = String(delivery.deliveryId);
     button.dataset.deliveryVersion = String(delivery.version);
+    const proof = doc.querySelector('[data-delivery-proof]');
+    if (proof) proof.hidden = delivery.status !== 'picked_up';
     setText('[data-banner-title]', delivery.status === 'picked_up' ? `Deliver to ${delivery.customerName}.` : `${delivery.restaurantName} is ready for pickup.`);
     setText('[data-banner-copy]', delivery.status === 'picked_up' ? `Drop off at ${delivery.dropoffAddress}.` : `Navigate to ${delivery.pickupAddress}.`);
+  }
+
+  async function uploadEvidence(delivery) {
+    const input = doc.getElementById('driver-delivery-proof');
+    const status = doc.querySelector('[data-delivery-proof-status]');
+    const file = input && input.files && input.files[0];
+    if (!file) throw new Error('Choose a proof-of-delivery photo or PDF.');
+    const form = new FormData();
+    form.append('deliveryId', String(delivery.deliveryId));
+    form.append('type', 'photo');
+    form.append('evidence', file, file.name);
+    if (status) status.textContent = 'Uploading and verifying proof...';
+    const response = await root.fetch('api/delivery_evidence.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': root.SavoraCsrfToken || '', 'Idempotency-Key': key(`evidence-${delivery.deliveryId}`) },
+      body: form
+    });
+    let payload;
+    try { payload = await response.json(); } catch (_) { payload = { ok: false, message: 'Invalid server response.' }; }
+    if (!response.ok || !payload.ok) throw new Error(payload.message || 'Proof of delivery could not be uploaded.');
+    if (status) status.textContent = 'Proof verified by the server.';
+    return Number(payload.data && payload.data.evidenceId);
   }
 
   function renderDelivery(delivery) {
@@ -75,7 +99,8 @@
     if (!command || !activeDelivery) return;
     button.disabled = true;
     try {
-      await Api.post('api/dispatch.php', { command, payload: { deliveryId: Number(activeDelivery.deliveryId), expectedVersion: Number(activeDelivery.version), evidence: [] } }, key(`${command}-${activeDelivery.deliveryId}`));
+      const evidenceIds = command === 'record_completion' ? [await uploadEvidence(activeDelivery)] : [];
+      await Api.post('api/dispatch.php', { command, payload: { deliveryId: Number(activeDelivery.deliveryId), expectedVersion: Number(activeDelivery.version), evidenceIds } }, key(`${command}-${activeDelivery.deliveryId}`));
       ui.showToast('Delivery status saved by the server.'); await refresh();
     } catch (error) { button.disabled = false; ui.showToast(error.message || 'The server rejected this delivery update.', 'error'); }
   });

@@ -326,7 +326,8 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(operations, /<h1[^>]*>\s*Operations &amp; Opening Hours\s*<\/h1>/);
   for (const hook of ['data-store-status', 'data-weekly-hours', 'data-copy-hours', 'data-special-hours', 'data-operations-preview']) assert.match(operations, new RegExp(hook));
   assert.match(operations, /name="accepting-orders"/);
-  assert.match(controller, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(controller, /locationClient\.getPosition/);
+  assert.match(controller, /api\/location\.php/);
   assert.match(controller, /data-address-feedback/);
   assert.match(controller, /SavoraApi\.get\('api\/catalog\.php\?scope=restaurant'\)/);
   assert.match(controller, /SavoraApi\.post\('api\/catalog\.php'/);
@@ -337,6 +338,7 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
   assert.doesNotMatch(controller, /permission granted/i, 'geolocation must not claim permission before a success callback');
+  assert.doesNotMatch(controller, /watchPosition|savora:platform-state|localStorage/);
 });
 
 test('Analytics and review routes provide accessible local insight and bounded reply controls', () => {

@@ -18,8 +18,11 @@ function delivery_test_expect(bool $condition, string $message): void
 $conn = null;
 $ids = [];
 $prefix = 'task16-delivery-' . bin2hex(random_bytes(5));
+$uploadRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $prefix;
 
 try {
+    if (!mkdir($uploadRoot, 0700, true) && !is_dir($uploadRoot)) throw new RuntimeException('Delivery evidence upload root could not be created.');
+    putenv('SAVORA_UPLOAD_ROOT=' . $uploadRoot);
     $conn = savora_test_database();
     $password = password_hash('delivery-test', PASSWORD_DEFAULT);
     $user = $conn->prepare("INSERT INTO users(username,password,role,full_name,status) VALUES(?,?,?,?, 'active')");
@@ -62,11 +65,17 @@ try {
     $conn->query("UPDATE deliveries SET proof_required=1 WHERE id=" . $deliveryId);
     $missingEvidence = delivery_record_completion($conn, $driver, $deliveryId, 3, $prefix . '-complete-missing', []);
     delivery_test_expect(($missingEvidence['status'] ?? 0) === 422, 'Configured proof-of-delivery must be required.');
-    $evidence = [[
+    $forgedEvidence = [[
         'type' => 'photo', 'storedPath' => 'proof/' . $prefix . '.jpg', 'mimeType' => 'image/jpeg', 'sizeBytes' => 1024,
         'sha256' => hash('sha256', $prefix), 'capturedAt' => $now,
     ]];
-    $completed = delivery_record_completion($conn, $driver, $deliveryId, 3, $prefix . '-complete', $evidence);
+    $forged = delivery_record_completion($conn, $driver, $deliveryId, 3, $prefix . '-complete-forged', $forgedEvidence);
+    delivery_test_expect(($forged['status'] ?? 0) === 422, 'Client-supplied proof metadata must not complete a delivery.');
+    $source = $uploadRoot . DIRECTORY_SEPARATOR . 'proof-source.png';
+    file_put_contents($source, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true));
+    $storedEvidence = delivery_store_evidence_upload($conn, $driver, $deliveryId, 'photo', ['name' => 'proof.png', 'tmp_name' => $source, 'error' => UPLOAD_ERR_OK, 'size' => filesize($source)]);
+    delivery_test_expect((int) ($storedEvidence['evidenceId'] ?? 0) > 0 && !isset($storedEvidence['storedPath']), 'Verified proof bytes must be stored server-side without exposing paths.');
+    $completed = delivery_record_completion($conn, $driver, $deliveryId, 3, $prefix . '-complete', [(int) $storedEvidence['evidenceId']]);
     delivery_test_expect(($completed['ok'] ?? false) === true && ($completed['data']['status'] ?? '') === 'delivered', 'Picked-up cash delivery should complete with proof.');
     $paymentStatus = (string) ($conn->query("SELECT status FROM payments WHERE order_id={$orderId}")->fetch_assoc()['status'] ?? '');
     delivery_test_expect($paymentStatus === 'paid', 'Cash completion should mark payment collected.');
@@ -100,4 +109,6 @@ try {
         if ($idsToDelete !== []) { $placeholders = implode(',', array_fill(0, count($idsToDelete), '?')); $types = str_repeat('i', count($idsToDelete)); $stmt = $conn->prepare("DELETE FROM users WHERE id IN ({$placeholders})"); $stmt->bind_param($types, ...$idsToDelete); $stmt->execute(); $stmt->close(); }
         $conn->close();
     }
+    if (getenv('SAVORA_UPLOAD_ROOT') === $uploadRoot) putenv('SAVORA_UPLOAD_ROOT');
+    if (is_dir($uploadRoot)) { $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadRoot, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach ($iterator as $item) $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname()); rmdir($uploadRoot); }
 }

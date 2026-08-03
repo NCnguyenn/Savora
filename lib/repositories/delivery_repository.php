@@ -69,3 +69,18 @@ function delivery_repository_add_evidence(mysqli $conn, int $deliveryId, int $up
     $type = (string) $evidence['type']; $path = (string) $evidence['storedPath']; $mime = (string) $evidence['mimeType']; $size = (int) $evidence['sizeBytes']; $sha = (string) $evidence['sha256']; $capturedAt = ($evidence['capturedAt'] ?? null) === null ? null : (string) $evidence['capturedAt'];
     $statement->bind_param('isssissi', $deliveryId, $type, $path, $mime, $size, $sha, $capturedAt, $uploaderId); $statement->execute(); $id = (int) $statement->insert_id; $statement->close(); return $id;
 }
+
+function delivery_repository_evidence_for_completion(mysqli $conn, int $deliveryId, int $uploaderId, array $evidenceIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $evidenceIds), static fn (int $id): bool => $id > 0)));
+    if ($ids === []) return [];
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = 'ii' . str_repeat('i', count($ids));
+    $params = [$deliveryId, $uploaderId, ...$ids];
+    $statement = $conn->prepare("SELECT id,evidence_type,stored_path,mime_type,size_bytes,sha256,captured_at FROM delivery_evidence WHERE delivery_id=? AND uploaded_by=? AND id IN ({$placeholders}) FOR UPDATE");
+    $statement->bind_param($types, ...$params);
+    $statement->execute();
+    $rows = $statement->get_result()->fetch_all(MYSQLI_ASSOC);
+    $statement->close();
+    return $rows;
+}

@@ -70,7 +70,7 @@ try {
             ? delivery_record_pickup($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey)
             : dispatch_result(false, 403, 'Only a Driver can record pickup.'),
         'record_completion', 'delivery_record_completion' => $role === 'driver'
-            ? delivery_record_completion($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey, is_array($payload['evidence'] ?? null) ? $payload['evidence'] : [])
+            ? delivery_record_completion($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey, is_array($payload['evidenceIds'] ?? null) ? $payload['evidenceIds'] : [])
             : dispatch_result(false, 403, 'Only a Driver can record completion.'),
         'fail_delivery', 'delivery_fail' => $role === 'driver'
             ? delivery_fail($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey, (string) ($payload['reason'] ?? ''))

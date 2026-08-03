@@ -10,7 +10,7 @@ $asset = media_find_asset($conn, trim((string) ($_GET['asset'] ?? '')));
 if ($asset === []) { http_response_code(404); exit; }
 $public = $asset['status'] === 'active' && $asset['visibility'] === 'public';
 $admin = false;
-if (($_SESSION['role'] ?? '') === 'admin') {
+if ($asset['status'] === 'active' && ($_SESSION['role'] ?? '') === 'admin') {
     $admin = (bool) (savora_validate_session($conn, $_SESSION, session_id(), 'admin')['ok'] ?? false);
 }
 if (!$public && !$admin) { http_response_code(404); exit; }

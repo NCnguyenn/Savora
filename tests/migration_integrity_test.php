@@ -107,7 +107,7 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations'], 'Migration registry order is incorrect.');
 
 $deleteMigration = $conn->prepare('DELETE FROM schema_migrations WHERE version=?');
 foreach ($versions as $version) { $deleteMigration->bind_param('s', $version); $deleteMigration->execute(); }
@@ -153,6 +153,18 @@ foreach ($expected as $name => [$table, $column, $parent, $parentColumn, $delete
     );
     migration_expect(migration_has_leading_index($conn, $table, $column), "Missing leading index for {$table}.{$column}.");
 }
+
+$conn->query("DELETE FROM schema_migrations WHERE version = '009_delivery_reassignment'");
+migration_drop_constraint($conn, 'deliveries', 'fk_deliveries_order');
+migration_expect(migration_constraint($conn, 'fk_deliveries_order') === null, 'Interrupted reassignment fixture must remove the delivery-order foreign key.');
+migration_expect(savora_apply_migrations($conn) === ['009_delivery_reassignment'], 'Reassignment migration retry must run independently of the removed unique index.');
+$restoredDeliveryForeignKey = migration_constraint($conn, 'fk_deliveries_order');
+migration_expect(
+    $restoredDeliveryForeignKey !== null
+        && [$restoredDeliveryForeignKey['TABLE_NAME'], $restoredDeliveryForeignKey['COLUMN_NAME'], $restoredDeliveryForeignKey['REFERENCED_TABLE_NAME'], $restoredDeliveryForeignKey['REFERENCED_COLUMN_NAME'], $restoredDeliveryForeignKey['DELETE_RULE']]
+            === ['deliveries', 'order_id', 'orders', 'id', 'RESTRICT'],
+    'Reassignment migration retry must restore the delivery-order foreign key after partial MySQL DDL.'
+);
 
 $conn->query("DELETE FROM schema_migrations WHERE version = '002_core_integrity'");
 migration_drop_constraint($conn, 'notifications', 'fk_notifications_user');

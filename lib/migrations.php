@@ -20,6 +20,7 @@ function savora_migrations(): array
         '013_rate_limits' => __DIR__ . '/../database/migrations/013_rate_limits.php',
         '014_partner_document_storage' => __DIR__ . '/../database/migrations/014_partner_document_storage.php',
         '015_auth_onboarding' => __DIR__ . '/../database/migrations/015_auth_onboarding.php',
+        '016_profile_locations' => __DIR__ . '/../database/migrations/016_profile_locations.php',
     ];
 }
 

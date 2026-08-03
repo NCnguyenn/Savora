@@ -57,6 +57,7 @@
                             <div class="driver-location-settings-actions">
                                 <button class="driver-coral-action" type="button" data-profile-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current GPS location</button>
                             </div>
+                            <p class="driver-location-attribution">Powered by Geoapify for GPS-assisted addresses. You can always enter an address manually.</p>
                             <p class="driver-location-enabled" data-location-access><i class="fa-solid fa-circle-check" aria-hidden="true"></i>Manual location enabled</p>
                         </div>
                         <div class="driver-profile-map" role="img" aria-label="Driver service area preview">

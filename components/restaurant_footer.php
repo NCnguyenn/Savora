@@ -3,6 +3,7 @@
     <div id="restaurant-toast-container" class="restaurant-toast-container" aria-live="polite" aria-atomic="true"></div>
     <script src="js/restaurant_state.js"></script>
     <script src="js/api_client.js"></script>
+    <script src="js/location_client.js"></script>
     <script src="js/restaurant_ui.js"></script>
     <script src="js/notifications.js"></script>
     <?php $sessionHeartbeatCsrfToken = (string) ($_SESSION['admin_csrf'] ?? ''); ?>

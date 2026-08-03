@@ -12,7 +12,7 @@
             <div class="checkout-form-column">
                 <section class="surface-card checkout-section" aria-labelledby="delivery-heading">
                     <div class="checkout-section-heading"><span aria-hidden="true"><i class="fa-solid fa-location-dot"></i></span><div><h2 id="delivery-heading">Saved delivery address</h2><p>Checkout uses an address already saved to your account.</p></div></div>
-                    <div class="form-group"><label for="checkout-address">Address</label><textarea id="checkout-address" name="address" rows="3" maxlength="300" required readonly aria-describedby="checkout-address-help checkout-address-error"></textarea><p id="checkout-address-help" class="form-help">Update delivery addresses from your <a href="customer_profile.php">Profile</a>.</p><p id="checkout-address-error" class="field-error" aria-live="polite"></p></div>
+                    <div class="form-group"><label for="checkout-address">Address</label><textarea id="checkout-address" name="address" rows="3" maxlength="300" required readonly aria-describedby="checkout-address-help checkout-address-error"></textarea><button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button><p id="checkout-address-help" class="form-help">Update delivery addresses from your <a href="customer_profile.php">Profile</a>. Powered by Geoapify for GPS-assisted addresses.</p><p class="form-help" data-customer-location-status aria-live="polite"></p><p id="checkout-address-error" class="field-error" aria-live="polite"></p></div>
                     <div class="form-group"><label for="checkout-note">Delivery note <span>(optional)</span></label><textarea id="checkout-note" name="note" rows="3" maxlength="120" aria-describedby="checkout-note-count" placeholder="e.g. Leave at the front desk"></textarea><p id="checkout-note-count" class="form-help align-right">0/120</p></div>
                 </section>
                 <section class="surface-card checkout-section" aria-labelledby="payment-heading">
@@ -63,10 +63,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderQuote(result); SavoraApi.clearIntentKey('customer-checkout-quote');
         promoStatus.textContent = promo.value.trim() ? 'Promotion eligibility and totals were confirmed by the server.' : 'Server quote refreshed.';
     }
+    function renderSelectedAddress() {
+        const selectedAddress = (snapshot && snapshot.addresses || []).find(item => item.isDefault) || (snapshot && snapshot.addresses || [])[0];
+        address.value = selectedAddress ? [selectedAddress.addressLine1, selectedAddress.city].filter(Boolean).join(', ') : '';
+    }
+    async function refreshAfterLocationChange() {
+        snapshot = await SavoraApi.get('api/profile.php');
+        renderSelectedAddress();
+        SavoraApi.clearIntentKey('customer-checkout-quote');
+        await requestQuote();
+    }
+    document.addEventListener('savora:customer-location-changed', () => {
+        refreshAfterLocationChange().catch(error => { feedback.textContent = error.message || 'Delivery quote was not refreshed.'; submit.disabled = true; });
+    });
     try {
         snapshot = await SavoraApi.get('api/profile.php');
-        const selectedAddress = (snapshot.addresses || []).find(item => item.isDefault) || (snapshot.addresses || [])[0];
-        if (selectedAddress) address.value = [selectedAddress.addressLine1, selectedAddress.city].filter(Boolean).join(', ');
+        renderSelectedAddress();
         setText('checkout-wallet-balance', `Balance: ${money(snapshot.wallet && snapshot.wallet.balance)}`);
         if (!stateApi.load().cart.length) { ui.showToast('Your cart is empty.'); window.location.replace('customer_cart.php'); return; }
         await requestQuote();

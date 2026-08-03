@@ -36,6 +36,8 @@ test('Partner commands transfer claims and media without a legal-document gate',
   assert.match(actions, /registration_repository_release_claims/);
   assert.match(actions, /media_transfer/);
   assert.match(actions, /media_revoke/);
+  assert.match(actions, /media_delete_file/);
+  assert.ok(actions.indexOf('media_delete_file') > actions.indexOf('$conn->commit()'), 'revoked files must be deleted only after the database decision commits');
   assert.match(actions, /restaurant_weekly_hours/);
   assert.doesNotMatch(actions, /required document|verification_status|changes_requested/i);
 });

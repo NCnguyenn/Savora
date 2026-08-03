@@ -26,6 +26,7 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
     }
 
     $hash = savora_idempotency_hash($action, $payload);
+    $revokedPaths = [];
     $conn->begin_transaction();
     try {
         $stored = savora_idempotency_find($conn, $actorId, $idempotencyKey, $action, $hash);
@@ -96,7 +97,10 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
                 $media->execute();
                 $assets = $media->get_result()->fetch_all(MYSQLI_ASSOC);
                 $media->close();
-                foreach ($assets as $asset) media_revoke($conn, (int) $asset['id']);
+                foreach ($assets as $asset) {
+                    $revokedPath = media_revoke($conn, (int) $asset['id']);
+                    if (is_string($revokedPath) && $revokedPath !== '') $revokedPaths[] = $revokedPath;
+                }
             }
         }
 
@@ -113,6 +117,10 @@ function admin_partner_application_action(mysqli $conn, string $action, array $p
         $response = ['ok' => true, 'message' => ucfirst($role) . ' application ' . $decision . '.', 'data' => ['application_id' => $applicationId, 'status' => $decision, 'user_id' => $newUserId, 'profile_id' => $profileId, 'version' => $expectedVersion + 1], 'referenceId' => $referenceId];
         savora_idempotency_store($conn, $actorId, $idempotencyKey, $action, $hash, $response);
         $conn->commit();
+        foreach ($revokedPaths as $revokedPath) {
+            try { media_delete_file($revokedPath); }
+            catch (Throwable $cleanupError) { error_log('Savora media cleanup failed after partner rejection: ' . $cleanupError->getMessage()); }
+        }
         return $response;
     } catch (Throwable $exception) {
         $conn->rollback();

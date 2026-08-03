@@ -27,6 +27,8 @@
 
     <script src="js/driver_state.js"></script>
     <script src="js/api_client.js"></script>
+    <script src="js/location_client.js"></script>
+    <script src="js/driver_location.js"></script>
     <script src="js/driver_ui.js"></script>
     <script src="js/notifications.js"></script>
     <?php

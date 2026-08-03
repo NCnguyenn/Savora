@@ -47,6 +47,9 @@
                     <div class="form-field profile-address-field">
                         <label for="profile-address">Delivery address</label>
                         <textarea id="profile-address" name="address" autocomplete="street-address" rows="3" maxlength="200" placeholder="Street and building"></textarea>
+                        <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                        <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
+                        <p class="form-help" data-customer-location-status aria-live="polite"></p>
                     </div>
                     <div class="form-field"><label for="profile-address-label">Address label</label><input id="profile-address-label" name="addressLabel" maxlength="80" value="Home"></div>
                     <div class="form-field"><label for="profile-city">City</label><input id="profile-city" name="city" maxlength="100" autocomplete="address-level2"></div>
@@ -136,6 +139,10 @@
             renderSnapshot(await SavoraApi.get('api/profile.php'));
         }
 
+        document.addEventListener('savora:customer-location-changed', () => {
+            hydrate().catch(error => { saveStatus.textContent = error.message || 'Profile location was not refreshed.'; });
+        });
+
         try { await hydrate(); }
         catch (error) { saveStatus.textContent = error.message || 'Profile is unavailable.'; form.querySelector('button[type="submit"]').disabled = true; return; }
 
@@ -144,6 +151,7 @@
             if (!form.reportValidity()) return;
             const profileScope = 'customer-profile';
             const addressScope = `customer-address-${addressPublicId}`;
+            const locationScope = 'customer-profile-manual-location';
             try {
                 await SavoraApi.post('api/profile.php', { action: 'update_profile', payload: {
                     fullName: fullNameInput.value.trim(), email: emailInput.value.trim(), phone: phoneInput.value.trim(), version: snapshot.profile.version
@@ -153,8 +161,11 @@
                     addressLine1: addressInput.value.trim(), city: cityInput.value.trim(), latitude: Number(latitudeInput.value), longitude: Number(longitudeInput.value),
                     isDefault: true, version: ((snapshot.addresses || []).find(item => item.publicId === addressPublicId) || {}).version || 0
                 } }, SavoraApi.intentKey(addressScope));
+                if (window.SavoraLocationClient) {
+                    await window.SavoraLocationClient.saveManual(SavoraApi, { address: addressInput.value.trim() }, SavoraApi.intentKey(locationScope));
+                }
                 await hydrate();
-                SavoraApi.clearIntentKey(profileScope); SavoraApi.clearIntentKey(addressScope);
+                SavoraApi.clearIntentKey(profileScope); SavoraApi.clearIntentKey(addressScope); SavoraApi.clearIntentKey(locationScope);
                 saveStatus.textContent = 'Profile and delivery address refreshed from the server.';
                 SavoraUI.showToast('Profile and address saved.');
             } catch (error) { saveStatus.textContent = error.message || 'Profile was not saved.'; }

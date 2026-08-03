@@ -7,6 +7,15 @@ require_once __DIR__ . '/notification_service.php';
 require_once __DIR__ . '/../repositories/order_repository.php';
 require_once __DIR__ . '/../repositories/delivery_repository.php';
 require_once __DIR__ . '/dispatch_service.php';
+require_once __DIR__ . '/media_service.php';
+
+const SAVORA_DELIVERY_EVIDENCE_MAX_BYTES = 20 * 1024 * 1024;
+const SAVORA_DELIVERY_EVIDENCE_MIMES = [
+    'image/jpeg' => 'jpg',
+    'image/png' => 'png',
+    'image/webp' => 'webp',
+    'application/pdf' => 'pdf',
+];
 
 function delivery_result(bool $ok, int $status, string $message, array $data = []): array
 {
@@ -29,6 +38,83 @@ function delivery_idempotent_result(mysqli $conn, int $actorId, string $key, str
 function delivery_store_result(mysqli $conn, int $actorId, string $key, string $action, array $payload, array $result): void
 {
     if ($key !== '') savora_idempotency_store($conn, $actorId, $key, $action, savora_idempotency_hash($action, $payload), $result);
+}
+
+function delivery_store_evidence_upload(mysqli $conn, int $driverUserId, int $deliveryId, string $type, array $file, string $idempotencyKey = ''): array
+{
+    if ($driverUserId <= 0 || $deliveryId <= 0 || !in_array($type, ['photo', 'signature', 'document'], true)) {
+        throw new InvalidArgumentException('Delivery evidence scope is invalid.');
+    }
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error !== UPLOAD_ERR_OK) throw new InvalidArgumentException('Delivery evidence upload failed.');
+    $source = (string) ($file['tmp_name'] ?? '');
+    if ($source === '' || !is_file($source) || (PHP_SAPI !== 'cli' && !is_uploaded_file($source))) throw new InvalidArgumentException('Delivery evidence upload is invalid.');
+    $size = (int) filesize($source);
+    if ($size <= 0 || $size > SAVORA_DELIVERY_EVIDENCE_MAX_BYTES) throw new InvalidArgumentException('Delivery evidence must be 20 MB or smaller.');
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? (string) finfo_file($finfo, $source) : '';
+    if ($finfo) finfo_close($finfo);
+    if (!isset(SAVORA_DELIVERY_EVIDENCE_MIMES[$mime])) throw new InvalidArgumentException('Delivery evidence must be a JPEG, PNG, WebP, or PDF file.');
+    $extension = strtolower((string) pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $expectedExtension = SAVORA_DELIVERY_EVIDENCE_MIMES[$mime];
+    $extensionMatches = $mime === 'image/jpeg' ? in_array($extension, ['jpg', 'jpeg'], true) : $extension === $expectedExtension;
+    if (!$extensionMatches) throw new InvalidArgumentException('Delivery evidence extension does not match its content.');
+    $sha256 = hash_file('sha256', $source);
+    if (!is_string($sha256) || !preg_match('/^[a-f0-9]{64}$/', $sha256)) throw new RuntimeException('Delivery evidence could not be hashed.');
+    $action = 'upload_delivery_evidence';
+    $payload = ['deliveryId' => $deliveryId, 'type' => $type, 'sha256' => $sha256, 'sizeBytes' => $size, 'mimeType' => $mime];
+
+    $relative = 'delivery-evidence/' . date('Y/m') . '/' . bin2hex(random_bytes(18)) . '.' . $expectedExtension;
+    $absolute = media_safe_absolute_path($relative);
+    $directory = dirname($absolute);
+    if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) throw new RuntimeException('Delivery evidence directory could not be created.');
+
+    $conn->begin_transaction();
+    try {
+        if ($idempotencyKey !== '') {
+            $stored = savora_idempotency_find($conn, $driverUserId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload));
+            if ($stored !== null) { $conn->commit(); return is_array($stored['data'] ?? null) ? $stored['data'] : []; }
+        }
+        $delivery = delivery_repository_delivery($conn, $deliveryId, true);
+        if ($delivery === [] || (int) $delivery['driver_user_id'] !== $driverUserId || $delivery['superseded_at'] !== null) throw new RuntimeException('Driver is not assigned to this delivery.');
+        if ((string) $delivery['status'] !== 'picked_up' || (string) $delivery['order_status'] !== 'picked_up') throw new RuntimeException('Proof can only be uploaded for a picked-up delivery.');
+        $moved = PHP_SAPI === 'cli' ? rename($source, $absolute) : move_uploaded_file($source, $absolute);
+        if (!$moved) throw new RuntimeException('Delivery evidence could not be stored.');
+        @chmod($absolute, 0600);
+        $evidenceId = delivery_repository_add_evidence($conn, $deliveryId, $driverUserId, [
+            'type' => $type,
+            'storedPath' => $relative,
+            'mimeType' => $mime,
+            'sizeBytes' => $size,
+            'sha256' => $sha256,
+            'capturedAt' => delivery_server_now($conn),
+        ]);
+        $result = ['evidenceId' => $evidenceId, 'type' => $type, 'mimeType' => $mime, 'sizeBytes' => $size, 'sha256' => $sha256];
+        if ($idempotencyKey !== '') savora_idempotency_store($conn, $driverUserId, $idempotencyKey, $action, savora_idempotency_hash($action, $payload), ['ok' => true, 'status' => 201, 'message' => 'Delivery evidence uploaded.', 'data' => $result]);
+        $conn->commit();
+        return $result;
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        if (is_file($absolute)) @unlink($absolute);
+        throw $exception;
+    }
+}
+
+function delivery_verified_evidence(mysqli $conn, int $deliveryId, int $driverUserId, array $evidenceIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map(static fn (mixed $id): int => is_int($id) || (is_string($id) && ctype_digit($id)) ? (int) $id : 0, $evidenceIds), static fn (int $id): bool => $id > 0)));
+    if (count($ids) !== count($evidenceIds)) throw new InvalidArgumentException('Proof identifiers are invalid.');
+    $rows = delivery_repository_evidence_for_completion($conn, $deliveryId, $driverUserId, $ids);
+    if (count($rows) !== count($ids)) throw new InvalidArgumentException('Proof does not belong to this delivery.');
+    foreach ($rows as $row) {
+        $absolute = media_safe_absolute_path((string) $row['stored_path']);
+        $size = is_file($absolute) ? (int) filesize($absolute) : 0;
+        $sha256 = $size > 0 ? hash_file('sha256', $absolute) : false;
+        if ($size !== (int) $row['size_bytes'] || !is_string($sha256) || !hash_equals((string) $row['sha256'], $sha256)) {
+            throw new RuntimeException('Stored proof could not be verified.');
+        }
+    }
+    return $rows;
 }
 
 function driver_update_location(mysqli $conn, int $driverUserId, float $latitude, float $longitude, ?float $accuracyMeters, string $recordedAt, int $expectedVersion = 0, string $idempotencyKey = '', ?int $deliveryId = null): array
@@ -78,15 +164,13 @@ function delivery_transition(mysqli $conn, int $driverUserId, int $deliveryId, i
         elseif ($nextStatus === 'delivered' && (int) $delivery['proof_required'] === 1 && $evidence === []) $result = delivery_result(false, 422, 'Proof of delivery is required.');
         else {
             $validEvidence = [];
-            foreach ($evidence as $item) {
-                if (!is_array($item) || !preg_match('/\A(photo|signature|document)\z/', (string) ($item['type'] ?? '')) || !preg_match('/\A(?:image\/(?:jpeg|png)|application\/pdf)\z/', (string) ($item['mimeType'] ?? '')) || !preg_match('/\A[a-f0-9]{64}\z/i', (string) ($item['sha256'] ?? '')) || !preg_match('/\A(?![A-Za-z]:|\/|\\\\)[A-Za-z0-9._\/-]{1,500}\z/', (string) ($item['storedPath'] ?? '')) || (int) ($item['sizeBytes'] ?? 0) <= 0 || (int) ($item['sizeBytes'] ?? 0) > 20 * 1024 * 1024) { $result = delivery_result(false, 422, 'Proof metadata is invalid.'); break; }
-                $validEvidence[] = $item;
-            }
+            try { if ($nextStatus === 'delivered' && $evidence !== []) $validEvidence = delivery_verified_evidence($conn, $deliveryId, $driverUserId, $evidence); }
+            catch (InvalidArgumentException $exception) { $result = delivery_result(false, 422, $exception->getMessage()); }
+            catch (RuntimeException $exception) { $result = delivery_result(false, 409, $exception->getMessage()); }
             if (!isset($result)) {
                 if (!delivery_repository_update_status($conn, $deliveryId, $nextStatus, $expectedVersion, $fromStatus === 'assigned', $nextStatus === 'delivered')) $result = delivery_result(false, 409, 'Delivery changed. Refresh before retrying.');
                 else {
                     delivery_repository_add_milestone($conn, $deliveryId, $nextStatus, $driverUserId, $reason);
-                    foreach ($validEvidence as $item) delivery_repository_add_evidence($conn, $deliveryId, $driverUserId, $item);
                     $nextOrderVersion = (int) $delivery['order_version'];
                     if ($orderStatus !== null) {
                         $orderUpdate = $conn->prepare('UPDATE orders SET status=?,version=version+1 WHERE id=? AND version=?'); $orderId = (int) $delivery['order_id']; $orderUpdate->bind_param('sii', $orderStatus, $orderId, $nextOrderVersion); $orderUpdate->execute(); $orderUpdate->close();

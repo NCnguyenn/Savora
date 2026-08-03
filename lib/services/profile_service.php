@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../idempotency.php';
 require_once __DIR__ . '/../repositories/profile_repository.php';
+require_once __DIR__ . '/../repositories/registration_repository.php';
 
 function profile_error(int $status, string $message, array $errors = []): array
 {
@@ -219,14 +220,16 @@ function profile_update_driver_contact_mutation(mysqli $conn, int $userId, array
     $version = (int) $driver['version']; if ($version !== $expectedVersion) return profile_error(409, 'Driver profile version is stale.');
     try {
         $fullName = profile_text($input['fullName'] ?? $driver['full_name'], 120, 'Full name', true);
-        $email = profile_text($input['email'] ?? ($driver['email'] ?? ''), 190, 'Email address', true);
+        $email = mb_strtolower(profile_text($input['email'] ?? ($driver['email'] ?? ''), 190, 'Email address', true));
         $phone = profile_text($input['phone'] ?? ($driver['phone'] ?? ''), 40, 'Phone number');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return profile_error(422, 'Email address is invalid.');
+        registration_repository_replace_claim($conn, 'email', $email, 'user', $userId);
         $update = $conn->prepare('UPDATE driver_profiles SET version=version+1 WHERE user_id=? AND version=?'); $update->bind_param('ii', $userId, $expectedVersion); $update->execute(); $affected = $update->affected_rows; $update->close();
         if ($affected !== 1) return profile_error(409, 'Driver profile changed. Refresh before retrying.');
         $user = $conn->prepare("UPDATE users SET full_name=?,email=?,phone=?,version=version+1 WHERE id=? AND role='driver' AND status='active'"); $user->bind_param('sssi', $fullName, $email, $phone, $userId); $user->execute(); $user->close();
         return profile_success(['fullName' => $fullName, 'email' => $email, 'phone' => $phone, 'version' => $expectedVersion + 1], 'Driver contact saved.');
     } catch (InvalidArgumentException $exception) { return profile_error(422, $exception->getMessage()); }
+    catch (mysqli_sql_exception $exception) { return profile_error((int) $exception->getCode() === 1062 ? 409 : 500, (int) $exception->getCode() === 1062 ? 'Email address is already in use.' : 'Driver contact could not be saved.'); }
 }
 
 function profile_update_driver_contact(mysqli $conn, int $userId, array $input, int $expectedVersion): array

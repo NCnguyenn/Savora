@@ -56,3 +56,12 @@ test('auth onboarding migration is registered after partner document storage', (
   assert.ok(onboarding > partnerStorage, 'auth onboarding migration must follow partner storage');
   assert.match(registry, /database\/migrations\/015_auth_onboarding\.php/);
 });
+
+test('profile location migration is registered after auth onboarding', () => {
+  const registry = fs.readFileSync('lib/migrations.php', 'utf8');
+  const onboarding = registry.indexOf("'015_auth_onboarding'");
+  const profileLocations = registry.indexOf("'016_profile_locations'");
+  assert.ok(onboarding >= 0, 'auth onboarding migration must be registered');
+  assert.ok(profileLocations > onboarding, 'profile location migration must follow auth onboarding');
+  assert.match(registry, /database\/migrations\/016_profile_locations\.php/);
+});

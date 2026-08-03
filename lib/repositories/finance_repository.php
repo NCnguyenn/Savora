@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 function finance_repository_one(mysqli $conn, string $sql, string $types = '', array $params = []): array { $stmt=$conn->prepare($sql); if($types!=='')$stmt->bind_param($types,...$params); $stmt->execute(); $row=$stmt->get_result()->fetch_assoc()?:[]; $stmt->close(); return $row; }
-function finance_repository_case(mysqli $conn, int $caseId, bool $forUpdate=false): array { $sql='SELECT * FROM support_cases WHERE id=? LIMIT 1'; if($forUpdate)$sql.=' FOR UPDATE'; return finance_repository_one($conn,$sql,'i',[$caseId]); }
+function finance_repository_case(mysqli $conn, int $caseId, bool $forUpdate=false): array { $sql='SELECT c.*,o.customer_user_id FROM support_cases c JOIN orders o ON o.id=c.order_id WHERE c.id=? LIMIT 1'; if($forUpdate)$sql.=' FOR UPDATE'; return finance_repository_one($conn,$sql,'i',[$caseId]); }
 function finance_repository_payment(mysqli $conn, int $orderId, bool $forUpdate=false): array { $sql='SELECT * FROM payments WHERE order_id=? LIMIT 1'; if($forUpdate)$sql.=' FOR UPDATE'; return finance_repository_one($conn,$sql,'i',[$orderId]); }
 function finance_repository_refunded(mysqli $conn, int $orderId): float { $row=finance_repository_one($conn,'SELECT COALESCE(SUM(amount),0) AS total FROM refunds WHERE order_id=?','i',[$orderId]); return (float)($row['total']??0); }
 function finance_repository_payout(mysqli $conn, int $payoutId, bool $forUpdate=false): array { $sql='SELECT * FROM payouts WHERE id=? LIMIT 1'; if($forUpdate)$sql.=' FOR UPDATE'; return finance_repository_one($conn,$sql,'i',[$payoutId]); }

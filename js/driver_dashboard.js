@@ -105,25 +105,7 @@
     await refreshServer(); renderAll();
   }
 
-  doc.querySelector('[data-use-driver-gps]')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    if (!root.navigator.geolocation) { ui.showToast('GPS is unavailable.', 'error'); return; }
-    button.disabled = true;
-    root.navigator.geolocation.getCurrentPosition(async position => {
-      try { await sendGps(position); ui.showToast('GPS location sent to the server.'); }
-      catch (error) { ui.showToast(error.message || 'Server rejected the location.', 'error'); }
-      finally { button.disabled = false; }
-    }, () => { button.disabled = false; ui.showToast('Location permission was not granted.', 'error'); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
-  });
-
-  doc.querySelector('[data-enter-driver-address]')?.addEventListener('click', event => ui.openDialog('driver-address-dialog', event.currentTarget));
-  doc.querySelector('[data-driver-address-form]')?.addEventListener('submit', event => {
-    event.preventDefault();
-    const address = String(event.currentTarget.elements['driver-address'].value || '').trim();
-    if (!address) { setText('[data-driver-address-error]', 'Enter an address.'); return; }
-    ui.closeDialog('driver-address-dialog');
-    ui.showToast('Address is kept as a draft; dispatch uses server GPS coordinates.');
-  });
+  root.SavoraDriverDispatchLocation = { sendGps };
 
   (async function initialize() {
     try { await refreshServer(); renderAll(); }

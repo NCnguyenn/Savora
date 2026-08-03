@@ -27,7 +27,6 @@
 
   async function load() { snapshot = await Api.get('api/profile.php'); populate(); }
 
-  doc.querySelector('[data-profile-use-gps]')?.addEventListener('click', () => ui.showToast('GPS updates are sent from Driver Overview to the server.'));
   doc.querySelector('[data-change-password]')?.addEventListener('click', () => ui.showToast('Password changes are managed by Savora account support.'));
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (!snapshot) return;

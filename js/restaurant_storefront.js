@@ -6,6 +6,7 @@
   'use strict';
 
   const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const LOCATION_ENDPOINT = 'api/location.php';
   const dayLabel = day => `${day.slice(0, 1).toUpperCase()}${day.slice(1)}`;
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const create = (tag, attributes = {}, children = []) => {
@@ -69,7 +70,7 @@
     if (host._savoraMap) { host._savoraMap.remove(); host._savoraMap = null; }
     host.replaceChildren();
     host.style.minHeight = '160px';
-    const hasCoordinates = profile.locationMethod === 'current' && profile.latitude !== null && profile.longitude !== null && Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude));
+    const hasCoordinates = profile.locationMethod === 'gps' && profile.latitude !== null && profile.longitude !== null && Number.isFinite(Number(profile.latitude)) && Number.isFinite(Number(profile.longitude));
     if (root.L && hasCoordinates) {
       if (!root.document.querySelector('link[data-local-leaflet]')) root.document.head.append(create('link', { rel: 'stylesheet', href: 'assets/vendor/leaflet/leaflet.css', 'data-local-leaflet': 'true' }));
       const map = root.L.map(host, { zoomControl: true, attributionControl: false }).setView([profile.latitude, profile.longitude], 13);
@@ -90,7 +91,7 @@
     }));
     const hasCoordinates = Number.isFinite(Number(restaurant.latitude)) && Number.isFinite(Number(restaurant.longitude));
     return {
-      profile: { name: text(restaurant.name), cuisine: text(restaurant.cuisine), address: text(restaurant.address), city: text(restaurant.city), phone: text(restaurant.phone), latitude: hasCoordinates ? Number(restaurant.latitude) : null, longitude: hasCoordinates ? Number(restaurant.longitude) : null, locationMethod: hasCoordinates ? 'current' : 'manual', version: Number(restaurant.version || 0) },
+      profile: { name: text(restaurant.name), cuisine: text(restaurant.cuisine), address: text(restaurant.address), city: text(restaurant.city), phone: text(restaurant.phone), latitude: hasCoordinates ? Number(restaurant.latitude) : null, longitude: hasCoordinates ? Number(restaurant.longitude) : null, locationMethod: hasCoordinates ? 'gps' : 'manual', version: Number(restaurant.version || 0) },
       operations: { acceptingOrders: restaurant.acceptingOrders !== false, weeklyHours, specialHours }
     };
   }
@@ -98,14 +99,21 @@
   async function initProfile() {
     const form = root.document.querySelector('[data-store-profile-form]');
     if (!form || !root.SavoraApi) return;
+    const locationClient = root.SavoraLocationClient && root.SavoraLocationClient.endpoint === LOCATION_ENDPOINT
+      ? root.SavoraLocationClient
+      : null;
     const ui = root.SavoraRestaurantUI; let state;
     const feedback = root.document.querySelector('[data-profile-feedback]');
     const addressFeedback = root.document.querySelector('[data-address-feedback]');
     const preview = root.document.querySelector('[data-storefront-preview]');
     const hydrate = async () => {
       state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant'));
+      const savedLocation = locationClient ? await locationClient.load(root.SavoraApi).catch(() => null) : null;
+      if (savedLocation && savedLocation.address) state.profile = { ...state.profile, address: savedLocation.address, city: savedLocation.city || state.profile.city, latitude: savedLocation.latitude, longitude: savedLocation.longitude, locationMethod: savedLocation.locationMethod || 'manual' };
       const profile = state.profile || {};
-      form.dataset.locationMethod = profile.locationMethod === 'current' ? 'current' : 'manual';
+      form.dataset.locationMethod = profile.locationMethod === 'gps' ? 'gps' : 'manual';
+      if (profile.latitude !== null) form.dataset.latitude = String(profile.latitude); else delete form.dataset.latitude;
+      if (profile.longitude !== null) form.dataset.longitude = String(profile.longitude); else delete form.dataset.longitude;
       setInput(form, 'profile-name', profile.name); setInput(form, 'profile-cuisine', profile.cuisine); setInput(form, 'profile-phone', profile.phone);
       setInput(form, 'address-line1', profile.address); setInput(form, 'address-city', profile.city);
       renderProfilePreview(preview, state); renderMap(profile);
@@ -121,20 +129,31 @@
       if (!patch.name) { setMessage(feedback, 'Restaurant name is required.'); fields(form)('profile-name').setAttribute('aria-invalid', 'true'); return; }
       const scope = 'restaurant-profile';
       try {
-        await root.SavoraApi.post('api/catalog.php', { action: 'save_profile', payload: { name: patch.name, cuisine: patch.cuisine, address: patch.address, city: patch.city, phone: patch.phone, latitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.latitude) : null, longitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.longitude) : null, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
+        await root.SavoraApi.post('api/catalog.php', { action: 'save_profile', payload: { name: patch.name, cuisine: patch.cuisine, address: patch.address, city: patch.city, phone: patch.phone, latitude: form.dataset.locationMethod === 'gps' ? Number(form.dataset.latitude) : null, longitude: form.dataset.locationMethod === 'gps' ? Number(form.dataset.longitude) : null, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
+        if (form.dataset.locationMethod !== 'gps' && locationClient) {
+          const locationScope = 'restaurant-location-manual';
+          await locationClient.saveManual(root.SavoraApi, { address: patch.address, addressLine1: patch.address, city: patch.city }, root.SavoraApi.intentKey(locationScope));
+          root.SavoraApi.clearIntentKey(locationScope);
+        }
         await hydrate(); root.SavoraApi.clearIntentKey(scope); setMessage(feedback, 'Store profile refreshed from the server.'); if (ui) ui.showToast('Store profile refreshed from the server.');
       } catch (error) { setMessage(feedback, error.message || 'Store profile was not saved.'); }
     });
     const manual = root.document.querySelector('[data-manual-address]');
     if (manual) manual.addEventListener('click', () => { form.dataset.locationMethod = 'manual'; delete form.dataset.latitude; delete form.dataset.longitude; renderMap({ locationMethod: 'manual' }); setMessage(addressFeedback, 'Enter the address manually, then save your profile.'); fields(form)('address-line1').focus(); });
     const locate = root.document.querySelector('[data-use-current-location]');
-    if (locate) locate.addEventListener('click', () => {
-      if (!root.navigator || !navigator.geolocation) { setMessage(addressFeedback, 'Current location is unavailable in this browser. You can enter the address manually.'); return; }
-      setMessage(addressFeedback, 'Requesting your current location…');
-      navigator.geolocation.getCurrentPosition(position => {
-        form.dataset.locationMethod = 'current'; form.dataset.latitude = String(position.coords.latitude); form.dataset.longitude = String(position.coords.longitude);
-        renderMap({ locationMethod: 'current', latitude: position.coords.latitude, longitude: position.coords.longitude }); setMessage(addressFeedback, 'Current location selected. Save your profile to submit it.');
-      }, () => setMessage(addressFeedback, 'Current location could not be used. You can enter the address manually.'));
+    if (locate) locate.addEventListener('click', async () => {
+      if (!locationClient) { setMessage(addressFeedback, 'Current location is unavailable in this browser. You can enter the address manually.'); return; }
+      locate.disabled = true; locate.setAttribute('aria-busy', 'true'); setMessage(addressFeedback, 'Requesting your current location...');
+      try {
+        const coordinates = await locationClient.getPosition(root.navigator && root.navigator.geolocation);
+        const locationScope = 'restaurant-location-gps';
+        const saved = await locationClient.saveGps(root.SavoraApi, coordinates, root.SavoraApi.intentKey(locationScope));
+        root.SavoraApi.clearIntentKey(locationScope);
+        form.dataset.locationMethod = 'gps'; form.dataset.latitude = String(saved.latitude); form.dataset.longitude = String(saved.longitude);
+        setInput(form, 'address-line1', saved.addressLine1 || saved.address); setInput(form, 'address-city', saved.city);
+        state.profile = { ...state.profile, ...saved, locationMethod: 'gps' }; renderProfilePreview(preview, state); renderMap(state.profile); setMessage(addressFeedback, 'Current address saved by the server.');
+      } catch (error) { setMessage(addressFeedback, error && error.code ? locationClient.messageForGeolocationError(error) : (error.message || 'Current location could not be used. You can enter the address manually.')); }
+      finally { locate.disabled = false; locate.setAttribute('aria-busy', 'false'); }
     });
   }
 

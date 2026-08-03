@@ -466,6 +466,33 @@ test('profile is a labelled server-backed form without a password update claim',
   assert.doesNotMatch(profile, /\balert\s*\(/);
 });
 
+test('Customer location controls are optional, editable, and shared across surfaces', () => {
+  const home = read('customer_dashboard.php');
+  const profile = read('customer_profile.php');
+  const checkout = read('customer_checkout.php');
+  const footer = read('components/customer_footer.php');
+  const controller = read('js/customer_location.js');
+  assert.match(home, /data-customer-location-trigger/);
+  assert.doesNotMatch(home, /123 Tech Park, Block C/);
+  assert.match(footer, /js\/customer_location\.js/);
+  assert.match(controller, /SavoraLocationClient\.getPosition/);
+  assert.match(controller, /SavoraLocationClient\.load/);
+  assert.match(controller, /api\/location\.php/);
+  assert.match(controller, /saveManualAddress/);
+  assert.match(controller, /savora:customer-location-changed/);
+  assert.match(checkout, /savora:customer-location-changed/);
+  assert.match(checkout, /await requestQuote\(\)/);
+  assert.match(home, /id="customer-location-dialog"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  assert.match(home, /data-customer-use-gps/);
+  assert.match(home, /data-customer-location-skip/);
+  assert.match(home, /Powered by Geoapify/);
+  assert.match(profile, /data-customer-use-gps/);
+  assert.match(checkout, /data-customer-use-gps/);
+  assert.match(`${home}\n${profile}\n${checkout}`, /aria-live="polite"/);
+  assert.doesNotMatch(controller, /watchPosition/);
+  assert.doesNotMatch(controller, /SavoraState\.(?:setProfile|persist)|localStorage|savora:platform-state/);
+});
+
 test('wallet uses event-driven safe rendering and an accessible top-up form', () => {
   const wallet = read('customer_wallet.php');
   const css = read('css/customer_style.css');

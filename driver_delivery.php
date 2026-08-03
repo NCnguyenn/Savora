@@ -71,6 +71,12 @@
                 </div>
 
                 <div class="driver-delivery-actions">
+                    <label class="driver-field" data-delivery-proof hidden for="driver-delivery-proof">
+                        <span>Proof of delivery</span>
+                        <input id="driver-delivery-proof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">
+                        <small>Upload a photo or PDF (maximum 20 MB). Savora verifies the file before completing the delivery.</small>
+                    </label>
+                    <p class="driver-field-error" data-delivery-proof-status aria-live="polite"></p>
                     <button class="driver-primary-action" type="button" data-delivery-primary-action disabled>Loading server status…</button>
                     <button class="driver-danger-action" type="button" data-report-issue aria-controls="driver-issue-dialog">Report an issue</button>
                 </div>

@@ -34,3 +34,20 @@ test('dispatch service exposes exclusive offer lifecycle and safe offer fields',
   assert.match(repo, /distance/);
   assert.doesNotMatch(service, /password|password_hash|customer_phone/);
 });
+
+test('proof of delivery is uploaded as verified multipart bytes before completion', () => {
+  const upload = read('api/delivery_evidence.php');
+  const dispatch = read('api/dispatch.php');
+  const controller = read('js/driver_delivery.js');
+  assert.match(upload, /savora_request_actor\(\$conn, \['driver'\]\)/);
+  assert.match(upload, /savora_require_csrf/);
+  assert.match(upload, /savora_require_idempotency_key/);
+  assert.match(upload, /\$_FILES\['evidence'\]/);
+  assert.match(upload, /delivery_store_evidence_upload/);
+  assert.match(upload, /finally\s*\{[\s\S]*savora_idempotency_unlock[\s\S]*\}\s*if \(\$httpError !== null\) savora_error/);
+  assert.match(dispatch, /evidenceIds/);
+  assert.doesNotMatch(dispatch, /storedPath|mimeType|sha256|sizeBytes/);
+  assert.match(controller, /FormData/);
+  assert.match(controller, /api\/delivery_evidence\.php/);
+  assert.match(controller, /evidenceIds/);
+});

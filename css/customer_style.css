@@ -168,9 +168,12 @@ h3 { font-size: 1rem; line-height: 1.35; }
   border-radius: 1rem; background: rgba(255, 255, 255, .96); box-shadow: 0 12px 32px rgba(4, 41, 30, .12);
 }
 .search-field, .delivery-location { min-width: 0; display: flex; align-items: center; gap: .75rem; padding: .8rem 1rem; }
+.delivery-location { width: 100%; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.delivery-location:hover { background: rgba(225, 238, 220, .55); }
 .search-field { border-right: 1px solid var(--savora-line); }
 .search-field input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; }
 .delivery-location span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; font-weight: 800; }
+.delivery-location strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .delivery-location small { display: block; color: var(--savora-muted); font-size: .7rem; font-weight: 700; }
 .discovery-search .primary-action { margin: .35rem; border-radius: .75rem; }
 .discovery-hero .category-row { gap: .65rem; }
@@ -580,6 +583,13 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .form-field input, .form-field textarea, .form-field select { display: block; width: 100%; max-width: 100%; min-height: 2.8rem; padding: .7rem .8rem; border: 1px solid var(--savora-line); border-radius: .7rem; color: var(--savora-ink); background: #fff; }
 .form-field textarea { min-height: 5.5rem; resize: vertical; }
 .profile-address-field { grid-column: 1 / -1; }
+.profile-location-actions, .checkout-location-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .65rem; }
+.profile-location-actions .form-help, .checkout-location-actions .form-help { margin: 0; }
+.customer-location-dialog-panel form { display: grid; gap: .85rem; padding: 1.25rem; }
+.customer-location-dialog-panel .form-field { display: grid; gap: .45rem; }
+.customer-location-dialog-panel .form-field textarea { width: 100%; min-height: 6rem; padding: .7rem .8rem; border: 1px solid var(--savora-line); border-radius: .7rem; resize: vertical; }
+.customer-location-actions { padding-top: .25rem; border-top: 0; }
+[data-customer-location-status].is-error { color: #a23d2d; }
 .profile-form-actions { display: flex; align-items: center; gap: 1rem; margin-top: 1.25rem; }
 .profile-save-status { min-width: 0; margin: 0; color: var(--savora-forest); font-size: .84rem; font-weight: 800; }
 .profile-card-icon { display: grid; place-items: center; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: 50%; color: var(--savora-forest); background: var(--savora-sage); }

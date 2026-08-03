@@ -8,6 +8,7 @@ test('media endpoint serves controlled assets without exposing paths', () => {
   assert.match(source, /media_find_asset/);
   assert.match(source, /visibility/);
   assert.match(source, /savora_validate_session/);
+  assert.match(source, /\$asset\['status'\]\s*===\s*'active'\s*&&\s*\(\$_SESSION\['role'\]/);
   assert.match(source, /X-Content-Type-Options/);
   assert.match(source, /Content-Type/);
   assert.doesNotMatch(source, /echo\s+\$asset\[['"]stored_path/);
