@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setText('product-base-price', money(item.price));
     setText('product-calories', `${item.calories} kcal per regular serving`);
     setText('restaurant-detail-title', restaurant.name);
-    setText('restaurant-description', `${restaurant.name} brings Savora customers ${restaurant.cuisine.toLowerCase()} favorites prepared to order.`);
+    setText('restaurant-description', restaurant.description || `${restaurant.name} brings Savora customers ${restaurant.cuisine.toLowerCase()} favorites prepared to order.`);
     setText('restaurant-prep-time', restaurant.prepTime);
     setText('restaurant-rating', `★ ${restaurant.rating}`);
     setText('restaurant-cuisine', restaurant.cuisine);

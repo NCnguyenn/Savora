@@ -14,6 +14,8 @@
     : placeholderImage;
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const price = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const list = value => Array.isArray(value) ? value.map(entry => text(entry)).filter(Boolean) : [];
+  const prepTime = value => Number.isFinite(Number(value)) && Number(value) > 0 ? `${Math.round(Number(value))} min` : 'Prepared to order';
   const categoryId = value => text(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'menu';
 
   function itemFromRecord(record) {
@@ -26,8 +28,12 @@
       id: String(source.publicId), restaurant: text(source.restaurant && source.restaurant.name), restaurantId: String(source.restaurant && source.restaurant.id || ''),
       restaurantName: text(source.restaurant && source.restaurant.name), name: text(source.name), price: price(source.basePrice), available: source.available !== false,
       cuisine: text(source.restaurant && source.restaurant.cuisine),
-      categories: [categoryId(source.restaurant && source.restaurant.cuisine)], category: categoryId(source.restaurant && source.restaurant.cuisine),
-      image: '', description: '', prepTime: 'Prepared to order', calories: 0, dietaryTags: [], allergens: [], ingredients: [],
+      categories: [categoryId(source.category || (source.restaurant && source.restaurant.cuisine))],
+      category: categoryId(source.category || (source.restaurant && source.restaurant.cuisine)),
+      image: text(source.imagePath), description: text(source.description), prepTime: prepTime(source.prepTimeMinutes),
+      prepTimeMinutes: Number.isFinite(Number(source.prepTimeMinutes)) ? Number(source.prepTimeMinutes) : null,
+      calories: Number.isFinite(Number(source.calories)) ? Number(source.calories) : 0,
+      dietaryTags: list(source.dietaryTags), allergens: list(source.allergens), ingredients: list(source.ingredients),
       portions: portions.length ? portions : [{ id: 'regular', label: 'Regular', price: 0 }], addOns, version: Number(source.version || 0)
     };
   }
@@ -39,10 +45,17 @@
     (Array.isArray(records) ? records : []).map(itemFromRecord).filter(item => item.id).forEach(item => {
       products[item.id] = item;
       const name = item.restaurant || 'Restaurant';
-      const existing = restaurants[name] || { publicId: String(item.restaurantId), name, cuisine: item.cuisine, rating: '—', prepTime: item.prepTime, productIds: [] };
+      const source = (Array.isArray(records) ? records : []).find(record => String(record && record.restaurant && record.restaurant.name || '') === name) || {};
+      const restaurantSource = source.restaurant && typeof source.restaurant === 'object' ? source.restaurant : {};
+      const existing = restaurants[name] || {
+        publicId: String(item.restaurantId), name, cuisine: item.cuisine,
+        rating: Number.isFinite(Number(restaurantSource.rating)) ? String(Number(restaurantSource.rating)) : 'No rating',
+        description: text(restaurantSource.description), heroImage: text(restaurantSource.heroImage), image: text(restaurantSource.heroImage),
+        prepTime: item.prepTime, productIds: []
+      };
       if (!existing.productIds.includes(item.id)) existing.productIds.push(item.id);
       restaurants[name] = existing;
-      if (!categories.some(category => category.id === item.category)) categories.push({ id: item.category, label: item.cuisine || 'Menu' });
+      if (!categories.some(category => category.id === item.category)) categories.push({ id: item.category, label: source.category || item.cuisine || 'Menu' });
     });
     return api;
   }

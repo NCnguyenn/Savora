@@ -349,6 +349,8 @@ function catalog_for_restaurant(mysqli $conn, int $ownerUserId): array
         'status' => 200,
         'restaurant' => [
             'id' => $restaurantId, 'name' => (string) $restaurant['name'], 'cuisine' => (string) $restaurant['cuisine'],
+            'description' => (string) ($restaurant['description'] ?? ''), 'heroImage' => (string) ($restaurant['hero_image'] ?? ''),
+            'rating' => (float) ($restaurant['rating'] ?? 0),
             'address' => (string) $restaurant['address'], 'city' => (string) $restaurant['city'], 'phone' => (string) $restaurant['phone'],
             'status' => (string) $restaurant['status'], 'acceptingOrders' => (bool) $restaurant['accepting_orders'],
             'latitude' => $restaurant['latitude'] === null ? null : (float) $restaurant['latitude'],
