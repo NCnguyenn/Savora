@@ -1,6 +1,6 @@
 <?php
 include 'components/customer_header.php';
-$checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer_login_url('customer_checkout.php');
+$checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer_login_url('customer_checkout.php', 'Please sign in to continue to checkout.');
 ?>
 
 <main class="container cart-page">

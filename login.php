@@ -6,6 +6,8 @@ require_once __DIR__ . '/lib/customer_access.php';
 savora_start_session();
 $error = is_string($_SESSION['error'] ?? null) ? $_SESSION['error'] : '';
 $notice = is_string($_SESSION['auth_notice'] ?? null) ? $_SESSION['auth_notice'] : '';
+$queryNotice = is_string($_GET['notice'] ?? null) ? trim((string) $_GET['notice']) : '';
+if ($notice === '' && $queryNotice !== '') $notice = mb_substr($queryNotice, 0, 160);
 $loginUsername = is_string($_SESSION['login_username'] ?? null) ? $_SESSION['login_username'] : '';
 $returnTo = customer_safe_return_to($_GET['return_to'] ?? $_POST['return_to'] ?? '');
 unset($_SESSION['error'], $_SESSION['auth_notice'], $_SESSION['login_username']);

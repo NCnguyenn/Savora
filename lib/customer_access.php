@@ -24,10 +24,13 @@ function customer_safe_return_to(mixed $candidate): string
     return $path . $query;
 }
 
-function customer_login_url(string $returnTo = ''): string
+function customer_login_url(string $returnTo = '', string $notice = ''): string
 {
     $safe = customer_safe_return_to($returnTo);
-    return 'login.php' . ($safe === '' ? '' : '?return_to=' . rawurlencode($safe));
+    $query = [];
+    if ($safe !== '') $query['return_to'] = $safe;
+    if (trim($notice) !== '') $query['notice'] = trim($notice);
+    return 'login.php' . ($query === [] ? '' : '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986));
 }
 
 function customer_redirect_to_login(string $returnTo, string $notice = 'Please sign in to continue.'): never

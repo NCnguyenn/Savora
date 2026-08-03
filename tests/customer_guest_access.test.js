@@ -62,3 +62,10 @@ test('guest cart remains local and checkout has an authentication gate', () => {
   assert.match(cart, /customer_login_url|login\.php/);
   assert.match(read('customer_checkout.php'), /api\/checkout\.php/);
 });
+
+test('browser QA covers the public Home to checkout login gate', () => {
+  const qa = read('tests/customer_guest_browser_qa.mjs');
+  for (const token of ['customer_dashboard.php', 'customer_cart.php', 'customer_checkout.php', 'customer_profile.php', 'SavoraCustomerAuthenticated', 'restaurant_dashboard.php', 'driver_dashboard.php', 'admin_dashboard.php']) {
+    assert.match(qa, new RegExp(token.replace(/[.]/g, '\\$&')));
+  }
+});
