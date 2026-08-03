@@ -90,15 +90,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stateApi = window.SavoraState;
     const ui = window.SavoraUI;
     if (!catalog || !stateApi || !ui) return;
+    let profileSnapshot;
     try {
         await catalog.hydrate();
+        profileSnapshot = await SavoraApi.get('api/profile.php');
     } catch (error) {
         const message = document.getElementById('product-result-count');
         if (message) message.textContent = error.message || 'Catalog is temporarily unavailable.';
         return;
     }
+    let serverOrders = [];
+    try {
+        const orderData = await SavoraApi.get('api/orders.php');
+        serverOrders = Array.isArray(orderData && orderData.orders) ? orderData.orders : [];
+    } catch (_) { serverOrders = []; }
 
     const products = Object.values(SavoraCatalog.products);
+    const categories = catalog.categories || [];
     const restaurants = Object.values(SavoraCatalog.restaurants).map(restaurant => {
         const menu = restaurant.productIds.map(id => SavoraCatalog.products[id]).filter(Boolean);
         return {
@@ -112,6 +120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const restaurantGrid = document.getElementById('restaurant-grid');
     const categoryControls = document.getElementById('category-controls');
     let selectedCategory = 'all';
+    const favoriteSaved = (type, id) => (profileSnapshot.favorites || []).some(item => item.type === type && item.publicId === String(id));
 
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const createElement = (tag, attributes = {}, children = []) => {
@@ -134,8 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'data-favorite-kind': kind,
             'data-favorite-id': value
         });
-        const render = state => {
-            const saved = state.favorites[kind].includes(value);
+        const render = saved => {
             button.setAttribute('aria-pressed', String(saved));
             button.setAttribute('aria-label', `${saved ? 'Remove' : 'Add'} ${name} ${saved ? 'from' : 'to'} favorites`);
             button.setAttribute('title', `${saved ? 'Remove' : 'Add'} ${name} ${saved ? 'from' : 'to'} favorites`);
@@ -144,14 +152,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'aria-hidden': 'true'
             }));
         };
-        render(stateApi.load());
-        button.addEventListener('click', () => {
-            const nextState = stateApi.toggleFavorite(stateApi.load(), kind, value);
-            stateApi.persist(nextState);
-            ui.refreshChrome();
-            const saved = nextState.favorites[kind].includes(value);
-            render(nextState);
-            ui.announce(`${name} ${saved ? 'added to' : 'removed from'} favorites.`);
+        render(favoriteSaved(kind === 'products' ? 'product' : 'restaurant', value));
+        button.addEventListener('click', async () => {
+            const type = kind === 'products' ? 'product' : 'restaurant';
+            const active = !favoriteSaved(type, value); const scope = `customer-favorite-${type}-${value}`;
+            button.disabled = true;
+            try {
+                await SavoraApi.post('api/profile.php', { action: 'set_favorite', payload: { type, publicId: value, active, version: 0 } }, SavoraApi.intentKey(scope));
+                profileSnapshot = await SavoraApi.get('api/profile.php'); SavoraApi.clearIntentKey(scope); filterDiscovery();
+                ui.announce(`${name} ${active ? 'added to' : 'removed from'} favorites.`);
+            } catch (error) { button.disabled = false; ui.announce(error.message || 'Favorite was not changed.'); }
         });
         return button;
     }
@@ -190,35 +200,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             className: 'food-card-meta',
             text: `★ ${restaurant.rating} · ${restaurant.cuisine} · ${restaurant.prepTime}`
         });
-        const status = createElement('p', {
-            className: 'food-card-meta',
-            text: restaurant.status || (restaurant.acceptingOrders === false ? 'Orders paused' : 'Open for orders')
-        });
-        const storefront = createElement('p', {
-            className: 'food-card-meta',
-            text: restaurant.description || restaurant.address || 'Storefront details available'
-        });
-        const fulfillmentCopy = restaurant.deliveryEnabled === false && restaurant.pickupEnabled === false
-            ? 'Delivery and pickup unavailable'
-            : restaurant.deliveryEnabled === false
-                ? 'Pickup available'
-                : restaurant.pickupEnabled === false
-                    ? `Delivery available within ${restaurant.deliveryRadius || 0} mi`
-                    : 'Delivery and pickup available';
-        const fulfillment = createElement('p', {
-            className: 'food-card-meta',
-            text: fulfillmentCopy
-        });
         const action = createElement('span', { className: 'restaurant-card-action', text: 'View menu →' });
         const card = createElement('button', {
             className: 'food-card discovery-card restaurant-discovery-card',
             type: 'button',
             'aria-label': `Open ${restaurant.name} menu`
-        }, [image, title, meta, status, storefront, fulfillment, action]);
+        }, [image, title, meta, action]);
         card.addEventListener('click', () => SavoraUI.openMenuModal(restaurant.name));
         return createElement('article', { className: 'discovery-card-shell' }, [
             card,
-            favoriteButton('restaurants', restaurant.name, restaurant.name)
+            favoriteButton('restaurants', restaurant.publicId, restaurant.name)
         ]);
     }
 
@@ -256,7 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         searchInput.focus();
     }
 
-    SavoraCatalog.categories.forEach(category => {
+    categories.forEach(category => {
         const button = createElement('button', {
             className: 'category-card',
             type: 'button',
@@ -296,15 +287,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             markDegraded();
             return;
         }
-        const customerLocation = [10.7769, 106.7009];
-        const driverState = delivery && window.SavoraDriverState ? window.SavoraDriverState.load() : null;
-        const savedLocation = driverState && driverState.location && driverState.location.method === 'gps'
-            ? [driverState.location.latitude, driverState.location.longitude]
-            : null;
-        const driverLocation = delivery
-            ? (savedLocation && savedLocation.every(Number.isFinite) ? savedLocation : [10.7812, 106.6945])
-            : null;
-        const map = L.map('order-map', { zoomControl: false, scrollWheelZoom: false }).setView(customerLocation, 14);
+        const customerLocation = delivery && delivery.customerLocation && Number.isFinite(Number(delivery.customerLocation.latitude)) && Number.isFinite(Number(delivery.customerLocation.longitude))
+            ? [Number(delivery.customerLocation.latitude), Number(delivery.customerLocation.longitude)] : null;
+        const rawDriverLocation = delivery && delivery.location;
+        const driverIsFresh = rawDriverLocation && rawDriverLocation.recordedAt && (Date.now() - new Date(rawDriverLocation.recordedAt).getTime()) <= 5 * 60 * 1000;
+        const driverLocation = driverIsFresh && Number.isFinite(Number(rawDriverLocation.latitude)) && Number.isFinite(Number(rawDriverLocation.longitude))
+            ? [Number(rawDriverLocation.latitude), Number(rawDriverLocation.longitude)] : null;
+        const center = customerLocation || driverLocation || [0, 0];
+        const map = L.map('order-map', { zoomControl: false, scrollWheelZoom: false }).setView(center, customerLocation || driverLocation ? 14 : 2);
         let tileFailed = false;
         const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 20,
@@ -318,18 +308,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!tileFailed) mapElement.dataset.mapStatus = 'ready';
         });
         tiles.addTo(map);
-        const customerMarker = L.circleMarker(customerLocation, { radius: 8, color: '#fff', weight: 3, fillColor: '#ef634b', fillOpacity: 1 }).addTo(map);
+        const markers = [];
+        if (customerLocation) markers.push(L.circleMarker(customerLocation, { radius: 8, color: '#fff', weight: 3, fillColor: '#ef634b', fillOpacity: 1 }).addTo(map));
         if (driverLocation) {
             const driverMarker = L.circleMarker(driverLocation, { radius: 9, color: '#fff', weight: 3, fillColor: '#073b2b', fillOpacity: 1 }).addTo(map);
-            map.fitBounds(L.featureGroup([customerMarker, driverMarker]).getBounds().pad(0.25));
+            markers.push(driverMarker);
         }
+        if (markers.length > 1) map.fitBounds(L.featureGroup(markers).getBounds().pad(0.25));
+        if (!driverLocation) mapElement.dataset.locationStatus = 'unavailable';
+        mapElement.setAttribute('aria-label', driverLocation ? `Server Driver location recorded ${rawDriverLocation.recordedAt}.` : 'Driver location temporarily unavailable.');
     }
 
     function renderTracking() {
         const tracking = document.getElementById('active-order-content');
-        const activeOrder = SavoraState.load().orders.find(order =>
-            ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'].includes(order.status)
-        );
+        const activeOrder = serverOrders.find(order => ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'on_the_way'].includes(order.status)) || null;
         if (!activeOrder) {
             const empty = createElement('div', { className: 'empty-state tracking-empty' }, [
                 createElement('i', { className: 'fa-solid fa-bicycle', 'aria-hidden': 'true' }),
@@ -350,12 +342,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         const status = statusLabels[activeOrder.status] || 'Order update';
         const itemCount = activeOrder.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-        const delivery = window.SavoraDriverState
-            ? window.SavoraDriverState.deliveryForOrder(window.SavoraDriverState.load(), activeOrder.id)
-            : null;
-        const dispatch = window.SavoraDriverState
-            ? window.SavoraDriverState.dispatchForOrder(window.SavoraDriverState.load(), activeOrder.id)
-            : null;
+        const delivery = activeOrder.assignment;
+        const dispatch = activeOrder.dispatch;
         const driverCopy = activeOrder.status === 'ready_for_pickup' && !delivery
             ? dispatch && dispatch.status === 'offer_sent'
                 ? 'Savora has sent this delivery to an eligible nearby driver'
@@ -370,13 +358,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             createElement('p', { className: 'tracking-estimate', text: 'Estimated arrival: 10–20 minutes' }),
             driverCopy ? createElement('p', { className: 'tracking-driver', text: driverCopy }) : null,
             activeOrder.deliveryNote ? createElement('p', { className: 'tracking-delivery-note', text: `Delivery note: ${activeOrder.deliveryNote}` }) : null,
-            createElement('div', { id: 'order-map', className: 'order-map', role: 'img', 'aria-label': 'Map showing the demo delivery route', 'data-map-status': 'loading' }, [
+            createElement('div', { id: 'order-map', className: 'order-map', role: 'img', 'aria-label': 'Server delivery location', 'data-map-status': 'loading' }, [
                 createElement('p', { className: 'map-fallback-message', text: 'Map tiles unavailable — delivery markers remain visible.' })
             ]),
+            !delivery || !delivery.location || !delivery.location.recordedAt || (Date.now() - new Date(delivery.location.recordedAt).getTime()) > 5 * 60 * 1000
+                ? createElement('p', { className: 'tracking-location-unavailable', text: 'Location temporarily unavailable. The last server update is stale or not yet available.' }) : null,
             createElement('a', { className: 'primary-action', href: 'customer_history.php', text: 'Track order' })
         ].filter(Boolean));
         tracking.replaceChildren(article);
-        initializeTrackingMap(delivery);
+        initializeTrackingMap({
+            customerLocation: activeOrder.deliveryLocation,
+            location: delivery && delivery.location
+        });
     }
 
     filterDiscovery();

@@ -8,8 +8,6 @@
   const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const dayLabel = day => `${day.slice(0, 1).toUpperCase()}${day.slice(1)}`;
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
-  const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(text(value)) ? text(value) : '';
-  const defaultDay = () => ({ open: '09:00', close: '17:00', closed: false });
   const create = (tag, attributes = {}, children = []) => {
     if (!root || !root.document) return null;
     const node = root.document.createElement(tag);
@@ -22,44 +20,18 @@
     return node;
   };
 
-  function normalizeWeeklyHours(value) {
-    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    return Object.fromEntries(DAYS.map(day => {
-      const item = source[day] && typeof source[day] === 'object' ? source[day] : {};
-      if (item.closed === true) return [day, { open: '', close: '', closed: true }];
-      const fallback = defaultDay();
-      return [day, { open: clock(item.open) || fallback.open, close: clock(item.close) || fallback.close, closed: false }];
-    }));
-  }
-
-  function validateOperations(value) {
-    const source = value && typeof value === 'object' ? value : {};
-    const radius = Number(source.deliveryRadius);
-    const capacity = Number(source.capacity);
-    const prepMinutes = Number(source.prepMinutes);
-    const errors = {};
-    if (!Number.isFinite(radius) || radius <= 0 || radius > 50) errors.deliveryRadius = 'Delivery radius must be between 0.1 and 50 miles.';
-    if (!Number.isFinite(capacity) || capacity < 1 || capacity > 500) errors.capacity = 'Kitchen capacity must be between 1 and 500 orders.';
-    if (!Number.isFinite(prepMinutes) || prepMinutes < 1 || prepMinutes > 180) errors.prepMinutes = 'Prep time must be between 1 and 180 minutes.';
-    return { valid: Object.keys(errors).length === 0, errors };
-  }
-
   function fields(form) {
     return name => form && form.elements && form.elements.namedItem(name);
   }
   function setMessage(node, message) { if (node) node.textContent = message; }
   function profileAddress(profile) {
-    return [profile.addressLine1, profile.addressLine2, profile.city, profile.state, profile.postalCode, profile.country].map(text).filter(Boolean).join(', ') || text(profile.address);
+    return [profile.address, profile.city].map(text).filter(Boolean).join(', ');
   }
   function profilePatch(form) {
     const field = fields(form);
-    const address = {
-      addressLine1: text(field('address-line1').value), addressLine2: text(field('address-line2').value), city: text(field('address-city').value),
-      state: text(field('address-state').value), postalCode: text(field('address-postal-code').value), country: text(field('address-country').value)
-    };
     return {
-      name: text(field('profile-name').value), cuisine: text(field('profile-cuisine').value), description: text(field('profile-description').value),
-      phone: text(field('profile-phone').value), image: text(field('profile-image').value), address: profileAddress(address), locationMethod: form.dataset.locationMethod || 'manual', ...address
+      name: text(field('profile-name').value), cuisine: text(field('profile-cuisine').value), phone: text(field('profile-phone').value),
+      address: text(field('address-line1').value), city: text(field('address-city').value), locationMethod: form.dataset.locationMethod || 'manual'
     };
   }
   function setInput(form, name, value, checked) {
@@ -71,26 +43,23 @@
   function renderProfilePreview(container, state) {
     if (!container) return;
     const profile = state.profile || {};
-    const operations = state.operations || {};
     container.replaceChildren(
       create('p', { className: 'restaurant-eyebrow' }, 'Storefront card'),
-      create('h3', {}, profile.name || 'Savora Kitchen'),
-      create('p', {}, profile.description || 'Add a short description to help customers discover your restaurant.'),
-      create('p', { className: 'restaurant-field-hint' }, profileAddress(profile) || 'Address will appear here after you save it.'),
-      create('p', { className: 'restaurant-field-hint' }, `${operations.deliveryEnabled === false ? 'Pickup only' : `${operations.deliveryRadius || 0} mi delivery`} · ${operations.acceptingOrders === false ? 'Orders paused' : 'Open for orders'}`)
+      create('h3', {}, profile.name || ''),
+      create('p', {}, profile.cuisine || ''),
+      create('p', { className: 'restaurant-field-hint' }, profileAddress(profile))
     );
   }
 
   function renderOperationsPreview(container, state) {
     if (!container) return;
     const profile = state.profile || {}; const operations = state.operations || {};
-    const monday = (operations.weeklyHours || {}).monday || defaultDay();
-    const hours = monday.closed ? 'Closed Monday' : `Monday ${monday.open}–${monday.close}`;
+    const monday = (operations.weeklyHours || {}).monday;
+    const hours = !monday ? '' : (monday.closed ? 'Closed Monday' : `Monday ${monday.open}–${monday.close}`);
     container.replaceChildren(
-      create('h3', {}, profile.name || 'Savora Kitchen'),
+      create('h3', {}, profile.name || ''),
       create('p', {}, operations.acceptingOrders === false ? 'Orders are currently paused' : 'Accepting orders'),
-      create('p', { className: 'restaurant-field-hint' }, `${hours} · ${operations.prepMinutes || 20} min prep`),
-      create('p', { className: 'restaurant-field-hint' }, `${operations.deliveryEnabled === false ? 'Delivery unavailable' : 'Delivery available'} · ${operations.pickupEnabled === false ? 'Pickup unavailable' : 'Pickup available'}`)
+      create('p', { className: 'restaurant-field-hint' }, hours)
     );
   }
 
@@ -121,8 +90,8 @@
     }));
     const hasCoordinates = Number.isFinite(Number(restaurant.latitude)) && Number.isFinite(Number(restaurant.longitude));
     return {
-      profile: { name: text(restaurant.name), cuisine: text(restaurant.cuisine), address: text(restaurant.address), city: text(restaurant.city), phone: text(restaurant.phone), addressLine1: text(restaurant.address), addressLine2: '', state: '', postalCode: '', country: '', latitude: hasCoordinates ? Number(restaurant.latitude) : null, longitude: hasCoordinates ? Number(restaurant.longitude) : null, locationMethod: hasCoordinates ? 'current' : 'manual', version: Number(restaurant.version || 0) },
-      operations: { acceptingOrders: restaurant.acceptingOrders !== false, prepMinutes: 20, deliveryRadius: 5, capacity: 20, deliveryEnabled: true, pickupEnabled: true, pickupInstructions: '', weeklyHours: normalizeWeeklyHours(weeklyHours), specialHours }
+      profile: { name: text(restaurant.name), cuisine: text(restaurant.cuisine), address: text(restaurant.address), city: text(restaurant.city), phone: text(restaurant.phone), latitude: hasCoordinates ? Number(restaurant.latitude) : null, longitude: hasCoordinates ? Number(restaurant.longitude) : null, locationMethod: hasCoordinates ? 'current' : 'manual', version: Number(restaurant.version || 0) },
+      operations: { acceptingOrders: restaurant.acceptingOrders !== false, weeklyHours, specialHours }
     };
   }
 
@@ -135,28 +104,25 @@
     const preview = root.document.querySelector('[data-storefront-preview]');
     const hydrate = async () => {
       state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant'));
-      const profile = state.profile || {}; const operations = state.operations || {};
+      const profile = state.profile || {};
       form.dataset.locationMethod = profile.locationMethod === 'current' ? 'current' : 'manual';
-      setInput(form, 'profile-name', profile.name); setInput(form, 'profile-cuisine', profile.cuisine); setInput(form, 'profile-description', profile.description); setInput(form, 'profile-phone', profile.phone); setInput(form, 'profile-image', profile.image);
-      setInput(form, 'address-line1', profile.addressLine1); setInput(form, 'address-line2', profile.addressLine2); setInput(form, 'address-city', profile.city); setInput(form, 'address-state', profile.state); setInput(form, 'address-postal-code', profile.postalCode); setInput(form, 'address-country', profile.country);
-      setInput(form, 'delivery-radius', operations.deliveryRadius); setInput(form, 'minimum-order', operations.minimumOrder); setInput(form, 'profile-prep-minutes', operations.prepMinutes);
+      setInput(form, 'profile-name', profile.name); setInput(form, 'profile-cuisine', profile.cuisine); setInput(form, 'profile-phone', profile.phone);
+      setInput(form, 'address-line1', profile.address); setInput(form, 'address-city', profile.city);
       renderProfilePreview(preview, state); renderMap(profile);
     };
     try { await hydrate(); } catch (error) { setMessage(feedback, error.message || 'Store profile is unavailable.'); return; }
-    const previewDraft = () => renderProfilePreview(preview, { ...state, profile: { ...state.profile, ...profilePatch(form) }, operations: { ...state.operations, deliveryRadius: Number(fields(form)('delivery-radius').value) || 0 } });
+    const previewDraft = () => renderProfilePreview(preview, { ...state, profile: { ...state.profile, ...profilePatch(form) } });
     form.addEventListener('input', previewDraft);
     const profileName = fields(form)('profile-name');
     if (profileName) profileName.addEventListener('input', () => { if (profileName.value.trim()) profileName.removeAttribute('aria-invalid'); });
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      const patch = profilePatch(form); const deliveryRadius = Number(fields(form)('delivery-radius').value); const minimumOrder = Number(fields(form)('minimum-order').value); const prepMinutes = Number(fields(form)('profile-prep-minutes').value);
-      const validation = validateOperations({ deliveryRadius, capacity: state.operations.capacity || 1, prepMinutes });
+      const patch = profilePatch(form);
       if (!patch.name) { setMessage(feedback, 'Restaurant name is required.'); fields(form)('profile-name').setAttribute('aria-invalid', 'true'); return; }
-      if (!validation.valid) { setMessage(feedback, validation.errors.deliveryRadius || validation.errors.prepMinutes); return; }
       const scope = 'restaurant-profile';
       try {
         await root.SavoraApi.post('api/catalog.php', { action: 'save_profile', payload: { name: patch.name, cuisine: patch.cuisine, address: patch.address, city: patch.city, phone: patch.phone, latitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.latitude) : null, longitude: form.dataset.locationMethod === 'current' ? Number(form.dataset.longitude) : null, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
-        root.SavoraApi.clearIntentKey(scope); await hydrate(); setMessage(feedback, 'Store profile refreshed from the server.'); if (ui) ui.showToast('Store profile refreshed from the server.');
+        await hydrate(); root.SavoraApi.clearIntentKey(scope); setMessage(feedback, 'Store profile refreshed from the server.'); if (ui) ui.showToast('Store profile refreshed from the server.');
       } catch (error) { setMessage(feedback, error.message || 'Store profile was not saved.'); }
     });
     const manual = root.document.querySelector('[data-manual-address]');
@@ -177,8 +143,8 @@
     specialHours.forEach((entry, index) => {
       const row = create('div', { className: 'restaurant-form-three-column', 'data-special-row': String(index) });
       const date = create('input', { type: 'date', value: entry.date, 'data-special-date': '', 'aria-label': 'Special hours date' });
-      const open = create('input', { type: 'time', value: entry.open || '09:00', 'data-special-open': '', 'aria-label': 'Special hours opening time' });
-      const close = create('input', { type: 'time', value: entry.close || '17:00', 'data-special-close': '', 'aria-label': 'Special hours closing time' });
+      const open = create('input', { type: 'time', value: entry.open || '', 'data-special-open': '', 'aria-label': 'Special hours opening time' });
+      const close = create('input', { type: 'time', value: entry.close || '', 'data-special-close': '', 'aria-label': 'Special hours closing time' });
       const closed = create('input', { type: 'checkbox', 'data-special-closed': '', 'aria-label': 'Closed on this date' }); closed.checked = entry.closed === true;
       const note = create('input', { type: 'text', value: entry.note || '', maxlength: '100', 'data-special-note': '', 'aria-label': 'Special hours note' });
       const setTimedInputs = () => { open.disabled = closed.checked; close.disabled = closed.checked; };
@@ -196,7 +162,7 @@
   function weeklyRows(container, weeklyHours) {
     container.replaceChildren();
     DAYS.forEach(day => {
-      const value = weeklyHours[day] || defaultDay(); const row = create('div', { className: 'restaurant-form-three-column', 'data-weekday': day });
+      const value = weeklyHours[day] || { open: '', close: '', closed: false }; const row = create('div', { className: 'restaurant-form-three-column', 'data-weekday': day });
       const open = create('input', { type: 'time', value: value.open, 'aria-label': `${dayLabel(day)} opening time` });
       const close = create('input', { type: 'time', value: value.close, 'aria-label': `${dayLabel(day)} closing time` });
       const closed = create('input', { type: 'checkbox', 'aria-label': `${dayLabel(day)} closed` }); closed.checked = value.closed === true;
@@ -210,34 +176,31 @@
     container.querySelectorAll('[data-weekday]').forEach(row => {
       const [open, close, closed] = row.querySelectorAll('input'); source[row.dataset.weekday] = { open: open.value, close: close.value, closed: closed.checked };
     });
-    return normalizeWeeklyHours(source);
+    return source;
   }
 
   async function initOperations() {
     const form = root.document.querySelector('[data-store-operations-form]');
     if (!form || !root.SavoraApi) return;
     const ui = root.SavoraRestaurantUI; let state; const field = fields(form);
-    const weekly = root.document.querySelector('[data-weekly-hours]'); const specials = root.document.querySelector('[data-special-hours]'); const feedback = root.document.querySelector('[data-operations-feedback]'); const warning = root.document.querySelector('[data-capacity-warning]'); const preview = root.document.querySelector('[data-operations-preview]');
-    const updateWarning = () => { const capacity = Number(field('capacity').value); setMessage(warning, capacity > 0 && capacity < 5 ? 'Low capacity may pause orders during busy periods.' : ''); };
-    const hydrate = async () => { state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant')); const operations = state.operations || {}; setInput(form, 'accepting-orders', '', operations.acceptingOrders !== false); setInput(form, 'prep-minutes', operations.prepMinutes); setInput(form, 'capacity', operations.capacity); setInput(form, 'delivery-enabled', '', operations.deliveryEnabled !== false); setInput(form, 'pickup-enabled', '', operations.pickupEnabled !== false); setInput(form, 'pickup-instructions', operations.pickupInstructions); weeklyRows(weekly, normalizeWeeklyHours(operations.weeklyHours)); specialRows(specials, operations.specialHours || []); updateWarning(); renderOperationsPreview(preview, state); };
+    const weekly = root.document.querySelector('[data-weekly-hours]'); const specials = root.document.querySelector('[data-special-hours]'); const feedback = root.document.querySelector('[data-operations-feedback]'); const preview = root.document.querySelector('[data-operations-preview]');
+    const hydrate = async () => { state = stateFromSnapshot(await root.SavoraApi.get('api/catalog.php?scope=restaurant')); const operations = state.operations || {}; setInput(form, 'accepting-orders', '', operations.acceptingOrders !== false); weeklyRows(weekly, operations.weeklyHours || {}); specialRows(specials, operations.specialHours || []); renderOperationsPreview(preview, state); };
     try { await hydrate(); } catch (error) { setMessage(feedback, error.message || 'Operations are unavailable.'); return; }
-    field('capacity').addEventListener('input', updateWarning);
     root.document.querySelector('[data-copy-hours]').addEventListener('click', () => { const monday = weekly.querySelector('[data-weekday="monday"]'); const [open, close, closed] = monday.querySelectorAll('input'); weeklyRows(weekly, Object.fromEntries(DAYS.map(day => [day, { open: open.value, close: close.value, closed: closed.checked }]))); });
-    root.document.querySelector('[data-add-special-hours]').addEventListener('click', () => { specialRows(specials, [...readSpecialHours(specials), { date: '', open: '09:00', close: '17:00', closed: false, note: '' }]); });
+    root.document.querySelector('[data-add-special-hours]').addEventListener('click', () => { specialRows(specials, [...readSpecialHours(specials), { date: '', open: '', close: '', closed: false, note: '' }]); });
     form.addEventListener('submit', async event => {
-      event.preventDefault(); const deliveryRadius = state.operations.deliveryRadius || 0; const capacity = Number(field('capacity').value); const prepMinutes = Number(field('prep-minutes').value); const validation = validateOperations({ deliveryRadius: deliveryRadius || 0.1, capacity, prepMinutes });
-      if (!validation.valid) { setMessage(feedback, validation.errors.capacity || validation.errors.prepMinutes || validation.errors.deliveryRadius); return; }
+      event.preventDefault();
       const scope = 'restaurant-operations';
       const weeklyHours = Object.entries(readWeeklyHours(weekly)).map(([day, hours]) => ({ weekday: DAYS.indexOf(day), opensAt: hours.open || null, closesAt: hours.close || null, isClosed: hours.closed === true }));
       const specialHours = readSpecialHours(specials).map(hours => ({ date: hours.date, opensAt: hours.open || null, closesAt: hours.close || null, isClosed: hours.closed === true, note: hours.note }));
       try {
         await root.SavoraApi.post('api/catalog.php', { action: 'save_operations', payload: { acceptingOrders: field('accepting-orders').checked, weeklyHours, specialHours, version: state.profile.version } }, root.SavoraApi.intentKey(scope));
-        root.SavoraApi.clearIntentKey(scope); await hydrate(); updateWarning(); setMessage(feedback, 'Operations refreshed from the server.'); if (ui) ui.showToast('Operations refreshed from the server.');
+        await hydrate(); root.SavoraApi.clearIntentKey(scope); setMessage(feedback, 'Operations refreshed from the server.'); if (ui) ui.showToast('Operations refreshed from the server.');
       } catch (error) { setMessage(feedback, error.message || 'Operations were not saved.'); }
     });
   }
 
   function initialize() { if (!root || !root.document) return; initProfile(); initOperations(); }
   if (root && root.document) { if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', initialize, { once: true }); else initialize(); }
-  return { normalizeWeeklyHours, validateOperations };
+  return {};
 }));

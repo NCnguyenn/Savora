@@ -122,8 +122,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    let profileSnapshot;
     try {
         await catalog.hydrate();
+        profileSnapshot = await SavoraApi.get('api/profile.php');
     } catch (error) {
         loading.textContent = error.message || 'Product details are temporarily unavailable.';
         return;
@@ -237,8 +239,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.title = `${item.name} | Savora`;
 
     const favoriteButton = document.getElementById('product-favorite-button');
-    function renderFavoriteButton(state) {
-        const saved = state.favorites.products.includes(String(item.id));
+    function renderFavoriteButton() {
+        const saved = (profileSnapshot.favorites || []).some(entry => entry.type === 'product' && entry.publicId === String(item.id));
         favoriteButton.setAttribute('aria-pressed', String(saved));
         favoriteButton.setAttribute('aria-label', `${saved ? 'Remove' : 'Add'} ${item.name} ${saved ? 'from' : 'to'} favorites`);
         favoriteButton.setAttribute('title', `${saved ? 'Remove' : 'Add'} ${item.name} ${saved ? 'from' : 'to'} favorites`);
@@ -247,13 +249,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             'aria-hidden': 'true'
         }));
     }
-    renderFavoriteButton(stateApi.load());
-    favoriteButton.addEventListener('click', () => {
-        const nextState = stateApi.toggleFavorite(stateApi.load(), 'products', item.id);
-        stateApi.persist(nextState);
-        ui.refreshChrome();
-        renderFavoriteButton(nextState);
-        ui.announce(`${item.name} ${nextState.favorites.products.includes(String(item.id)) ? 'added to' : 'removed from'} favorites.`);
+    renderFavoriteButton();
+    favoriteButton.addEventListener('click', async () => {
+        const active = !(profileSnapshot.favorites || []).some(entry => entry.type === 'product' && entry.publicId === String(item.id));
+        const scope = `customer-favorite-product-${item.id}`; favoriteButton.disabled = true;
+        try {
+            await SavoraApi.post('api/profile.php', { action: 'set_favorite', payload: { type: 'product', publicId: String(item.id), active, version: 0 } }, SavoraApi.intentKey(scope));
+            profileSnapshot = await SavoraApi.get('api/profile.php'); SavoraApi.clearIntentKey(scope); renderFavoriteButton();
+            ui.announce(`${item.name} ${active ? 'added to' : 'removed from'} favorites.`);
+        } catch (error) { favoriteButton.disabled = false; ui.announce(error.message || 'Favorite was not changed.'); }
     });
 
     const tags = [

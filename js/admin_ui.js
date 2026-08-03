@@ -243,6 +243,40 @@
             button.addEventListener('click', function printReport() { root.print(); });
         });
 
+        const createAdminForm = root.document.querySelector('[data-admin-create-account]');
+        if (createAdminForm) createAdminForm.addEventListener('submit', async function createAdminAccount(event) {
+            event.preventDefault();
+            const submit = createAdminForm.querySelector('[type="submit"]');
+            const errorNode = createAdminForm.querySelector('[data-admin-field-error]');
+            const password = createAdminForm.querySelector('[name="password"]');
+            const confirmation = createAdminForm.querySelector('[name="password_confirmation"]');
+            if (errorNode) errorNode.textContent = '';
+            if (!createAdminForm.checkValidity() || !password || !confirmation || password.value !== confirmation.value) {
+                if (errorNode) errorNode.textContent = password && confirmation && password.value !== confirmation.value ? 'Passwords do not match.' : 'Complete every required field.';
+                createAdminForm.reportValidity();
+                return;
+            }
+            if (submit) submit.disabled = true;
+            try {
+                const result = await requestAction('create_admin_account', formPayload(createAdminForm), createIntentKey('create-admin'));
+                showToast(result.message, 'success');
+                root.setTimeout(function refreshAdminAccounts() { root.location.reload(); }, 500);
+            } catch (error) {
+                if (errorNode) errorNode.textContent = Object.values((error.details && error.details.errors) || {})[0] || error.message;
+                showToast(error.message, 'error');
+            } finally {
+                if (password) password.value = '';
+                if (confirmation) confirmation.value = '';
+                if (submit) submit.disabled = false;
+            }
+        });
+
+        root.document.querySelectorAll('[data-admin-export-table]').forEach(function bindExport(button) {
+            button.addEventListener('click', function exportAccounts() {
+                root.location.href = 'api/admin_export.php?type=accounts';
+            });
+        });
+
         root.document.querySelectorAll('[data-admin-confirm-action]').forEach(function bindConfirmedAction(button) {
             button.addEventListener('click', function requestConfirmedAction() {
                 const action = button.dataset.adminConfirmAction;

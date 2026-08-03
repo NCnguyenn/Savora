@@ -8,22 +8,18 @@ const path = require('node:path');
 const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
 test('platform commands require a stable caller-owned idempotency key', () => {
-  const bridge = read('js/platform_bridge.js');
-  assert.doesNotMatch(bridge, /Date\.now\(\).*Math\.random/);
-  assert.match(bridge, /command\(name,payload,idempotencyKey\)/);
-  assert.match(bridge, /'Idempotency-Key':idempotencyKey/);
-  assert.match(bridge, /SavoraApi\s*=.*intentKey/);
-  assert.match(bridge, /crypto\.randomUUID\(\)/);
+  const dispatch = read('api/dispatch.php');
+  assert.match(dispatch, /savora_require_idempotency_key/);
+  assert.match(dispatch, /savora_idempotency_lock/);
+  assert.match(dispatch, /Idempotency-Key/);
 });
 
 test('checkout retains its intent key until its order request completes', () => {
   const checkout = read('customer_checkout.php');
-  const intent = read('js/checkout_intent.js');
-  assert.match(checkout, /SavoraCheckoutIntent\.submit/);
-  assert.match(intent, /savora_checkout_intent/);
-  assert.match(intent, /savora_checkout_draft_/);
-  assert.match(intent, /storage\.removeItem\('savora_checkout_intent'\)/);
-  assert.match(checkout, /SavoraPlatformBridge\.command\('place_order',\s*order,\s*intentKey\)/);
+  assert.match(checkout, /SavoraApi\.post\('api\/checkout\.php'/);
+  assert.match(checkout, /SavoraApi\.intentKey\('customer-place-order'\)/);
+  assert.match(checkout, /SavoraApi\.clearIntentKey\('customer-place-order'\)/);
+  assert.match(checkout, /action: 'place_order'/);
 });
 
 test('admin confirmation actions retain a dialog-owned key rather than minting retry keys', () => {
@@ -35,10 +31,10 @@ test('admin confirmation actions retain a dialog-owned key rather than minting r
 });
 
 test('both command endpoints reject a reused key with a conflict response', () => {
-  const platformEndpoint = read('api/platform_state.php');
+  const platformEndpoint = read('api/dispatch.php');
   const adminEndpoint = read('admin_action.php');
   assert.match(platformEndpoint, /catch \(SavoraIdempotencyConflict\)/);
-  assert.match(platformEndpoint, /savora_error\(409, 'Idempotency key was already used for a different request\.'/);
+  assert.match(platformEndpoint, /savora_error\(409, 'Idempotency key was already used for a different dispatch request\.'/);
   assert.match(adminEndpoint, /catch \(SavoraIdempotencyConflict\)/);
   assert.match(adminEndpoint, /savora_error\(409, 'Idempotency key was already used for a different request\.'/);
 });

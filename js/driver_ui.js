@@ -92,11 +92,9 @@
   }
 
   function syncTopbar() {
-    if (!doc || !root.SavoraDriverState) return;
-    const state = root.SavoraDriverState.load();
     doc.querySelectorAll('[data-driver-topbar-status]').forEach(node => {
-      node.textContent = state.online ? 'Online' : 'Offline';
-      node.closest('.driver-topbar-status')?.classList.toggle('is-online', state.online);
+      node.textContent = 'Server status';
+      node.closest('.driver-topbar-status')?.classList.remove('is-online');
     });
   }
 

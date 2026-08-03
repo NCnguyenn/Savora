@@ -11,11 +11,11 @@
   const bool = value => value === true || value === 'true' || value === 'on' || value === '1';
   const safeOptions = value => Array.isArray(value) ? value.map(option => {
     const label = text(option && option.label);
-    return label ? { label, price: money(option.price) } : null;
+    return label ? { publicId: text(option.publicId), label, price: money(option.price), available: option.available !== false, sortOrder: Number.isInteger(Number(option.sortOrder)) ? Number(option.sortOrder) : 0 } : null;
   }).filter(Boolean).slice(0, 20) : [];
   const safeGroups = value => Array.isArray(value) ? value.map(group => {
     const name = text(group && group.name);
-    return name ? { name, required: bool(group.required), options: safeOptions(group.options) } : null;
+    return name ? { name, required: bool(group.required), selectionType: group.selectionType === 'multiple' ? 'multiple' : 'single', minimumChoices: Math.max(0, Number(group.minimumChoices) || (bool(group.required) ? 1 : 0)), maximumChoices: Math.max(1, Number(group.maximumChoices) || 1), sortOrder: Math.max(0, Number(group.sortOrder) || 0), options: safeOptions(group.options) } : null;
   }).filter(Boolean).slice(0, 8) : [];
   const editorFieldName = key => ({ compareAtPrice: 'menu-compare-price', taxCategory: 'menu-tax-category', prepTime: 'menu-prep-time' }[key] || `menu-${key}`);
   const appendOptionGroup = (groups, draft) => {
@@ -60,6 +60,22 @@
     id: String(item.publicId || ''), name: text(item.name), price: money(item.basePrice), available: item.available !== false,
     version: Number(item.version || 0), category: text(snapshot.restaurant && snapshot.restaurant.cuisine) || 'Menu', optionGroups: Array.isArray(item.optionGroups) ? item.optionGroups : []
   });
+  function editorGroupsFromServer(groups) {
+    return safeGroups((Array.isArray(groups) ? groups : []).map(group => ({
+      name: group.name,
+      required: Number(group.minimumChoices || 0) > 0,
+      selectionType: group.selectionType,
+      minimumChoices: group.minimumChoices,
+      maximumChoices: group.maximumChoices,
+      sortOrder: group.sortOrder,
+      options: (Array.isArray(group.optionChoices) ? group.optionChoices : []).map(choice => ({ publicId: choice.publicId, label: choice.name, price: choice.priceDelta, available: choice.available !== false, sortOrder: choice.sortOrder }))
+    })));
+  }
+  function editorDataFromServer(groups) {
+    const mapped = editorGroupsFromServer(groups);
+    const addOnGroup = mapped.find(group => group.name === 'Add-ons' && group.selectionType === 'multiple');
+    return { optionGroups: mapped.filter(group => group !== addOnGroup), addOns: addOnGroup ? addOnGroup.options : [] };
+  }
   async function loadSnapshot() {
     snapshot = await root.SavoraApi.get('api/catalog.php?scope=restaurant');
     snapshot.items = Array.isArray(snapshot.items) ? snapshot.items.map(serverItem) : [];
@@ -108,8 +124,11 @@
   function clearValidationState(form) { ['name', 'category', 'price', 'compareAtPrice'].forEach(key => { const field = form && form.elements.namedItem(editorFieldName(key)); if (field) field.removeAttribute('aria-invalid'); }); }
   function showValidation(form, errors) { clearValidationState(form); Object.entries(errors).forEach(([key, message]) => { const field = form.elements.namedItem(editorFieldName(key)); if (field) field.setAttribute('aria-invalid', 'true'); }); const summary = get('[data-menu-validation]'); if (summary) summary.textContent = Object.values(errors).join(' '); }
   function serverPayload(item, version) {
-    const groups = [...item.optionGroups, ...(item.addOns.length ? [{ name: 'Add-ons', required: false, options: item.addOns }] : [])];
-    return { publicId: item.id, name: item.name, price: item.price, available: item.available, version, optionGroups: groups.map((group, groupIndex) => ({ name: group.name, selectionType: group.required ? 'single' : 'multiple', minimumChoices: group.required ? 1 : 0, maximumChoices: group.required ? 1 : Math.max(1, group.options.length), sortOrder: groupIndex, choices: group.options.map((option, optionIndex) => ({ publicId: `${item.id}-${groupIndex}-${optionIndex}`, name: option.label, priceDelta: option.price, available: true, sortOrder: optionIndex })) })) };
+    const groups = [...item.optionGroups, ...(item.addOns.length ? [{
+      name: 'Add-ons', required: false, selectionType: 'multiple', minimumChoices: 0,
+      maximumChoices: item.addOns.length, sortOrder: item.optionGroups.length, options: item.addOns
+    }] : [])];
+    return { publicId: item.id, name: item.name, price: item.price, available: item.available, version, optionGroups: groups.map((group, groupIndex) => ({ name: group.name, selectionType: group.selectionType === 'multiple' ? 'multiple' : 'single', minimumChoices: Math.max(0, Number(group.minimumChoices) || (group.required ? 1 : 0)), maximumChoices: Math.max(1, Number(group.maximumChoices) || (group.required ? 1 : group.options.length)), sortOrder: Number.isInteger(Number(group.sortOrder)) ? Number(group.sortOrder) : groupIndex, choices: group.options.map((option, optionIndex) => ({ publicId: text(option.publicId) || `${item.id}-${groupIndex}-${optionIndex}`, name: option.label, priceDelta: option.price, available: option.available !== false, sortOrder: Number.isInteger(Number(option.sortOrder)) ? Number(option.sortOrder) : optionIndex })) })) };
   }
   async function bindMenu() {
     if (!documentRef || !get('[data-menu-page]') || !root.SavoraApi) return;
@@ -122,8 +141,7 @@
       const scope = `restaurant-availability-${toggle.dataset.menuAvailabilityToggle}`;
       try {
         await root.SavoraApi.post('api/catalog.php', { action: 'set_item_availability', payload: { publicId: toggle.dataset.menuAvailabilityToggle, available: toggle.getAttribute('aria-pressed') !== 'true', version: Number(toggle.dataset.menuVersion || 0) } }, root.SavoraApi.intentKey(scope));
-        root.SavoraApi.clearIntentKey(scope);
-        await loadSnapshot(); renderMenu(); if (ui()) ui().showToast('Availability refreshed from the server.');
+        await loadSnapshot(); root.SavoraApi.clearIntentKey(scope); renderMenu(); if (ui()) ui().showToast('Availability refreshed from the server.');
       } catch (error) { if (feedback) feedback.textContent = error.message || 'Availability was not changed.'; }
     });
   }
@@ -132,8 +150,8 @@
     if (!form || !documentRef || !ui() || !root.SavoraApi) return;
     try { await loadSnapshot(); } catch (error) { showValidation(form, { name: error.message || 'Menu records are unavailable.' }); return; }
     const id = new URLSearchParams(root.location.search).get('id'); const saved = id && snapshot.items.find(item => item.id === id);
-    if (saved) { form.dataset.menuItemId = saved.id; setField(form, 'menu-name', saved.name); setField(form, 'menu-price', saved.price); setField(form, 'menu-available', '', saved.available); form.dataset.menuVersion = String(saved.version); const title = get('[data-menu-editor-title]'); if (title) title.textContent = 'Edit Menu Item'; } else { ensureDraftId(form); form.dataset.menuVersion = '0'; }
-    form.optionGroups = []; form.addOns = []; renderEditorLists(form); previewDraft(collectDraft(form));
+    if (saved) { form.dataset.menuItemId = saved.id; setField(form, 'menu-name', saved.name); setField(form, 'menu-price', saved.price); setField(form, 'menu-available', '', saved.available); form.dataset.menuVersion = String(saved.version); const title = get('[data-menu-editor-title]'); if (title) title.textContent = 'Edit Menu Item'; const editorData = editorDataFromServer(saved.optionGroups); form.optionGroups = editorData.optionGroups; form.addOns = editorData.addOns; } else { ensureDraftId(form); form.dataset.menuVersion = '0'; form.optionGroups = []; form.addOns = []; }
+    renderEditorLists(form); previewDraft(collectDraft(form));
     form.addEventListener('input', () => previewDraft(collectDraft(form))); form.addEventListener('change', () => previewDraft(collectDraft(form)));
     documentRef.addEventListener('click', event => {
       if (event.target.closest('[data-menu-add-option-group]')) { form.optionGroups = appendOptionGroup(form.optionGroups, { name: form.elements.namedItem('menu-option-group-name').value, required: form.elements.namedItem('menu-option-required').checked, optionLabel: form.elements.namedItem('menu-option-label').value, optionPrice: form.elements.namedItem('menu-option-price').value }); renderEditorLists(form); }
@@ -146,10 +164,10 @@
       const item = menuItemFromDraft(draft); const scope = `restaurant-menu-${item.id}`;
       try {
         await root.SavoraApi.post('api/catalog.php', { action: 'save_item', payload: serverPayload(item, Number(form.dataset.menuVersion || 0)) }, root.SavoraApi.intentKey(scope));
-        root.SavoraApi.clearIntentKey(scope); const state = root.SavoraRestaurantState; if (state && state.clearMenuDraft) state.persist(state.clearMenuDraft(state.load(), item.id)); await loadSnapshot(); root.location.assign('restaurant_menu.php');
+        await loadSnapshot(); root.SavoraApi.clearIntentKey(scope); const state = root.SavoraRestaurantState; if (state && state.clearMenuDraft) state.persist(state.clearMenuDraft(state.load(), item.id)); root.location.assign('restaurant_menu.php');
       } catch (error) { showValidation(form, { name: error.message || 'Menu item was not saved.' }); }
     });
   }
   if (root && documentRef) { const initialize = () => { bindMenu(); bindEditor(); }; if (documentRef.readyState === 'loading') documentRef.addEventListener('DOMContentLoaded', initialize, { once: true }); else initialize(); }
-  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, clearValidationState, editorFieldName, ensureDraftId, validateMenuItem, validateMenuItemForStatus, menuItemFromDraft, loadSnapshot, renderMenu };
+  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, clearValidationState, editorFieldName, ensureDraftId, validateMenuItem, validateMenuItemForStatus, menuItemFromDraft, editorGroupsFromServer, editorDataFromServer, serverPayload, loadSnapshot, renderMenu };
 }));

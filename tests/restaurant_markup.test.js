@@ -7,13 +7,14 @@ const Finance = require('../js/restaurant_finance.js');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('Revenue and finance document routes use safe, labelled local-demo finance controls', () => {
+test('Revenue and finance document routes use safe, labelled server-backed finance controls', () => {
   for (const file of ['restaurant_finance.php', 'restaurant_invoices.php', 'js/restaurant_finance.js']) {
     assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
   }
   const finance = read('restaurant_finance.php');
   const invoices = read('restaurant_invoices.php');
   const controller = read('js/restaurant_finance.js');
+  const repository = read('lib/repositories/finance_repository.php');
 
   for (const page of [finance, invoices]) {
     assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/restaurant_header\.php['"]/);
@@ -26,18 +27,19 @@ test('Revenue and finance document routes use safe, labelled local-demo finance 
 
   assert.match(finance, /<h1[^>]*>\s*Revenue &amp; Payouts\s*<\/h1>/);
   for (const hook of ['data-finance-kpis', 'data-finance-chart', 'data-transaction-filters', 'data-finance-transactions', 'data-payout-preview', 'data-payout-account', 'data-finance-feedback']) assert.match(finance, new RegExp(hook));
-  assert.match(finance, /<caption[^>]*>Local demo transactions<\/caption>/);
+  assert.match(finance, /<caption[^>]*>Server ledger transactions<\/caption>/);
   assert.match(finance, /<label[^>]*for="finance-date-range"/);
   assert.match(finance, /<label[^>]*for="finance-transaction-search"/);
 
   assert.match(invoices, /<h1[^>]*>\s*Invoices &amp; Statements\s*<\/h1>/);
   for (const hook of ['data-document-tabs', 'data-document-filters', 'data-document-table', 'data-document-preview', 'data-document-feedback']) assert.match(invoices, new RegExp(hook));
-  assert.match(invoices, /<caption[^>]*>Local demo financial documents<\/caption>/);
+  assert.match(invoices, /<caption[^>]*>Server financial documents<\/caption>/);
   assert.match(invoices, /<label[^>]*for="document-date-range"/);
   assert.match(invoices, /<label[^>]*for="document-search"/);
   assert.match(invoices, /<label[^>]*for="document-status"/);
-  assert.match(controller, /window\.print\(\)/);
-  assert.match(controller, /not a server-generated accounting document/i);
+  assert.match(repository, /restaurant_invoice_print\.php/);
+  assert.match(controller, /authenticated server ledger/i);
+  assert.doesNotMatch(controller, /serverOrders|local demo accounting document|10% fee estimate/i);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
 
@@ -96,8 +98,8 @@ test('Restaurant Overview uses the shared authenticated shell and semantic data 
   assert.match(page, /data-live-queue/);
   assert.match(page, /data-top-items/);
   assert.match(page, /data-low-stock/);
-  assert.match(page, /SavoraRestaurantState\.load\(\)/);
-  assert.match(page, /SavoraState\.load\(\)/);
+  assert.match(page, /api\/orders\.php/);
+  assert.match(page, /await api\.get/);
   assert.match(page, /SavoraRestaurantUI\.el/);
   assert.doesNotMatch(`${page}\n${header}\n${footer}`, /href\s*=\s*["']#["']/i);
   assert.doesNotMatch(`${page}\n${header}\n${footer}`, /\son[a-z]+\s*=/i);
@@ -112,7 +114,7 @@ test('Restaurant shell has local assets, accessible navigation, and named UI hel
   assert.match(header, /assets\/vendor\/fontawesome\/css\/all\.min\.css/);
   assert.match(header, /css\/restaurant_style\.css/);
   assert.match(footer, /js\/restaurant_state\.js/);
-  assert.match(footer, /js\/customer_state\.js/);
+  assert.doesNotMatch(footer, /js\/(?:customer_state|driver_state|platform_bridge)\.js/);
   assert.match(footer, /js\/restaurant_ui\.js/);
   assert.match(header, /class="skip-link"/);
   assert.match(header, /role="dialog"/);
@@ -181,8 +183,9 @@ test('Live Order Center uses the shared shell and exposes accessible order-opera
   for (const action of ['accept', 'reject', 'ready']) assert.match(page, new RegExp(`data-order-action="${action}"`));
   assert.match(page, /data-order-feedback[^>]*aria-live="polite"/);
   assert.match(page, /js\/restaurant_orders\.js/);
-  assert.match(controller, /SavoraRestaurantState\.updateOrderStatus/);
-  assert.match(controller, /SavoraState\.persist/);
+  assert.match(controller, /api\/orders\.php/);
+  assert.match(controller, /expectedVersion/);
+  assert.doesNotMatch(controller, /SavoraRestaurantState\.updateOrderStatus|SavoraState\.persist/);
   assert.match(controller, /textContent/);
   assert.doesNotMatch(`${page}\n${controller}`, /innerHTML\s*=/);
   assert.doesNotMatch(`${page}\n${controller}`, /\son[a-z]+\s*=/i);
@@ -313,7 +316,7 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   }
 
   assert.match(profile, /<h1[^>]*>\s*Store Profile\s*<\/h1>/);
-  for (const field of ['profile-name', 'profile-description', 'profile-phone', 'address-line1', 'address-line2', 'address-city', 'address-state', 'address-postal-code', 'address-country', 'delivery-radius']) assert.match(profile, new RegExp(`name="${field}"`));
+  for (const field of ['profile-name', 'profile-cuisine', 'profile-phone', 'address-line1', 'address-city']) assert.match(profile, new RegExp(`name="${field}"`));
   assert.match(profile, /data-use-current-location/);
   assert.match(profile, /data-address-feedback[^>]*aria-live="polite"/);
   assert.match(profile, /data-map-fallback/);
@@ -321,8 +324,8 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(profile, /js\/restaurant_storefront\.js/);
 
   assert.match(operations, /<h1[^>]*>\s*Operations &amp; Opening Hours\s*<\/h1>/);
-  for (const hook of ['data-store-status', 'data-weekly-hours', 'data-copy-hours', 'data-special-hours', 'data-capacity-warning', 'data-operations-preview']) assert.match(operations, new RegExp(hook));
-  for (const field of ['accepting-orders', 'prep-minutes', 'capacity', 'delivery-enabled', 'pickup-enabled', 'pickup-instructions']) assert.match(operations, new RegExp(`name="${field}"`));
+  for (const hook of ['data-store-status', 'data-weekly-hours', 'data-copy-hours', 'data-special-hours', 'data-operations-preview']) assert.match(operations, new RegExp(hook));
+  assert.match(operations, /name="accepting-orders"/);
   assert.match(controller, /navigator\.geolocation\.getCurrentPosition/);
   assert.match(controller, /data-address-feedback/);
   assert.match(controller, /SavoraApi\.get\('api\/catalog\.php\?scope=restaurant'\)/);
@@ -330,7 +333,7 @@ test('Store Profile and Operations routes provide accessible safe storefront con
   assert.match(controller, /clearIntentKey\(scope\)/);
   assert.match(controller, /data-special-open/);
   assert.match(controller, /data-special-close/);
-  assert.match(controller, /prepMinutes/);
+  assert.doesNotMatch(controller, /prepMinutes|deliveryRadius|capacity|deliveryEnabled|pickupEnabled/);
   assert.match(controller, /textContent/);
   assert.doesNotMatch(controller, /innerHTML\s*=/);
   assert.doesNotMatch(controller, /permission granted/i, 'geolocation must not claim permission before a success callback');
@@ -366,8 +369,10 @@ test('Analytics and review routes provide accessible local insight and bounded r
   assert.match(reviews, /data-review-save-draft/);
   assert.match(reviews, /data-review-publish/);
   assert.match(reviews, /data-review-feedback[^>]*aria-live="polite"/);
-  assert.match(controller, /api\.deriveAnalytics/);
-  assert.match(controller, /api\.setReviewReply/);
+  assert.match(controller, /buildAnalytics/);
+  assert.match(controller, /api\/orders\.php/);
+  assert.match(controller, /api\/reviews\.php/);
+  assert.match(controller, /SavoraApi\.post/);
   assert.match(controller, /publish \? 'published' : 'draft'/);
   assert.match(controller, /visible\.find\(review => review\.id === selectedReviewId\)/);
   assert.match(analytics, /restaurant-insight-items/);
@@ -376,14 +381,14 @@ test('Analytics and review routes provide accessible local insight and bounded r
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
 
-test('Restaurant Live Orders loads Driver state and stops at ready for pickup', () => {
+test('Restaurant Live Orders loads server orders and stops at ready for pickup', () => {
   const footer = read('components/restaurant_footer.php');
   const controller = read('js/restaurant_orders.js');
 
-  assert.match(footer, /js\/driver_state\.js/);
-  assert.match(controller, /SavoraDriverState/);
-  assert.match(controller, /deliveryForOrder/);
-  assert.match(controller, /dispatchForOrder/);
+  assert.doesNotMatch(footer, /js\/driver_state\.js/);
+  assert.match(controller, /api\/orders\.php/);
+  assert.match(controller, /order\.assignment/);
+  assert.match(controller, /order\.dispatch/);
   assert.match(controller, /Driver dispatch/);
   assert.match(controller, /Searching for an available driver/);
   assert.doesNotMatch(controller, /Hand off order|Complete handoff/);

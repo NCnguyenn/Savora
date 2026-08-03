@@ -37,4 +37,6 @@ try {
 } catch (SavoraIdempotencyConflict) {
     savora_error(409, 'Idempotency key was already used for a different request.', [], admin_reference_id());
 }
-savora_json($result, ($result['ok'] ?? false) ? 200 : 422);
+$httpStatus = (int) ($result['status'] ?? (($result['ok'] ?? false) ? 200 : 422));
+unset($result['status']);
+savora_json($result, $httpStatus);

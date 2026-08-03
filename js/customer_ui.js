@@ -35,7 +35,7 @@
 
   function load() {
     const api = stateApi();
-    return api ? api.load() : { cart: [], wallet: { balance: 0 }, profile: {} };
+    return api ? api.load() : { cart: [] };
   }
 
   function persist(state) {
@@ -63,8 +63,6 @@
   function syncLegacyState(state = load()) {
     if (!root) return state;
     root.cart = state.cart.map(legacyLine);
-    root.walletBalance = Number(state.wallet && state.wallet.balance || 0);
-    try { root.localStorage.setItem('savora_wallet', String(root.walletBalance)); } catch (_) { /* local demo fallback */ }
     return state;
   }
 
@@ -87,7 +85,6 @@
         note: ''
       };
     });
-    state.wallet.balance = Math.max(0, Number(root.walletBalance || state.wallet.balance || 0));
     persist(state);
     syncLegacyState(state);
     refreshChrome();
@@ -153,9 +150,12 @@
       });
     }
     container.replaceChildren(fragment);
-    const delivery = state.cart.length ? Number(stateApi().DELIVERY_FEE || 2) : 0;
-    const summary = [['cart-subtotal', subtotal], ['cart-delivery', delivery], ['cart-total', subtotal + delivery]];
-    summary.forEach(([id, value]) => { const node = dialogById(id); if (node) node.textContent = money(value); });
+    const subtotalNode = dialogById('cart-subtotal');
+    const deliveryNode = dialogById('cart-delivery');
+    const totalNode = dialogById('cart-total');
+    if (subtotalNode) subtotalNode.textContent = money(subtotal);
+    if (deliveryNode) deliveryNode.textContent = state.cart.length ? 'Calculated at checkout' : '$0.00';
+    if (totalNode) totalNode.textContent = state.cart.length ? 'Server quote at checkout' : '$0.00';
   }
 
   function refreshChrome() {
@@ -163,8 +163,6 @@
     const count = state.cart.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
     const countNode = dialogById('cart-count');
     if (countNode) { countNode.textContent = String(count); countNode.hidden = count === 0; }
-    const avatar = documentRef && documentRef.querySelector('[data-avatar]');
-    if (avatar && state.profile && state.profile.fullName) avatar.textContent = state.profile.fullName.trim().charAt(0).toUpperCase() || 'S';
     if (documentRef && root.location) {
       const currentPage = root.location.pathname.split('/').pop();
       documentRef.querySelectorAll('.customer-nav a').forEach(link => {
@@ -260,17 +258,9 @@
   }
 
   function topUpAmount(amount) {
-    const api = stateApi();
-    if (!api) return;
-    try {
-      const state = api.topUpWallet(load(), amount);
-      persist(state);
-      refreshChrome();
-      closeDialog('topup-modal');
-      announce(`${money(amount)} added to Savora Pay.`);
-    } catch (error) {
-      announce(error.message || 'Unable to top up.');
-    }
+    void amount;
+    closeDialog('topup-modal');
+    announce('Top-up is unavailable until a verified payment provider is configured.');
   }
 
   function toggleDropdown(event) {

@@ -1,17 +1,15 @@
 <?php require_once __DIR__ . '/components/driver_header.php'; ?>
-<main id="driver-main" class="driver-main" data-driver-page="overview">
+<main id="driver-main" class="driver-main" data-driver-page="overview" data-order-source="api/orders.php">
     <header class="driver-page-heading">
         <div>
             <p class="driver-eyebrow">Driver overview</p>
             <h1>Good afternoon, <span data-driver-first-name>Driver</span></h1>
-            <p>Set your location, go online, and review each delivery before accepting.</p>
+            <p>Availability, offers, location, and delivery assignments are read from Savora's server model.</p>
         </div>
-        <button class="driver-availability" type="button" data-driver-availability aria-pressed="false">
-            <span aria-hidden="true"></span><strong>Offline</strong><small>Not receiving offers</small>
-        </button>
+        <div class="driver-card" data-driver-dispatch-status role="status">Checking server dispatch status…</div>
     </header>
 
-    <section class="driver-overview-grid" aria-label="Driver location and delivery offers">
+    <section class="driver-overview-grid" aria-label="Driver location and assigned deliveries">
         <div class="driver-overview-main">
             <article class="driver-card driver-location-card" data-driver-location>
                 <div>
@@ -41,51 +39,18 @@
                 <span class="driver-map-label">Current service area</span>
             </div>
 
-            <section class="driver-kpi-grid" data-driver-summary aria-label="Today's delivery summary">
-                <article class="driver-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i><div><p>Today's deliveries</p><strong data-summary-deliveries>0</strong></div></article>
-                <article class="driver-card"><i class="fa-solid fa-dollar-sign" aria-hidden="true"></i><div><p>Today's earnings</p><strong data-summary-earnings>$0.00</strong></div></article>
-                <article class="driver-card"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><div><p>Acceptance rate</p><strong data-summary-acceptance>100%</strong></div></article>
+            <section class="driver-kpi-grid" data-driver-summary aria-label="Server delivery summary">
+                <article class="driver-card"><i class="fa-solid fa-route" aria-hidden="true"></i><div><p>Assigned deliveries</p><strong data-summary-deliveries>0</strong></div></article>
+                <article class="driver-card"><i class="fa-solid fa-dollar-sign" aria-hidden="true"></i><div><p>Assigned earnings</p><strong data-summary-earnings>$0.00</strong></div></article>
+                <article class="driver-card"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><p>Source of truth</p><strong data-summary-source>Server</strong></div></article>
             </section>
         </div>
 
         <aside class="driver-card driver-offer-card" data-delivery-offer aria-live="polite">
-            <div class="driver-offer-empty" data-offer-empty>
-                <span><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i></span>
-                <h2>Go online to receive offers</h2>
-                <p>Your next eligible delivery will appear here with restaurant, customer, route, and earnings details.</p>
-            </div>
-            <div data-offer-content hidden>
-                <header class="driver-offer-header">
-                    <div><p class="driver-eyebrow">Exclusive offer</p><h2>New delivery offer</h2></div>
-                    <div class="driver-offer-countdown" aria-label="Offer time remaining">
-                        <time data-offer-countdown datetime="PT30S">00:30</time>
-                    </div>
-                </header>
-                <section class="driver-offer-party">
-                    <span><i class="fa-solid fa-store" aria-hidden="true"></i></span>
-                    <div><small>Pickup</small><h3 data-offer-restaurant>Restaurant</h3><p data-offer-pickup-address></p></div>
-                </section>
-                <section class="driver-offer-party">
-                    <span><i class="fa-regular fa-user" aria-hidden="true"></i></span>
-                    <div><small>Customer</small><h3 data-offer-customer>Customer</h3><p data-offer-dropoff-address></p></div>
-                </section>
-                <section class="driver-offer-items">
-                    <h3>Order items</h3>
-                    <ul data-offer-items></ul>
-                </section>
-                <div class="driver-offer-route">
-                    <span class="driver-chip" data-offer-pickup-distance>0 km to pickup</span>
-                    <span class="driver-chip" data-offer-distance>0 km trip</span>
-                </div>
-                <div class="driver-offer-payment">
-                    <div><small>Estimated earnings</small><strong data-offer-earnings>$0.00</strong></div>
-                    <span class="driver-chip" data-offer-payment>Payment</span>
-                </div>
-                <div class="driver-offer-actions">
-                    <button class="driver-primary-action" type="button" data-accept-offer>Accept delivery</button>
-                    <button class="driver-danger-action" type="button" data-decline-offer>Decline</button>
-                </div>
-            </div>
+            <span><i class="fa-solid fa-server" aria-hidden="true"></i></span>
+            <h2>Server delivery offers</h2>
+            <p>Offers and responses are processed by the server. This page never creates or accepts a delivery locally.</p>
+            <ol class="driver-server-order-list" data-server-order-list></ol>
         </aside>
     </section>
 </main>
@@ -99,7 +64,7 @@
                 <i class="fa-solid fa-xmark" aria-hidden="true"></i>
             </button>
         </header>
-        <p class="driver-muted">This address helps Savora estimate which restaurants are closest to you.</p>
+        <p class="driver-muted">This preference is stored locally and does not change delivery ownership.</p>
         <label class="driver-field" for="driver-manual-address">
             <span>Current address</span>
             <input id="driver-manual-address" name="driver-address" type="text" autocomplete="street-address" required placeholder="Enter street, district, or landmark">

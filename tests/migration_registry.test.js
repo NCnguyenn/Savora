@@ -47,3 +47,12 @@ test('migration registry is explicit and core relationships are constrained', ()
   assert.match(integration, /idx_orders_customer/);
   assert.match(integration, /idx_migration_reused_orders_restaurant/);
 });
+
+test('auth onboarding migration is registered after partner document storage', () => {
+  const registry = fs.readFileSync('lib/migrations.php', 'utf8');
+  const partnerStorage = registry.indexOf("'014_partner_document_storage'");
+  const onboarding = registry.indexOf("'015_auth_onboarding'");
+  assert.ok(partnerStorage >= 0, 'partner storage migration must be registered');
+  assert.ok(onboarding > partnerStorage, 'auth onboarding migration must follow partner storage');
+  assert.match(registry, /database\/migrations\/015_auth_onboarding\.php/);
+});

@@ -1,7 +1,7 @@
 <?php require_once __DIR__ . '/components/restaurant_header.php'; ?>
-<main id="restaurant-main" class="restaurant-main" data-order-center>
+<main id="restaurant-main" class="restaurant-main" data-order-center data-order-source="api/orders.php">
     <header class="restaurant-page-heading">
-        <div><p class="restaurant-eyebrow">Order operations</p><h1>Live Order Center</h1><p>Review, prepare, and hand off every local order on time.</p></div>
+        <div><p class="restaurant-eyebrow">Order operations</p><h1>Live Order Center</h1><p>Review, prepare, and hand off every server order on time.</p></div>
         <a class="restaurant-primary-action" href="restaurant_order_history.php"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>Order history</a>
     </header>
     <p class="restaurant-empty" data-order-feedback aria-live="polite" aria-atomic="true"></p>

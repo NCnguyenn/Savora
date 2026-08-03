@@ -61,12 +61,10 @@ test('checkout cancellation clears the intent and draft without invoking the com
   assert.equal(storage.getItem('savora_checkout_draft_intent-cancel'), null);
 });
 
-test('checkout offers a cancellable path that abandons the saved intent and draft before returning to cart', () => {
+test('checkout offers a cancellable path that clears server-command intents before returning to cart', () => {
   const checkoutPage = fs.readFileSync('customer_checkout.php', 'utf8');
   assert.match(checkoutPage, /id="cancel-checkout-button"[^>]*type="button"/);
-  assert.match(checkoutPage, /Cancel checkout to discard the saved order draft and start over from your cart\./);
-  assert.match(checkoutPage, /cancelButton\.disabled = pending/);
-  assert.match(checkoutPage, /catch \(error\) \{\s+setSubmitting\(false\);/);
-  assert.match(checkoutPage, /SavoraCheckoutIntent\.cancel\(\{ storage: sessionStorage \}\)/);
+  assert.match(checkoutPage, /SavoraApi\.clearIntentKey\('customer-checkout-quote'\)/);
+  assert.match(checkoutPage, /SavoraApi\.clearIntentKey\('customer-place-order'\)/);
   assert.match(checkoutPage, /window\.location\.assign\('customer_cart\.php'\)/);
 });

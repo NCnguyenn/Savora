@@ -39,6 +39,6 @@ test('legacy sessions without a CSRF token must reauthenticate without a GET ses
 
   const requestSecurity = fs.readFileSync('lib/request_security.php', 'utf8');
   assert.match(requestSecurity, /savora_session_has_csrf_token\(\$_SESSION\)/, 'the shared request boundary must reject legacy sessions without a CSRF token');
-  assert.match(fs.readFileSync('api/platform_state.php', 'utf8'), /savora_request_actor/, 'api/platform_state.php must use the shared request boundary');
+  assert.match(fs.readFileSync('api/dispatch.php', 'utf8'), /savora_request_actor/, 'api/dispatch.php must use the shared request boundary');
   assert.match(fs.readFileSync('api/session_heartbeat.php', 'utf8'), /savora_session_has_csrf_token\(\$_SESSION\)/, 'api/session_heartbeat.php must reject legacy sessions without a CSRF token');
 });

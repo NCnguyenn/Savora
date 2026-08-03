@@ -1,7 +1,7 @@
 <?php require_once __DIR__ . '/components/restaurant_header.php'; ?>
-<main id="restaurant-main" class="restaurant-main" data-order-history>
+<main id="restaurant-main" class="restaurant-main" data-order-history data-order-source="api/orders.php">
     <header class="restaurant-page-heading">
-        <div><p class="restaurant-eyebrow">Order records</p><h1>Order History</h1><p>Search completed, cancelled, and refunded local records.</p></div>
+        <div><p class="restaurant-eyebrow">Order records</p><h1>Order History</h1><p>Search completed, cancelled, and refunded server records.</p></div>
         <a class="restaurant-primary-action" href="restaurant_orders.php"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>Live orders</a>
     </header>
     <p class="restaurant-empty" data-history-feedback aria-live="polite" aria-atomic="true"></p>
@@ -12,7 +12,7 @@
         <article class="restaurant-card restaurant-kpi"><i class="fa-solid fa-dollar-sign restaurant-kpi-icon" aria-hidden="true"></i><div><p>Completed sales</p><h2 data-history-sales>$0.00</h2></div></article>
     </section>
     <section class="restaurant-card" aria-labelledby="history-records-title">
-        <header class="restaurant-card-header"><h2 id="history-records-title">Order records</h2><span>Local demo data</span></header>
+        <header class="restaurant-card-header"><h2 id="history-records-title">Order records</h2><span>Server records</span></header>
         <form class="restaurant-form" data-history-filters>
             <div class="restaurant-field"><label for="history-date">From date</label><input id="history-date" name="history-date" type="date"></div>
             <div class="restaurant-field"><label for="history-search">Search by order or customer</label><input id="history-search" name="history-search" type="search"></div>

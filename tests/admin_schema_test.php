@@ -4,6 +4,7 @@ putenv('SAVORA_SEED_DEMO=1');
 
 putenv('SAVORA_DB_NAME=savora_test');
 require __DIR__ . '/../db.php';
+require_once __DIR__ . '/../lib/platform_schema.php';
 
 function admin_schema_assert(bool $condition, string $message): void
 {
@@ -13,7 +14,8 @@ function admin_schema_assert(bool $condition, string $message): void
     }
 }
 
-admin_schema_assert(($dbname ?? '') === 'savora_test', 'db.php must honor SAVORA_DB_NAME');
+$selectedDatabase = (string) ($conn->query('SELECT DATABASE() AS name')->fetch_assoc()['name'] ?? '');
+admin_schema_assert($selectedDatabase === 'savora_test', 'db.php must honor SAVORA_DB_NAME');
 admin_schema_assert(function_exists('platform_migrate'), 'platform_migrate must exist');
 admin_schema_assert(function_exists('platform_seed'), 'platform_seed must exist');
 
@@ -62,6 +64,7 @@ $requiredTables = [
 
 $stmt = $conn->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?');
 foreach ($requiredTables as $table) {
+    $dbname = 'savora_test';
     $stmt->bind_param('ss', $dbname, $table);
     $stmt->execute();
     $stmt->bind_result($count);

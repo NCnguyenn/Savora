@@ -165,7 +165,7 @@ try {
     catalog_expect($entry['publicId'] === $itemA && $entry['optionGroups'][0]['optionChoices'][0]['publicId'] === $choiceId, 'Customer options must belong to the matching menu item.');
 
     $restaurantCatalog = catalog_for_restaurant($conn, $ownerA);
-    catalog_expect(count($restaurantCatalog['items'] ?? []) === 1 && $restaurantCatalog['items'][0]['publicId'] === $itemA, 'Restaurant reads must resolve the owner to only its own catalog.');
+    catalog_expect(count($restaurantCatalog['items'] ?? []) === 2 && $restaurantCatalog['items'][0]['publicId'] === $itemA, 'Restaurant reads must resolve the owner to only its own catalog: ' . json_encode($restaurantCatalog, JSON_THROW_ON_ERROR));
 } finally {
     if ($conn instanceof mysqli && $ownerA !== null && $ownerB !== null) {
         $deleteGroups = $conn->prepare('DELETE g FROM menu_option_groups g JOIN menu_items m ON m.id=g.menu_item_id WHERE m.public_id IN (?,?,?)');

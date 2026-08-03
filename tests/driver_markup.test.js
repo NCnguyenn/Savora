@@ -29,14 +29,13 @@ test('Driver shell authenticates drivers and exposes exactly five top-level rout
   assert.match(header, /savora_start_session\(\)/);
   assert.match(header, /savora_validate_session\(\$conn,\s*\$_SESSION,\s*session_id\(\),\s*'driver'\)/);
   assert.match(header, /data-driver-session-id=/);
-  assert.match(read('js/driver_dashboard.js'), /scheduleDispatchReconciliation/);
+  assert.match(read('js/driver_dashboard.js'), /api\/orders\.php/);
   for (const route of routeNames) assert.match(header, new RegExp(route.replace('.', '\\.')));
   assert.equal((header.match(/=>\s*\[['"](?:Overview|Active Delivery|History|Earnings|Profile)['"]/g) || []).length, 5);
   assert.match(header, /aria-current="page"/);
   assert.match(header, /class="skip-link"/);
   assert.match(header, /assets\/vendor\/fontawesome\/css\/all\.min\.css/);
-  assert.match(footer, /js\/customer_state\.js/);
-  assert.match(footer, /js\/restaurant_state\.js/);
+  assert.doesNotMatch(footer, /js\/(?:customer_state|restaurant_state|platform_bridge)\.js/);
   assert.match(footer, /js\/driver_state\.js/);
   assert.match(footer, /js\/driver_ui\.js/);
 });
@@ -88,29 +87,29 @@ test('Driver UI renders persisted values with DOM nodes and exposes dialog and t
   assert.match(ui, /Escape/);
 });
 
-test('Driver Overview exposes location, summary and exclusive offer controls', () => {
+test('Driver Overview exposes location, server summary and read-only dispatch status', () => {
   const page = read('driver_dashboard.php');
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
   assert.equal((page.match(/<main\b/gi) || []).length, 1);
   assert.match(page, /<h1[^>]*>[\s\S]*Good afternoon/);
   for (const hook of [
-    'data-driver-availability',
     'data-driver-location',
     'data-use-driver-gps',
     'data-enter-driver-address',
     'data-driver-map',
     'data-driver-summary',
     'data-delivery-offer',
-    'data-offer-countdown',
-    'data-accept-offer',
-    'data-decline-offer'
+    'data-driver-dispatch-status',
+    'data-server-order-list'
   ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /server dispatch status|Server availability/i);
+  assert.doesNotMatch(page, /data-accept-offer|data-decline-offer/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
 });
 
-test('Active Delivery exposes route, parties, order details and one milestone action', () => {
+test('Active Delivery exposes server route data and a server milestone action', () => {
   const page = read('driver_delivery.php');
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
@@ -127,6 +126,7 @@ test('Active Delivery exposes route, parties, order details and one milestone ac
     'data-delivery-primary-action',
     'data-report-issue'
   ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /Loading server status|data-delivery-primary-action/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);
 });

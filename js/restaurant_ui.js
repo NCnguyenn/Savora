@@ -34,7 +34,7 @@
   function showToast(message) {
     const container = get('restaurant-toast-container');
     if (!container) return;
-    const toast = el('div', { className: 'restaurant-toast', role: 'status' }, String(message || 'Updated locally.'));
+    const toast = el('div', { className: 'restaurant-toast', role: 'status' }, String(message || 'Updated.'));
     container.append(toast);
     if (root) root.setTimeout(() => toast.remove(), 3600);
   }
@@ -69,21 +69,24 @@
     if (opener && typeof opener.focus === 'function') opener.focus();
   }
 
-  function restaurantState() { return root && root.SavoraRestaurantState; }
-  function customerState() { return root && root.SavoraState; }
-
-  function refreshShell() {
-    const restaurant = restaurantState();
-    const state = restaurant ? restaurant.load() : null;
-    if (!state) return;
-    documentRef.querySelectorAll('[data-restaurant-name]').forEach(node => { node.textContent = state.profile.name || 'Savora Kitchen'; });
+  function renderShell(restaurant) {
+    documentRef.querySelectorAll('[data-restaurant-name]').forEach(node => { node.textContent = restaurant && restaurant.name ? restaurant.name : ''; });
     documentRef.querySelectorAll('[data-accepting-orders]').forEach(button => {
-      const accepting = state.operations.acceptingOrders !== false;
+      const known = restaurant && typeof restaurant.acceptingOrders === 'boolean';
+      const accepting = known && restaurant.acceptingOrders;
       button.setAttribute('aria-pressed', String(accepting));
       button.classList.toggle('is-paused', !accepting);
       button.lastChild.textContent = '';
-      button.childNodes[1].textContent = accepting ? 'Accepting orders' : 'Orders paused';
+      button.childNodes[1].textContent = !known ? 'Manage availability' : (accepting ? 'Accepting orders' : 'Orders paused');
     });
+  }
+
+  async function refreshShell() {
+    if (!root || !root.SavoraApi || typeof root.SavoraApi.get !== 'function') { renderShell(null); return; }
+    try {
+      const snapshot = await root.SavoraApi.get('api/catalog.php?scope=restaurant');
+      renderShell(snapshot && snapshot.restaurant);
+    } catch (_) { renderShell(null); }
   }
 
   function bindShell() {
@@ -95,12 +98,8 @@
       if (!target) return;
       if (target.matches('.restaurant-mobile-menu-button')) { openDialog('restaurant-mobile-navigation', target); return; }
       if (target.matches('[data-accepting-orders]')) {
-        const api = restaurantState();
-        if (!api) return;
-        const current = api.load();
-        api.persist(api.setOperations(current, { acceptingOrders: current.operations.acceptingOrders === false }));
-        refreshShell();
-        showToast(current.operations.acceptingOrders === false ? 'Orders are now accepted.' : 'Orders are paused locally.');
+        if (root && root.location) root.location.assign('restaurant_operations.php');
+        else showToast('Manage availability from Operations & Opening Hours.');
         return;
       }
       if (target.matches('[data-owner-menu]')) {

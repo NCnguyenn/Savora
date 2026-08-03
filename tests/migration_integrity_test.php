@@ -71,6 +71,14 @@ function migration_column(mysqli $conn, string $table, string $column): ?array
     return $result ?: null;
 }
 
+function migration_column_matches(?array $column, string $type, string $nullable): bool
+{
+    if ($column === null) return false;
+    $actualType = strtolower((string) ($column['COLUMN_TYPE'] ?? ''));
+    $actualType = (string) preg_replace('/^int\(\d+\)$/', 'int', $actualType);
+    return $actualType === strtolower($type) && (string) ($column['IS_NULLABLE'] ?? '') === $nullable;
+}
+
 function migration_drop_constraint(mysqli $conn, string $table, string $constraint): void
 {
     migration_expect((bool) preg_match('/^[a-z0-9_]+$/', $table), 'Unsafe test table identifier.');
@@ -99,15 +107,25 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding'], 'Migration registry order is incorrect.');
 
-$conn->query("DELETE FROM schema_migrations WHERE version IN ('001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract')");
+$deleteMigration = $conn->prepare('DELETE FROM schema_migrations WHERE version=?');
+foreach ($versions as $version) { $deleteMigration->bind_param('s', $version); $deleteMigration->execute(); }
+$deleteMigration->close();
 migration_expect(savora_apply_migrations($conn) === $versions, 'Both migrations must apply in registry order.');
 migration_expect(savora_apply_migrations($conn) === [], 'A second migration pass must be a no-op.');
 migration_expect(
     migration_column($conn, 'idempotency_keys', 'request_hash') === ['COLUMN_TYPE' => 'char(64)', 'IS_NULLABLE' => 'NO'],
     'Idempotency request hashes must be stored as non-null SHA-256 values.'
 );
+$driverFileSize = migration_column($conn, 'driver_application_documents', 'file_size');
+$driverSha256 = migration_column($conn, 'driver_application_documents', 'sha256');
+$restaurantFileSize = migration_column($conn, 'restaurant_application_documents', 'file_size');
+$restaurantSha256 = migration_column($conn, 'restaurant_application_documents', 'sha256');
+migration_expect(migration_column_matches($driverFileSize, 'int', 'NO'), 'Driver document size metadata must exist: ' . json_encode($driverFileSize));
+migration_expect(migration_column_matches($driverSha256, 'char(64)', 'YES'), 'Driver document hash metadata must exist: ' . json_encode($driverSha256));
+migration_expect(migration_column_matches($restaurantFileSize, 'int', 'NO'), 'Restaurant document size metadata must exist: ' . json_encode($restaurantFileSize));
+migration_expect(migration_column_matches($restaurantSha256, 'char(64)', 'YES'), 'Restaurant document hash metadata must exist: ' . json_encode($restaurantSha256));
 
 $expected = [
     'fk_orders_customer' => ['orders', 'customer_user_id', 'users', 'id', 'RESTRICT'],

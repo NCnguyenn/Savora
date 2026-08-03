@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/environment.php';
 
 function savora_database_config(): array
 {
@@ -7,13 +8,15 @@ function savora_database_config(): array
     if (!preg_match('/^[A-Za-z0-9_]+$/', $name)) {
         throw new RuntimeException('Invalid database name.');
     }
-    return [
+    $config = [
         'host' => (string) (getenv('SAVORA_DB_HOST') ?: '127.0.0.1'),
         'port' => (int) (getenv('SAVORA_DB_PORT') ?: 3306),
         'user' => (string) (getenv('SAVORA_DB_USER') ?: 'root'),
         'password' => (string) (getenv('SAVORA_DB_PASSWORD') ?: ''),
         'name' => $name,
     ];
+    savora_require_production_database_config($config);
+    return $config;
 }
 
 function savora_database_connect(bool $selectDatabase = true): mysqli

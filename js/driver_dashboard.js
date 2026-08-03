@@ -3,313 +3,130 @@
 
   if (!root || !root.document) return;
   const doc = root.document;
-  const DriverState = root.SavoraDriverState;
-  const CustomerState = root.SavoraState;
-  const RestaurantState = root.SavoraRestaurantState;
+  const Api = root.SavoraApi;
   const ui = root.SavoraDriverUI;
   const page = doc.querySelector('[data-driver-page="overview"]');
-  if (!page || !DriverState || !CustomerState || !RestaurantState || !ui) return;
+  if (!page || !Api || !ui) return;
 
-  let countdownTimer = null;
-  let dispatchTimer = null;
+  let serverOrders = [];
+  let dispatch = { offers: [], availabilityStatus: 'offline', eligibilityStatus: 'pending', location: null };
+  const setText = (selector, value) => { const node = doc.querySelector(selector); if (node) node.textContent = String(value); };
+  const key = scope => Api.intentKey(`driver-${scope}`);
 
-  const setText = (selector, value) => {
-    const node = doc.querySelector(selector);
-    if (node) node.textContent = String(value);
-  };
-
-  function currentStates() {
-    return {
-      driver: DriverState.load(),
-      customer: CustomerState.load(),
-      restaurant: RestaurantState.load()
-    };
+  function refreshIdentity() {
+    const name = String(doc.body.dataset.driverSessionName || 'Savora Driver').replace(/\s*\(Driver\)\s*$/i, '').trim();
+    setText('[data-driver-first-name]', name.split(/\s+/)[0] || 'Driver');
   }
 
-  function syncSessionProfile(state) {
-    const sessionName = String(doc.body.dataset.driverSessionName || '').replace(/\s*\(Driver\)\s*$/i, '').trim();
-    const sessionId = String(doc.body.dataset.driverSessionId || '').trim();
-    const patch = {};
-    if (sessionName && sessionName !== state.profile.fullName) patch.fullName = sessionName;
-    if (sessionId && sessionId !== state.profile.id) patch.id = sessionId;
-    return Object.keys(patch).length ? DriverState.setProfile(state, patch) : state;
+  async function refreshServer() {
+    const [assigned, pickedUp, snapshot] = await Promise.all([
+      Api.get('api/orders.php?status=assigned&pageSize=50'),
+      Api.get('api/orders.php?status=picked_up&pageSize=50'),
+      Api.get('api/dispatch.php')
+    ]);
+    const byId = new Map();
+    for (const result of [assigned, pickedUp]) for (const order of Array.isArray(result && result.orders) ? result.orders : []) byId.set(order.id, order);
+    serverOrders = [...byId.values()];
+    dispatch = snapshot || dispatch;
   }
 
-  function prepareDriverState(states) {
-    let driver = syncSessionProfile(states.driver);
-    const now = Date.now();
-    driver = DriverState.expireOffer(driver, now);
-    driver = DriverState.expireDispatches(driver, now);
-    driver = DriverState.createOffer(driver, states.customer, states.restaurant, now);
-    return DriverState.persist(driver);
-  }
-
-  function renderIdentity(state) {
-    const firstName = state.profile.fullName.split(/\s+/).filter(Boolean)[0] || 'Driver';
-    setText('[data-driver-first-name]', firstName);
-  }
-
-  function renderAvailability(state) {
-    const button = doc.querySelector('[data-driver-availability]');
-    if (!button) return;
-    button.setAttribute('aria-pressed', String(state.online));
-    button.classList.toggle('is-online', state.online);
-    const strong = button.querySelector('strong');
-    const small = button.querySelector('small');
-    if (strong) strong.textContent = state.online ? 'Online' : 'Offline';
-    if (small) small.textContent = state.online ? 'Receiving delivery offers' : 'Not receiving offers';
-    ui.syncTopbar();
-  }
-
-  function renderLocation(state) {
-    setText('[data-driver-location-address]', state.location.address || 'Location unavailable');
+  function renderLocation() {
+    const location = dispatch.location || serverOrders.map(order => order.assignment && order.assignment.location).find(Boolean);
+    const fresh = location && location.recordedAt && (Date.now() - new Date(location.recordedAt).getTime()) <= 5 * 60 * 1000;
+    setText('[data-driver-location-address]', fresh ? `Server GPS · ${ui.formatDate(location.recordedAt)}` : 'Server location unavailable');
     const map = doc.querySelector('[data-driver-map]');
     if (map) {
-      map.dataset.locationMethod = state.location.method;
-      map.setAttribute('aria-label', `${state.location.address}. ${state.serviceRadiusKm} kilometer service area.`);
+      map.dataset.locationRecordedAt = fresh ? String(location.recordedAt) : '';
+      map.setAttribute('aria-label', fresh ? `Server GPS location recorded ${ui.formatDate(location.recordedAt)}.` : 'Server GPS location temporarily unavailable.');
     }
-    const input = doc.querySelector('[name="driver-address"]');
-    if (input && doc.activeElement !== input) input.value = state.location.address || '';
   }
 
-  function renderSummary(state) {
-    const earnings = DriverState.deriveEarnings(state);
-    const today = new Date().toISOString().slice(0, 10);
-    const completedToday = earnings.records.filter(delivery => String(delivery.deliveredAt || '').slice(0, 10) === today);
-    const todayTotal = completedToday.reduce((sum, delivery) => sum + delivery.earnings + delivery.bonus, 0);
-    const attempts = state.offerAttempts.length;
-    const accepted = state.offerAttempts.filter(attempt => attempt.outcome === 'accepted').length;
-    const acceptanceRate = attempts ? Math.round((accepted / attempts) * 100) : 100;
-    setText('[data-summary-deliveries]', completedToday.length);
-    setText('[data-summary-earnings]', ui.money(todayTotal));
-    setText('[data-summary-acceptance]', `${acceptanceRate}%`);
+  function renderSummary() {
+    const earnings = serverOrders.reduce((sum, order) => sum + Number(order.assignment && order.assignment.earning || 0), 0);
+    setText('[data-summary-deliveries]', serverOrders.length);
+    setText('[data-summary-earnings]', ui.money(earnings));
+    setText('[data-summary-source]', 'MySQL server');
   }
 
-  function emptyOfferCopy(state) {
-    if (DriverState.activeDelivery(state)) {
-      return {
-        title: 'Delivery in progress',
-        copy: 'Finish your active delivery before receiving another offer.',
-        action: ui.el('a', { className: 'driver-primary-action', href: 'driver_delivery.php' }, [
-          ui.icon('fa-route'), 'Open active delivery'
-        ])
-      };
+  function renderOrders() {
+    const list = doc.querySelector('[data-server-order-list]');
+    if (!list) return;
+    list.replaceChildren();
+    if (!serverOrders.length) list.append(ui.el('li', { className: 'driver-muted' }, 'No assigned deliveries are currently visible.'));
+    for (const order of serverOrders) {
+      const assignment = order.assignment || {};
+      list.append(ui.el('li', {}, [ui.el('strong', { text: order.id || 'Order' }), ui.el('span', { text: `${ui.titleCase(assignment.status || order.status)} · ${order.restaurantName || 'Restaurant'}` })]));
     }
-    if (!state.online) {
-      return {
-        title: 'Go online to receive offers',
-        copy: 'Your next eligible delivery will appear here with restaurant, customer, route, and earnings details.'
-      };
-    }
-    const reassigned = state.dispatches.find(dispatch =>
-      dispatch.status === 'offer_sent' && dispatch.candidateDriverId && dispatch.candidateDriverId !== state.profile.id &&
-      state.offerAttempts.some(attempt => attempt.orderId === dispatch.orderId && ['declined', 'expired'].includes(attempt.outcome))
-    );
-    if (reassigned) {
-      return {
-        title: 'Offer reassigned',
-        copy: 'This delivery is now being offered to another eligible driver. Savora is looking for your next nearby delivery.'
-      };
-    }
-    return {
-      title: 'Looking for nearby deliveries',
-      copy: 'You are online. Savora will show one eligible offer at a time.'
-    };
   }
 
-  function renderOffer(state) {
-    const empty = doc.querySelector('[data-offer-empty]');
-    const content = doc.querySelector('[data-offer-content]');
-    const offer = state.currentOffer;
-    if (!empty || !content) return;
-    page.classList.toggle('has-active-offer', Boolean(offer));
+  function renderOffers() {
+    const card = doc.querySelector('[data-delivery-offer]');
+    const status = doc.querySelector('[data-driver-dispatch-status]');
+    if (status) status.textContent = dispatch.eligibilityStatus !== 'eligible'
+      ? 'Dispatch requires an eligible Driver profile.'
+      : `Server availability: ${ui.titleCase(dispatch.availabilityStatus || 'offline')}.`;
+    if (!card) return;
+    const offer = dispatch.offers && dispatch.offers[0];
+    card.querySelectorAll('[data-offer-content]').forEach(node => node.remove());
+    const content = ui.el('div', { dataset: { offerContent: 'true' } });
     if (!offer) {
-      const copy = emptyOfferCopy(state);
-      empty.replaceChildren(...[
-        ui.el('span', {}, ui.icon(state.online ? 'fa-satellite-dish' : 'fa-wifi')),
-        ui.el('h2', { text: copy.title }),
-        ui.el('p', { text: copy.copy }),
-        copy.action
-      ].filter(Boolean));
-      empty.hidden = false;
-      content.hidden = true;
-      if (countdownTimer) root.clearInterval(countdownTimer);
-      countdownTimer = null;
-      scheduleDispatchReconciliation(state);
-      return;
+      content.append(ui.el('h2', { text: 'No active server offer' }), ui.el('p', { text: 'New offers appear here only when the server dispatch service assigns one to this Driver.' }));
+    } else {
+      content.append(ui.el('h2', { text: `${offer.pickup.restaurantName} · ${offer.orderReference}` }), ui.el('p', { text: `${offer.pickup.address}, ${offer.pickup.city} · ${offer.distanceKm === null ? 'Distance unavailable' : `${offer.distanceKm} km`} · Expires ${ui.formatDate(offer.expiresAt)}` }));
+      const actions = ui.el('div', { className: 'driver-offer-actions' }, [
+        ui.el('button', { className: 'driver-primary-action', type: 'button', dataset: { offerAccept: offer.offerReference } }, 'Accept offer'),
+        ui.el('button', { className: 'driver-secondary-action', type: 'button', dataset: { offerDecline: offer.offerReference } }, 'Decline')
+      ]);
+      content.append(actions);
     }
-
-    if (dispatchTimer) root.clearTimeout(dispatchTimer);
-    dispatchTimer = null;
-
-    empty.hidden = true;
-    content.hidden = false;
-    setText('[data-offer-restaurant]', offer.restaurantName);
-    setText('[data-offer-pickup-address]', offer.pickupAddress);
-    setText('[data-offer-customer]', offer.customerName);
-    setText('[data-offer-dropoff-address]', offer.dropoffAddress);
-    setText('[data-offer-pickup-distance]', `${offer.distanceToPickupKm.toFixed(1)} km to pickup`);
-    setText('[data-offer-distance]', `${offer.distanceKm.toFixed(1)} km trip`);
-    setText('[data-offer-earnings]', ui.money(offer.earnings));
-    setText('[data-offer-payment]', offer.paymentMethod === 'cash' ? `Cash on delivery · ${ui.money(offer.orderTotal)}` : 'Savora Pay');
-    const list = doc.querySelector('[data-offer-items]');
-    if (list) {
-      list.replaceChildren(...offer.items.map(item => ui.el('li', {}, [
-        ui.el('span', { text: `${item.quantity} × ${item.name}` }),
-        ui.el('strong', { text: ui.money(item.quantity * item.unitPrice) })
-      ])));
-    }
-    startCountdown(offer);
+    card.append(content);
+    card.querySelector('[data-offer-accept]')?.addEventListener('click', () => respondToOffer('accept_offer', offer.offerReference));
+    card.querySelector('[data-offer-decline]')?.addEventListener('click', () => respondToOffer('decline_offer', offer.offerReference));
   }
 
-  function scheduleDispatchReconciliation(state) {
-    if (dispatchTimer) root.clearTimeout(dispatchTimer);
-    dispatchTimer = null;
-    const expiresAt = state.dispatches
-      .filter(dispatch => dispatch.status === 'offer_sent' && dispatch.expiresAt > Date.now())
-      .map(dispatch => dispatch.expiresAt)
-      .sort((a, b) => a - b)[0];
-    if (!expiresAt) return;
-    dispatchTimer = root.setTimeout(() => {
-      dispatchTimer = null;
-      renderAll();
-    }, Math.max(0, expiresAt - Date.now()) + 25);
+  async function respondToOffer(command, offerReference) {
+    try {
+      await Api.post('api/dispatch.php', { command, payload: { offerReference } }, key(`${command}-${offerReference}`));
+      Api.clearIntentKey(`driver-${command}-${offerReference}`);
+      ui.showToast(command === 'accept_offer' ? 'Offer accepted by the server.' : 'Offer declined.');
+      await refreshServer(); renderAll();
+    } catch (error) { ui.showToast(error.message || 'The server could not process the offer.', 'error'); }
   }
 
-  function updateCountdown(offer) {
-    const remaining = Math.max(0, offer.expiresAt - Date.now());
-    const seconds = Math.ceil(remaining / 1000);
-    const node = doc.querySelector('[data-offer-countdown]');
-    if (node) {
-      node.textContent = `00:${String(seconds).padStart(2, '0')}`;
-      node.setAttribute('datetime', `PT${seconds}S`);
-    }
-    if (remaining > 0) return;
-    const state = DriverState.persist(DriverState.expireOffer(DriverState.load(), Date.now()));
-    ui.showToast('Offer expired. Savora is searching for another driver.', 'error');
-    ui.announce('The delivery offer expired after 30 seconds.');
-    renderAll(state);
-  }
+  function renderAll() { refreshIdentity(); renderLocation(); renderSummary(); renderOrders(); renderOffers(); }
 
-  function startCountdown(offer) {
-    if (countdownTimer) root.clearInterval(countdownTimer);
-    updateCountdown(offer);
-    countdownTimer = root.setInterval(() => {
-      const current = DriverState.load().currentOffer;
-      if (!current || current.orderId !== offer.orderId) {
-        root.clearInterval(countdownTimer);
-        countdownTimer = null;
-        return;
-      }
-      updateCountdown(current);
-    }, 1000);
+  async function sendGps(position) {
+    const delivery = serverOrders.find(order => order.assignment && ['assigned', 'arrived', 'picked_up'].includes(order.assignment.status));
+    const payload = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracyMeters: position.coords.accuracy, recordedAt: new Date().toISOString().slice(0, 19).replace('T', ' '), expectedVersion: Number(delivery && delivery.assignment && delivery.assignment.location && delivery.assignment.location.version || 0) };
+    if (delivery) payload.deliveryId = Number(delivery.assignment.deliveryId);
+    const command = delivery ? 'update_location' : 'set_availability';
+    if (!delivery) payload.availabilityStatus = dispatch.availabilityStatus || 'online';
+    await Api.post('api/dispatch.php', { command, payload }, key(`gps-${delivery ? delivery.assignment.deliveryId : 'availability'}`));
+    await refreshServer(); renderAll();
   }
-
-  function renderAll(providedState) {
-    const states = currentStates();
-    const state = providedState || prepareDriverState(states);
-    renderIdentity(state);
-    renderAvailability(state);
-    renderLocation(state);
-    renderSummary(state);
-    renderOffer(state);
-  }
-
-  doc.querySelector('[data-driver-availability]')?.addEventListener('click', event => {
-    const current = DriverState.load();
-    const next = DriverState.persist(DriverState.setAvailability(current, !current.online));
-    ui.showToast(next.online ? 'You are online and ready for offers.' : 'You are now offline.');
-    ui.announce(next.online ? 'Online. Looking for nearby deliveries.' : 'Offline. New offers are paused.');
-    renderAll(next.online ? prepareDriverState({ ...currentStates(), driver: next }) : next);
-    event.currentTarget.focus();
-  });
 
   doc.querySelector('[data-use-driver-gps]')?.addEventListener('click', event => {
     const button = event.currentTarget;
-    if (!root.navigator.geolocation) {
-      ui.showToast('GPS is unavailable. Enter your address manually.', 'error');
-      return;
-    }
+    if (!root.navigator.geolocation) { ui.showToast('GPS is unavailable.', 'error'); return; }
     button.disabled = true;
-    button.textContent = 'Locating…';
-    root.navigator.geolocation.getCurrentPosition(position => {
-      const current = DriverState.load();
-      const next = DriverState.setLocation(current, {
-        method: 'gps',
-        address: current.location.address || 'Current GPS location',
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      });
-      DriverState.persist(next);
-      button.disabled = false;
-      button.replaceChildren(ui.icon('fa-crosshairs'), 'Use GPS');
-      ui.showToast('Current GPS location saved.');
-      renderAll(next);
-    }, () => {
-      button.disabled = false;
-      button.replaceChildren(ui.icon('fa-crosshairs'), 'Use GPS');
-      ui.showToast('Location permission was not granted. Enter an address manually.', 'error');
-    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    root.navigator.geolocation.getCurrentPosition(async position => {
+      try { await sendGps(position); ui.showToast('GPS location sent to the server.'); }
+      catch (error) { ui.showToast(error.message || 'Server rejected the location.', 'error'); }
+      finally { button.disabled = false; }
+    }, () => { button.disabled = false; ui.showToast('Location permission was not granted.', 'error'); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
   });
 
-  doc.querySelector('[data-enter-driver-address]')?.addEventListener('click', event => {
-    const input = doc.querySelector('[name="driver-address"]');
-    if (input) input.value = DriverState.load().location.address || '';
-    ui.openDialog('driver-address-dialog', event.currentTarget);
-  });
-
+  doc.querySelector('[data-enter-driver-address]')?.addEventListener('click', event => ui.openDialog('driver-address-dialog', event.currentTarget));
   doc.querySelector('[data-driver-address-form]')?.addEventListener('submit', event => {
     event.preventDefault();
-    const input = event.currentTarget.elements['driver-address'];
-    const error = doc.querySelector('[data-driver-address-error]');
-    const address = String(input.value || '').trim();
-    if (!address) {
-      if (error) error.textContent = 'Enter your current address.';
-      input.setAttribute('aria-invalid', 'true');
-      input.focus();
-      return;
-    }
-    input.removeAttribute('aria-invalid');
-    if (error) error.textContent = '';
-    const next = DriverState.persist(DriverState.setLocation(DriverState.load(), { method: 'manual', address }));
+    const address = String(event.currentTarget.elements['driver-address'].value || '').trim();
+    if (!address) { setText('[data-driver-address-error]', 'Enter an address.'); return; }
     ui.closeDialog('driver-address-dialog');
-    ui.showToast('Current address saved.');
-    renderAll(next);
+    ui.showToast('Address is kept as a draft; dispatch uses server GPS coordinates.');
   });
 
-  doc.querySelector('[data-accept-offer]')?.addEventListener('click', async () => {
-    const states = currentStates();
-    const offer = states.driver.currentOffer;
-    if (!offer) return;
-      try {
-        const result = DriverState.acceptOffer(states.driver, states.customer, states.restaurant, offer.orderId, Date.now());
-        if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
-        const intentScope = 'driver-accept-' + offer.orderId;
-        await root.SavoraPlatformBridge.command('driver_accept_order', { reference_code: offer.orderId }, root.SavoraApi.intentKey(intentScope));
-        root.SavoraApi.clearIntentKey(intentScope);
-        DriverState.persist(result.state);
-      CustomerState.persist(result.customerState);
-      ui.announce(`Delivery ${offer.orderId} accepted.`);
-      root.location.href = 'driver_delivery.php';
-    } catch (error) {
-      ui.showToast(error.message || 'Unable to accept this offer.', 'error');
-      renderAll();
-    }
-  });
-
-  doc.querySelector('[data-decline-offer]')?.addEventListener('click', () => {
-    const state = DriverState.load();
-    if (!state.currentOffer) return;
-    try {
-      const next = DriverState.persist(DriverState.declineOffer(state, state.currentOffer.orderId, Date.now()));
-      ui.showToast('Offer declined. Savora will find another driver.');
-      ui.announce('Delivery declined and returned to driver search.');
-      renderAll(next);
-    } catch (error) {
-      ui.showToast(error.message || 'Unable to decline this offer.', 'error');
-    }
-  });
-
-  root.addEventListener('storage', () => renderAll());
-  renderAll();
+  (async function initialize() {
+    try { await refreshServer(); renderAll(); }
+    catch (error) { setText('[data-driver-dispatch-status]', error.message || 'Server dispatch data is unavailable.'); renderAll(); }
+  }());
 }(typeof window === 'undefined' ? null : window));

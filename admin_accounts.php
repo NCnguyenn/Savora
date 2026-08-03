@@ -7,6 +7,23 @@ $selected = $accountsData['selected'];
 ?>
 <main class="admin-main" id="admin-main" tabindex="-1">
     <header class="admin-page-heading"><div><p class="admin-eyebrow">IDENTITY &amp; SECURITY</p><h1>Accounts &amp; Access</h1><p>Monitor every role, session and status change with controlled Admin interventions.</p></div><div class="admin-page-heading__actions"><button class="admin-button admin-button--ghost" type="button" data-admin-export-table><i class="fa-solid fa-download" aria-hidden="true"></i> Export accounts</button></div></header>
+    <?php if (($accountsData['current_admin']['privilege_level'] ?? '') === 'super_admin'): ?>
+    <section class="admin-card admin-section-block" aria-labelledby="create-admin-title">
+        <header class="admin-card__header"><div><span class="admin-eyebrow">INTERNAL ACCESS</span><h2 id="create-admin-title">Create an Admin account</h2><p>Only Super Admins can provision active internal accounts.</p></div></header>
+        <form class="admin-filter-bar" data-admin-create-account novalidate>
+            <label><span>Full name</span><input name="full_name" autocomplete="name" required maxlength="120"></label>
+            <label><span>Username</span><input name="username" autocomplete="off" required minlength="3" maxlength="50"></label>
+            <label><span>Email</span><input name="email" type="email" autocomplete="off" required maxlength="190"></label>
+            <label><span>Internal phone</span><input name="phone" type="tel" autocomplete="off" required maxlength="40"></label>
+            <label><span>Password</span><input name="password" type="password" autocomplete="new-password" required minlength="10"></label>
+            <label><span>Confirm password</span><input name="password_confirmation" type="password" autocomplete="new-password" required minlength="10"></label>
+            <fieldset><legend>Privilege level</legend><label><input type="radio" name="privilege_level" value="admin" checked> Admin</label><label><input type="radio" name="privilege_level" value="super_admin"> Super Admin</label></fieldset>
+            <p class="admin-integrity-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>The account is activated immediately after creation.</p>
+            <p data-admin-field-error role="alert"></p>
+            <button class="admin-button admin-button--primary" type="submit">Create Admin account</button>
+        </form>
+    </section>
+    <?php endif; ?>
     <section class="admin-summary-strip" aria-label="Account summary"><?php foreach ([['All Accounts','all','fa-users'],['Active','active','fa-circle-check'],['Suspended','suspended','fa-pause'],['Blocked','blocked','fa-ban'],['Pending','pending','fa-clock']] as [$label,$key,$icon]): ?><a href="admin_accounts.php<?= $key === 'all' ? '' : '?status=' . admin_escape($key) ?>"><span><i class="fa-solid <?= admin_escape($icon) ?>" aria-hidden="true"></i><?= admin_escape($label) ?></span><strong><?= admin_escape($accountsData['summary'][$key] ?? 0) ?></strong></a><?php endforeach; ?></section>
     <form class="admin-filter-bar" method="get" data-admin-filter><label class="admin-filter-search"><span class="sr-only">Search accounts</span><input type="search" name="q" value="<?= admin_escape($_GET['q'] ?? '') ?>" placeholder="Search name, username or email"></label><label><span>Role</span><select name="role"><option value="">All roles</option><?php foreach (['customer','restaurant','driver','admin'] as $role): ?><option value="<?= $role ?>" <?= ($_GET['role'] ?? '') === $role ? 'selected' : '' ?>><?= admin_escape(ucfirst($role)) ?></option><?php endforeach; ?></select></label><label><span>Status</span><select name="status"><option value="">All statuses</option><?php foreach (['active','suspended','blocked','pending'] as $status): ?><option value="<?= $status ?>" <?= ($_GET['status'] ?? '') === $status ? 'selected' : '' ?>><?= admin_escape(ucfirst($status)) ?></option><?php endforeach; ?></select></label><label><span>Created date</span><input type="date" name="created"></label><button class="admin-button admin-button--primary" type="submit">Apply</button></form>
     <div class="admin-master-detail">

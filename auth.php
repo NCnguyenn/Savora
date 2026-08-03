@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/session_security.php';
 require_once __DIR__ . '/lib/admin_security.php';
+require_once __DIR__ . '/lib/services/rate_limit_service.php';
 savora_start_session();
 require_once __DIR__ . '/db.php';
 
@@ -13,6 +14,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $loginUsername = trim((string) ($_POST['username'] ?? ''));
 $loginPassword = (string) ($_POST['password'] ?? '');
+$_SESSION['login_username'] = mb_substr($loginUsername, 0, 50);
+
+$actor = ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|' . mb_strtolower(mb_substr($loginUsername, 0, 120));
+if (!rate_limit_consume($conn, $actor, 'login', 8, 300)) {
+    $_SESSION['error'] = 'Too many sign-in attempts. Please try again later.';
+    header('Location: index.php');
+    exit();
+}
 
 if ($loginUsername === '' || $loginPassword === '') {
     $_SESSION['error'] = 'Please enter both username and password.';
@@ -39,6 +48,7 @@ if (($user['status'] ?? 'active') !== 'active') {
 }
 
 session_regenerate_id(true);
+unset($_SESSION['login_username'], $_SESSION['error']);
 $_SESSION['user_id'] = (int) $user['id'];
 $_SESSION['username'] = (string) $user['username'];
 $_SESSION['role'] = (string) $user['role'];

@@ -5,7 +5,7 @@
         <div>
             <p class="eyebrow">From checkout to doorstep</p>
             <h1>Your orders</h1>
-            <p>Track active deliveries and revisit orders saved on this device.</p>
+            <p>Track active deliveries and revisit orders from your account.</p>
         </div>
     </header>
 
@@ -28,7 +28,7 @@
         <section class="orders-history-section" aria-labelledby="order-history-title">
             <div class="section-heading-row">
                 <div>
-                    <p class="eyebrow">Saved locally</p>
+                    <p class="eyebrow">Server history</p>
                     <h2 id="order-history-title">Order history</h2>
                 </div>
                 <span id="order-result-count" class="result-count" aria-live="polite"></span>
@@ -49,12 +49,12 @@
     </div>
 </main>
 
+<script src="js/api_client.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const stateApi = window.SavoraState;
     const catalog = window.SavoraCatalog;
     const ui = window.SavoraUI;
-    const driverStateApi = window.SavoraDriverState;
     if (!stateApi || !catalog || !ui) return;
 
     const historyList = document.getElementById('order-history-list');
@@ -65,6 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestedOrderId = params.get('order') || params.get('reorder');
     let selectedFilter = 'all';
     let requestedCard = null;
+    let serverReviews = [];
+    let serverOrders = [];
 
     const statusDetails = {
         pending: { label: 'Pending confirmation', icon: 'fa-hourglass-half' },
@@ -73,15 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ready_for_pickup: { label: 'Ready for pickup', icon: 'fa-bag-shopping' },
         on_the_way: { label: 'On the way', icon: 'fa-bicycle' },
         completed: { label: 'Completed', icon: 'fa-circle-check' },
+        delivered: { label: 'Delivered', icon: 'fa-circle-check' },
         cancelled: { label: 'Cancelled', icon: 'fa-circle-xmark' },
         refunded: { label: 'Refunded', icon: 'fa-rotate-left' }
     };
 
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const productForLine = line => catalog.products[String(line.id)] || null;
-    const driverForOrder = order => driverStateApi
-        ? driverStateApi.deliveryForOrder(driverStateApi.load(), order.id)
-        : null;
+    const driverForOrder = order => order && order.assignment ? order.assignment : null;
+    const dispatchForOrder = order => order && order.dispatch ? order.dispatch : null;
     const restaurantForOrder = order => {
         const product = order.items.map(productForLine).find(Boolean);
         return product ? product.restaurant : 'Savora order';
@@ -140,6 +142,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1800);
     }
 
+    function reviewForm(order) {
+        const existing = serverReviews.find(review => review.orderReference === String(order.id));
+        if (existing) return ui.el('p', { className: 'form-help' }, `Your ${existing.rating}-star review is saved.`);
+        if (!['completed', 'delivered'].includes(order.status)) return null;
+        const form = ui.el('form', { className: 'order-review-form', 'aria-label': `Review order ${order.id}` });
+        const rating = ui.el('select', { name: 'rating', 'aria-label': 'Rating' }, [1, 2, 3, 4, 5].map(value => ui.el('option', { value: String(value), selected: value === 5 }, `${value} stars`)));
+        const comment = ui.el('textarea', { name: 'comment', maxlength: '1000', 'aria-label': 'Review comment', placeholder: 'Share your experience' });
+        const submit = ui.el('button', { type: 'submit', className: 'secondary-action' }, [icon('fa-star'), 'Submit review']);
+        const status = ui.el('p', { className: 'form-help', role: 'status', 'aria-live': 'polite' });
+        form.append(rating, comment, submit, status);
+        form.addEventListener('submit', async event => {
+            event.preventDefault(); const scope = `customer-review-${order.id}`; submit.disabled = true;
+            try {
+                await SavoraApi.post('api/reviews.php', { action: 'create_review', payload: { orderReference: String(order.id), rating: Number(rating.value), comment: comment.value.trim(), version: 0 } }, SavoraApi.intentKey(scope));
+                serverReviews = await SavoraApi.get('api/reviews.php'); SavoraApi.clearIntentKey(scope); renderHistory(); ui.announce(`Review for order ${order.id} submitted.`);
+            } catch (error) { status.textContent = error.message || 'Review was not submitted.'; submit.disabled = false; }
+        });
+        return form;
+    }
+
     function orderCard(order) {
         const firstLine = order.items[0];
         const product = firstLine && productForLine(firstLine);
@@ -175,20 +197,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.el('strong', {}, money(order.total)),
                 statusChip(order.status)
             ]),
-            ui.el('div', { className: 'order-card-actions' }, reorderButton)
+            ui.el('div', { className: 'order-card-actions' }, [reorderButton, reviewForm(order)].filter(Boolean))
         ]);
         if (order.id === requestedOrderId) requestedCard = article;
         return ui.el('li', {}, article);
     }
 
     function renderHistory() {
-        const orders = stateApi.load().orders.filter(matchesFilter);
+        const orders = serverOrders.filter(matchesFilter);
         resultCount.textContent = `${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`;
         if (!orders.length) {
             historyList.replaceChildren(ui.el('li', {}, emptyState(
                 selectedFilter === 'all' ? 'No orders yet' : `No ${selectedFilter.replace('_', ' ')} orders`,
                 selectedFilter === 'all'
-                    ? 'Orders placed on this device will appear here.'
+                    ? 'Orders placed from your account will appear here.'
                     : 'Try another status or discover something new.'
             )));
             return;
@@ -202,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderActiveOrder() {
-        const activeOrder = SavoraState.getActiveOrder(stateApi.load());
+        const activeOrder = serverOrders.find(order => activeStatuses.has(order.status)) || null;
         if (!activeOrder) {
             activeDetails.replaceChildren(emptyState(
                 'No active orders',
@@ -231,9 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? ui.el('p', { className: 'active-order-delivery-note' }, [icon('fa-message'), 'Delivery note: ', activeOrder.deliveryNote])
             : null;
         const delivery = driverForOrder(activeOrder);
-        const dispatch = driverStateApi
-            ? driverStateApi.dispatchForOrder(driverStateApi.load(), activeOrder.id)
-            : null;
+        const dispatch = dispatchForOrder(activeOrder);
         const dispatchStatus = activeOrder.status === 'ready_for_pickup' && !delivery
             ? ui.el('section', { className: 'active-order-driver' }, [
                 icon('fa-satellite-dish'),
@@ -278,6 +298,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    try {
+        const orderData = await SavoraApi.get('api/orders.php');
+        serverOrders = Array.isArray(orderData && orderData.orders) ? orderData.orders : [];
+    } catch (_) { serverOrders = []; }
+    try { serverReviews = await SavoraApi.get('api/reviews.php'); }
+    catch (_) { serverReviews = []; }
     renderHistory();
     renderActiveOrder();
 });

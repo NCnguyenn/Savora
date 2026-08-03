@@ -4,18 +4,19 @@
   if (!root || !root.document) return;
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
-  const driverState = () => root.SavoraDriverState;
   const liveStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'];
-  const historyStatuses = ['completed', 'cancelled', 'refunded'];
-  const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
+  const historyStatuses = ['delivered', 'completed', 'cancelled', 'refunded'];
+  const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', assigned: 'Assigned', picked_up: 'Picked up', delivered: 'Completed', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
   const HISTORY_PAGE_SIZE = 7;
   const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '', historyPage: 1, historyView: 'order', requestedHistoryOrderId: '' };
+  let serverOrders = [];
   const text = value => typeof value === 'string' ? value : '';
-  const ordersForRestaurant = () => {
-    const restaurant = root.SavoraRestaurantState.load();
-    const customer = root.SavoraState.load();
-    return (customer.orders || []).filter(order => order && order.restaurantId === restaurant.profile.id);
-  };
+  const ordersForRestaurant = () => serverOrders.slice();
+  async function refreshOrders() {
+    const snapshot = await root.SavoraApi.get('api/orders.php');
+    serverOrders = Array.isArray(snapshot && snapshot.orders) ? snapshot.orders : [];
+    return serverOrders;
+  }
   const formatDate = value => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
@@ -83,12 +84,8 @@
     if (order.status === 'confirmed') {
       actions.append(button('Start preparing', 'prepare', false));
     }
-    const delivery = driverState()
-      ? driverState().deliveryForOrder(driverState().load(), order.id)
-      : null;
-    const dispatchState = driverState()
-      ? driverState().dispatchForOrder(driverState().load(), order.id)
-      : null;
+    const delivery = order.assignment || null;
+    const dispatchState = order.dispatch || null;
     const dispatchCopy = delivery
       ? `${delivery.driverName || 'Assigned driver'} · ${delivery.status.replace(/_/g, ' ')}`
       : dispatchState && dispatchState.status === 'offer_sent'
@@ -124,15 +121,17 @@
     if (!target) return;
     const prep = doc.querySelector('[name="prep-minutes"]');
     try {
-      const customer = root.SavoraState.load();
-      const next = root.SavoraRestaurantState.updateOrderStatus(customer, order.id, target, { prepMinutes: prep ? prep.value : 20 });
-      if (!root.SavoraPlatformBridge) throw new Error('The platform connection is not ready.');
       const intentScope = 'restaurant-order-' + order.id + '-' + target;
-      await root.SavoraPlatformBridge.command('restaurant_order_status', { reference_code: order.id, status: target }, root.SavoraApi.intentKey(intentScope));
+      await root.SavoraApi.post('api/orders.php', { action: 'transition', payload: {
+        referenceCode: order.referenceCode || order.id,
+        nextStatus: target,
+        expectedVersion: Number(order.version || 0),
+        reason: prep ? `Preparation time: ${prep.value} minutes.` : ''
+      } }, root.SavoraApi.intentKey(intentScope));
+      await refreshOrders();
       root.SavoraApi.clearIntentKey(intentScope);
-      root.SavoraState.persist(next);
-      announce('[data-order-feedback]', `${order.id} is now ${labels[target].toLowerCase()}. Saved to the local customer order.`);
-      ui().showToast(`${order.id} updated locally.`);
+      announce('[data-order-feedback]', `${order.id} is now ${labels[target].toLowerCase()} on the server.`);
+      ui().showToast(`${order.id} updated on the server.`);
       renderLiveList();
       renderHistory();
     } catch (error) {
@@ -175,8 +174,11 @@
     const cards = doc.querySelector('[data-history-cards]');
     if (!tableBody || !cards) return;
     const all = ordersForRestaurant();
-    doc.querySelectorAll('[data-history-count]').forEach(node => node.textContent = String(all.filter(order => order.status === node.dataset.historyCount).length));
-    const sales = all.filter(order => order.status === 'completed').reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+    doc.querySelectorAll('[data-history-count]').forEach(node => {
+      const status = node.dataset.historyCount;
+      node.textContent = String(all.filter(order => status === 'completed' ? ['delivered', 'completed'].includes(order.status) : order.status === status).length);
+    });
+    const sales = all.filter(order => ['delivered', 'completed'].includes(order.status)).reduce((sum, order) => sum + (Number(order.total) || 0), 0);
     const salesNode = doc.querySelector('[data-history-sales]');
     if (salesNode) salesNode.textContent = ui().formatMoney(sales);
     const records = filterHistory(all).sort((a, b) => text(b.createdAt).localeCompare(text(a.createdAt)));
@@ -206,13 +208,13 @@
     if (state.requestedHistoryOrderId) {
       announce('[data-history-feedback]', requestedIndex >= 0
         ? `${historyViewLabel()} opened for ${state.selectedHistoryId}.`
-        : 'The requested local order was not found.');
+        : 'The requested server order was not found.');
       state.requestedHistoryOrderId = '';
     }
   }
 
   function historyViewLabel() {
-    return { invoice: 'Local invoice preview', order: 'Order details', reorder: 'Reorder item details' }[state.historyView] || 'Order details';
+    return { invoice: 'Server invoice preview', order: 'Order details', reorder: 'Reorder item details' }[state.historyView] || 'Order details';
   }
 
   function renderHistoryDetails(order) {
@@ -227,10 +229,10 @@
       ui().el('p', {}, `${order.id} · ${formatDate(order.createdAt)}`),
       ui().el('p', {}, `${fulfillment(order)} · ${ui().formatMoney(order.total)}`),
       ui().el('p', { className: 'restaurant-empty' }, state.historyView === 'invoice'
-        ? 'Local order summary for review; no server-generated invoice is available.'
+        ? 'Server order summary for review; no server-generated invoice is available.'
         : state.historyView === 'reorder'
           ? 'Review the saved item details before choosing any future reorder action.'
-          : 'Local order details for this selected record.')
+          : 'Server order details for this selected record.')
     );
     const itemList = ui().el('ul', { className: 'restaurant-queue-list', 'aria-label': 'Completed order items' });
     (order.items || []).forEach(item => itemList.append(ui().el('li', {}, `${item.quantity || 1} × ${text(item.name) || 'Menu item'}`)));
@@ -282,14 +284,12 @@
     renderHistory();
   }
 
-  function initialize() {
-    if (!root.SavoraRestaurantState || !root.SavoraState || !ui()) return;
+  async function initialize() {
+    if (!root.SavoraApi || !ui()) return;
+    try { await refreshOrders(); }
+    catch (error) { announce('[data-order-feedback]', text(error && error.message) || 'Orders are unavailable.'); }
     bindLiveCenter();
     bindHistory();
-    root.addEventListener('storage', () => {
-      renderLiveList();
-      renderHistory();
-    });
   }
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', initialize, { once: true });

@@ -15,13 +15,8 @@
 
   async function csrfToken() {
     if (root.SavoraCsrfToken) return root.SavoraCsrfToken;
-    const bridge = root.SavoraPlatformBridge;
-    const snapshot = bridge && typeof bridge.getSnapshot === 'function' ? bridge.getSnapshot() : null;
-    if (snapshot && snapshot.csrfToken) return snapshot.csrfToken;
-    if (bridge && typeof bridge.refresh === 'function') {
-      const refreshed = await bridge.refresh();
-      if (refreshed && refreshed.csrfToken) return refreshed.csrfToken;
-    }
+    const meta = root.document && root.document.querySelector('meta[name="admin-csrf-token"]');
+    if (meta && meta.content) return meta.content;
     return '';
   }
 
@@ -57,5 +52,22 @@
     return payload.data;
   }
 
-  return { get, post };
+  function intentKey(scope) {
+    const key = `savora_intent_${String(scope || 'default')}`;
+    if (root.localStorage) {
+      const existing = root.localStorage.getItem(key);
+      if (existing) return existing;
+    }
+    const random = root.crypto && typeof root.crypto.randomUUID === 'function'
+      ? root.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (root.localStorage) root.localStorage.setItem(key, random);
+    return random;
+  }
+
+  function clearIntentKey(scope) {
+    if (root.localStorage) root.localStorage.removeItem(`savora_intent_${String(scope || 'default')}`);
+  }
+
+  return { get, post, intentKey, clearIntentKey };
 }));

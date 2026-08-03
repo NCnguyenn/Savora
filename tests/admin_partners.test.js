@@ -1,6 +1,41 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const root=path.join(__dirname,'..'),read=f=>fs.readFileSync(path.join(root,f),'utf8');
-function contract(file,title){assert.ok(fs.existsSync(path.join(root,file)));const s=read(file);assert.match(s,/components\/admin_header\.php/);assert.match(s,/components\/admin_footer\.php/);assert.match(s,new RegExp(`<h1[^>]*>${title}</h1>`,'i'));assert.match(s,/admin_page_data/);assert.doesNotMatch(s,/href=["']#["']|\son[a-z]+=/i);return s;}
-test('Restaurant approval workspace exposes queue, documents, notes and exact decisions',()=>{const s=contract('admin_restaurants.php','Restaurants &amp; Approvals');for(const x of ['Pending Applications','Active Restaurants','Needs Review','Suspended','Application Queue','Business Registration','Food Safety Certificate','Owner Identity','Reviewer note','Approve Restaurant','Request Changes','Reject Application'])assert.match(s,new RegExp(x,'i'));assert.match(s,/approve_restaurant/);});
-test('Driver verification workspace exposes eligibility and document safeguards',()=>{const s=contract('admin_drivers.php','Drivers &amp; Verification');for(const x of ['Pending Applications','Active Drivers','Document Alerts','Suspended','Application Queue','Driver License','Vehicle Registration','Background Check','Document expiry','Approve Driver','Request Changes','Reject Application'])assert.match(s,new RegExp(x,'i'));assert.match(s,/approve_driver/);});
-test('Partner commands lock applications, create accounts once, preserve change-request credentials and audit',()=>{const a=read('lib/admin_actions.php'),r=read('lib/admin_repository.php');for(const x of ['approve_restaurant','request_restaurant_changes','reject_restaurant','approve_driver','request_driver_changes','reject_driver'])assert.match(a,new RegExp(x));assert.match(a,/FOR UPDATE/i);assert.match(a,/INSERT INTO users/i);assert.match(a,/password_hash\s*=\s*IF/i);for(const type of ['business_registration','food_safety_certificate','owner_identity','driver_license','vehicle_registration','background_check'])assert.match(a,new RegExp(type));assert.match(a,/admin_append_audit/);assert.match(r,/restaurant_applications/);assert.match(r,/driver_applications/);});
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.join(__dirname, '..');
+const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+
+function contract(file, title) {
+  const source = read(file);
+  assert.match(source, /components\/admin_header\.php/);
+  assert.match(source, /components\/admin_footer\.php/);
+  assert.match(source, new RegExp(`<h1[^>]*>${title}</h1>`, 'i'));
+  assert.match(source, /admin_page_data/);
+  assert.doesNotMatch(source, /href=["']#["']|\son[a-z]+=/i);
+  return source;
+}
+
+test('Restaurant review workspace shows approved profile data and two final decisions', () => {
+  const source = contract('admin_restaurants.php', 'Restaurants &amp; Approvals');
+  for (const text of ['Owner', 'Restaurant name', 'Description', 'Cuisine', 'Address', 'City', 'Restaurant phone', 'Opening hours', 'Approve Restaurant', 'Reject Application']) assert.match(source, new RegExp(text, 'i'));
+  assert.doesNotMatch(source, /Business Registration|Food Safety Certificate|Owner Identity|Request Changes/i);
+});
+
+test('Driver review workspace shows approved vehicle data and two final decisions', () => {
+  const source = contract('admin_drivers.php', 'Drivers &amp; Verification');
+  for (const text of ['Full name', 'Email', 'Phone', 'Operating area', 'Vehicle type', 'Vehicle model', 'License plate', 'Vehicle color', 'Approve Driver', 'Reject Application']) assert.match(source, new RegExp(text, 'i'));
+  assert.doesNotMatch(source, /Driver License|Vehicle Registration|Background Check|Document expiry|Request Changes/i);
+});
+
+test('Partner commands transfer claims and media without a legal-document gate', () => {
+  const actions = read('lib/admin_actions.php') + read('lib/services/admin_partner_service.php');
+  for (const action of ['approve_restaurant', 'reject_restaurant', 'approve_driver', 'reject_driver']) assert.match(actions, new RegExp(action));
+  assert.match(actions, /FOR UPDATE/i);
+  assert.match(actions, /registration_repository_transfer_claims/);
+  assert.match(actions, /registration_repository_release_claims/);
+  assert.match(actions, /media_transfer/);
+  assert.match(actions, /media_revoke/);
+  assert.match(actions, /restaurant_weekly_hours/);
+  assert.doesNotMatch(actions, /required document|verification_status|changes_requested/i);
+});

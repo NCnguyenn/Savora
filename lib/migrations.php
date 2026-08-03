@@ -8,6 +8,18 @@ function savora_migrations(): array
         '002_core_integrity' => __DIR__ . '/../database/migrations/002_core_integrity.php',
         '003_idempotency_request_hash' => __DIR__ . '/../database/migrations/003_idempotency_request_hash.php',
         '004_catalog_contract' => __DIR__ . '/../database/migrations/004_catalog_contract.php',
+        '004a_profiles_reviews' => __DIR__ . '/../database/migrations/004a_profiles_reviews.php',
+        '005_checkout_quotes' => __DIR__ . '/../database/migrations/005_checkout_quotes.php',
+        '006_dispatch_location' => __DIR__ . '/../database/migrations/006_dispatch_location.php',
+        '007_delivery_evidence' => __DIR__ . '/../database/migrations/007_delivery_evidence.php',
+        '008_driver_profile_authority' => __DIR__ . '/../database/migrations/008_driver_profile_authority.php',
+        '009_delivery_reassignment' => __DIR__ . '/../database/migrations/009_delivery_reassignment.php',
+        '010_notification_outbox' => __DIR__ . '/../database/migrations/010_notification_outbox.php',
+        '011_notification_version' => __DIR__ . '/../database/migrations/011_notification_version.php',
+        '012_commercial_rule_versions' => __DIR__ . '/../database/migrations/012_commercial_rule_versions.php',
+        '013_rate_limits' => __DIR__ . '/../database/migrations/013_rate_limits.php',
+        '014_partner_document_storage' => __DIR__ . '/../database/migrations/014_partner_document_storage.php',
+        '015_auth_onboarding' => __DIR__ . '/../database/migrations/015_auth_onboarding.php',
     ];
 }
 

@@ -6,7 +6,6 @@
   'use strict';
   const text = value => typeof value === 'string' ? value.slice(0, 500) : '';
   const reviewText = value => text(value).slice(0, 300);
-  const readOrders = state => Array.isArray(state && state.orders) ? state.orders : [];
   const money = value => `$${(Number(value) || 0).toFixed(2)}`;
   const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   const dateLabel = value => {
@@ -14,20 +13,15 @@
     return Number.isNaN(date.valueOf()) ? 'No saved date' : new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
   };
 
-  function verifiedReviews(customerState, restaurantState) {
-    const saved = new Map((restaurantState && restaurantState.reviews || []).map(review => [text(review.id), review]));
-    return readOrders(customerState).filter(order => order && order.status === 'completed' && order.review && typeof order.review === 'object').map(order => {
-      const review = order.review;
-      const id = text(review.id) || `order-${text(order.id)}`;
-      const persisted = saved.get(id) || {};
-      const rating = Math.min(5, Math.max(1, Number(review.rating) || 0));
+  function verifiedReviews(records) {
+    return (Array.isArray(records) ? records : []).map(review => {
+      const rating = Math.min(5, Math.max(1, Number(review && review.rating) || 0));
       return {
-        id, orderId: text(order.id) || 'Local order', customer: text(review.customer || order.customerName || 'Verified customer'), rating,
-        comment: text(review.comment), createdAt: text(review.createdAt || order.createdAt), items: Array.isArray(order.items) ? order.items : [],
-        topics: Array.isArray(review.topics) ? review.topics.map(text).filter(Boolean).slice(0, 4) : [],
-        food: Number(review.food) || rating, packaging: Number(review.packaging) || rating, preparation: Number(review.preparation) || rating,
-        reply: reviewText(persisted.reply), replyStatus: persisted.status === 'published' ? 'published' : persisted.status === 'draft' ? 'draft' : '',
-        repliedAt: text(persisted.repliedAt)
+        id: text(review && review.publicId), orderId: text(review && review.orderReference), customer: text(review && review.customerName) || 'Verified customer', rating,
+        comment: text(review && review.comment), createdAt: text(review && review.createdAt), items: Array.isArray(review && review.items) ? review.items : [], topics: [],
+        food: rating, packaging: rating, preparation: rating, reply: reviewText(review && review.replyText),
+        replyStatus: ['draft', 'published'].includes(review && review.replyStatus) ? review.replyStatus : '', repliedAt: text(review && review.repliedAt),
+        version: Number(review && review.version || 0)
       };
     }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -61,17 +55,86 @@
 
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
-  const customerState = () => root.SavoraState.load();
-  const api = root.SavoraRestaurantState;
-  const restaurantState = () => api.load();
+  let serverOrders = [];
+  let serverAnalytics = null;
   const element = (tag, attrs, children) => ui().el(tag, attrs || {}, children || []);
   const say = (selector, value) => { const node = doc.querySelector(selector); if (node) node.textContent = value; };
   const selectedRange = () => Number(doc.querySelector('[data-analytics-range]')?.value || 30);
-  const analytics = () => api.deriveAnalytics({ ...customerState(), orders: ordersInDateRange(readOrders(customerState()), selectedRange()) });
+  const buildAnalytics = () => {
+    if (serverAnalytics && serverAnalytics.kpis) {
+      const kpis = serverAnalytics.kpis;
+      const statusCounts = Object.fromEntries((Array.isArray(serverAnalytics.status) ? serverAnalytics.status : []).map(row => [text(row.status), Number(row.total) || 0]));
+      const completedOrders = Number(statusCounts.delivered) || 0;
+      const orders = Number(kpis.orders) || 0;
+      return {
+        totalOrders: orders,
+        completedOrders,
+        grossSales: Number(kpis.gmv) || 0,
+        netRevenue: Number(kpis.netRevenue) || 0,
+        averageOrderValue: orders ? (Number(kpis.gmv) || 0) / orders : 0,
+        repeatCustomers: Number(serverAnalytics.repeatCustomers) || 0,
+        salesByDay: (Array.isArray(serverAnalytics.trend) ? serverAnalytics.trend : []).map(row => ({ key: text(row.day), orders: Number(row.orders) || 0, revenue: Number(row.gmv) || 0 })),
+        statusCounts,
+        orderingTimes: Object.fromEntries(Array.from({ length: 24 }, (_, hour) => [String(hour), 0])),
+        menuItems: [],
+        kitchen: { averagePrepMinutes: Number(serverAnalytics.durationMinutes) || 0 }
+      };
+    }
+    const orders = ordersInDateRange(serverOrders, selectedRange());
+    const completed = orders.filter(order => order && order.status === 'delivered');
+    const refunded = orders.filter(order => order && order.status === 'refunded');
+    const grossSales = completed.reduce((sum, order) => sum + Math.max(0, Number(order.total) || 0), 0);
+    const refundTotal = refunded.reduce((sum, order) => sum - Math.max(0, Number(order.total) || 0), 0);
+    const customers = new Map();
+    const orderingTimes = Object.fromEntries(Array.from({ length: 24 }, (_, hour) => [String(hour), 0]));
+    const sales = new Map();
+    const menu = new Map();
+    const prepTimes = [];
+    orders.forEach(order => {
+      const createdAt = text(order && order.createdAt);
+      const date = /^\d{4}-\d{2}-\d{2}/.test(createdAt) ? createdAt.slice(0, 10) : '';
+      const hour = new Date(createdAt).getUTCHours();
+      if (Number.isInteger(hour)) orderingTimes[String(hour)] += 1;
+      const customer = text(order && order.customer && order.customer.userId);
+      if (customer) customers.set(customer, (customers.get(customer) || 0) + 1);
+      const prep = Number(order && order.prepMinutes);
+      if (Number.isFinite(prep)) prepTimes.push(Math.max(0, prep));
+      if (order && order.status !== 'delivered') return;
+      if (date) {
+        const day = sales.get(date) || { key: date, orders: 0, revenue: 0 };
+        day.orders += 1; day.revenue += Math.max(0, Number(order.total) || 0); sales.set(date, day);
+      }
+      const items = Array.isArray(order && order.items) ? order.items : [];
+      items.forEach(item => {
+        const name = text(item && item.name);
+        if (!name) return;
+        const quantity = Math.max(1, Number(item.quantity) || 1);
+        const current = menu.get(name) || { name, quantity: 0, revenue: 0 };
+        current.quantity += quantity; current.revenue += Math.max(0, Number(item.unitPrice) || 0) * quantity; menu.set(name, current);
+      });
+    });
+    const salesByDay = [...sales.values()].sort((a, b) => a.key.localeCompare(b.key));
+    const statusCounts = Object.fromEntries(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered', 'cancelled', 'refunded'].map(status => [status, 0]));
+    orders.forEach(order => { if (Object.hasOwn(statusCounts, order.status)) statusCounts[order.status] += 1; });
+    const completedRevenue = grossSales;
+    return {
+      totalOrders: orders.length,
+      completedOrders: completed.length,
+      grossSales: completedRevenue,
+      netRevenue: completedRevenue - (completedRevenue * 0.1) + refundTotal,
+      averageOrderValue: completed.length ? completedRevenue / completed.length : 0,
+      repeatCustomers: [...customers.values()].filter(count => count > 1).length,
+      salesByDay,
+      statusCounts,
+      orderingTimes,
+      menuItems: [...menu.values()].sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name)),
+      kitchen: { averagePrepMinutes: prepTimes.length ? prepTimes.reduce((sum, value) => sum + value, 0) / prepTimes.length : 0 }
+    };
+  };
 
   function renderAnalytics() {
     if (!doc.querySelector('[data-analytics-page]')) return;
-    const result = analytics();
+    const result = buildAnalytics();
     say('[data-analytics-revenue]', money(result.netRevenue));
     say('[data-analytics-orders]', String(result.totalOrders));
     say('[data-analytics-aov]', money(result.averageOrderValue));
@@ -112,7 +175,8 @@
   }
 
   let selectedReviewId = '';
-  const currentReviews = () => verifiedReviews(customerState(), restaurantState());
+  let serverReviewRecords = [];
+  const currentReviews = () => verifiedReviews(serverReviewRecords);
   const readReviewFilters = () => ({ rating: doc.querySelector('[name="review-rating"]')?.value, status: doc.querySelector('[name="review-status"]')?.value, query: doc.querySelector('[name="review-search"]')?.value });
   function reviewCard(review) {
     const selected = review.id === selectedReviewId;
@@ -135,10 +199,10 @@
     selectedReviewId = selected ? selected.id : '';
     const ratings = reviews.map(review => review.rating);
     say('[data-review-average]', ratings.length ? average(ratings).toFixed(1) : '—');
-    say('[data-review-count]', ratings.length ? `${ratings.length} verified local review${ratings.length === 1 ? '' : 's'}` : 'No verified reviews');
+    say('[data-review-count]', ratings.length ? `${ratings.length} verified review${ratings.length === 1 ? '' : 's'}` : 'No verified reviews');
     [['food', 'food'], ['packaging', 'packaging'], ['preparation', 'preparation']].forEach(([selector, key]) => say(`[data-review-${selector}]`, reviews.length ? average(reviews.map(review => review[key])).toFixed(1) : '—'));
     const list = doc.querySelector('[data-review-list]');
-    if (list) { list.replaceChildren(); visible.forEach(review => list.append(reviewCard(review))); if (!visible.length) list.append(element('p', { className: 'restaurant-empty' }, 'No verified local reviews match these filters.')); }
+    if (list) { list.replaceChildren(); visible.forEach(review => list.append(reviewCard(review))); if (!visible.length) list.append(element('p', { className: 'restaurant-empty' }, 'No verified reviews match these filters.')); }
     const context = doc.querySelector('[data-review-order-context]');
     const textarea = doc.querySelector('[name="review-public-reply"]');
     if (context) context.textContent = selected ? `${selected.customer} · ${selected.orderId} · ${selected.items.map(item => text(item && item.name)).filter(Boolean).join(', ') || 'No item details saved'}` : 'Choose a verified review to see its order context.';
@@ -151,26 +215,58 @@
     const textarea = doc.querySelector('[name="review-public-reply"]');
     say('[data-review-character-count]', `${reviewText(textarea?.value).length} / 300`);
   }
-  function saveReply(publish) {
+  async function saveReply(publish) {
     const selected = currentReviews().find(review => review.id === selectedReviewId);
     const textarea = doc.querySelector('[name="review-public-reply"]');
     if (!selected || !textarea) { say('[data-review-feedback]', 'Choose a verified review before writing a reply.'); return; }
     const reply = reviewText(textarea.value).trim();
     if (!reply) { say('[data-review-feedback]', 'Write a public reply before saving.'); return; }
-    api.persist(api.setReviewReply(restaurantState(), selected.id, reply, publish ? 'published' : 'draft'));
-    say('[data-review-feedback]', publish ? 'Public reply published in this local demo.' : 'Reply draft saved in this browser.');
-    renderReviews();
+    const scope = `restaurant-review-${selected.id}`;
+    try {
+      await root.SavoraApi.post('api/reviews.php', { action: 'reply_review', payload: { publicId: selected.id, reply, status: publish ? 'published' : 'draft', version: selected.version } }, root.SavoraApi.intentKey(scope));
+      serverReviewRecords = await root.SavoraApi.get('api/reviews.php'); root.SavoraApi.clearIntentKey(scope);
+      say('[data-review-feedback]', publish ? 'Public reply refreshed from the server.' : 'Reply draft refreshed from the server.'); renderReviews();
+    } catch (error) { say('[data-review-feedback]', error.message || 'Reply was not saved.'); }
   }
   function bind() {
-    doc.querySelector('[data-analytics-range]')?.addEventListener('change', renderAnalytics);
-    doc.querySelector('[data-export-analytics]')?.addEventListener('click', () => say('[data-analytics-feedback]', 'Export is a local-demo preview; no report file was created.'));
-    doc.querySelector('[data-export-reviews]')?.addEventListener('click', () => say('[data-review-feedback]', 'Export is a local-demo preview; no feedback file was created.'));
+    doc.querySelector('[data-analytics-range]')?.addEventListener('change', loadAnalytics);
+    doc.querySelector('[data-export-analytics]')?.addEventListener('click', () => { root.location.href = 'api/analytics.php?export=csv'; });
+    doc.querySelector('[data-export-reviews]')?.addEventListener('click', () => say('[data-review-feedback]', 'Review export is not available yet.'));
     doc.querySelector('[data-review-filters]')?.addEventListener('input', renderReviews);
     doc.querySelector('[data-review-filters]')?.addEventListener('change', renderReviews);
     doc.querySelector('[name="review-public-reply"]')?.addEventListener('input', updateCharacterCount);
     doc.querySelector('[data-review-save-draft]')?.addEventListener('click', () => saveReply(false));
     doc.querySelector('[data-review-publish]')?.addEventListener('click', () => saveReply(true));
   }
-  bind(); renderAnalytics(); renderReviews();
+  async function loadAnalytics() {
+    const range = selectedRange();
+    const to = new Date();
+    const from = new Date(to);
+    from.setUTCDate(from.getUTCDate() - Math.max(1, range) + 1);
+    const params = new URLSearchParams({ from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) });
+    try {
+      const report = await root.SavoraApi.get(`api/analytics.php?${params.toString()}`);
+      serverAnalytics = report && report.kpis ? report : null;
+      renderAnalytics();
+    } catch (error) {
+      serverAnalytics = null;
+      say('[data-analytics-feedback]', error.message || 'Server analytics data is unavailable.');
+      renderAnalytics();
+    }
+  }
+  async function initialize() {
+    bind();
+    try {
+      const snapshot = await root.SavoraApi.get('api/orders.php?pageSize=50');
+      serverOrders = Array.isArray(snapshot && snapshot.orders) ? snapshot.orders : [];
+    } catch (error) {
+      say('[data-analytics-feedback]', error.message || 'Server analytics data is unavailable.');
+    }
+    await loadAnalytics();
+    if (!doc.querySelector('[data-reviews-page]')) return;
+    try { serverReviewRecords = await root.SavoraApi.get('api/reviews.php'); renderReviews(); }
+    catch (error) { say('[data-review-feedback]', error.message || 'Reviews are unavailable.'); }
+  }
+  initialize();
   return { verifiedReviews, filterReviews, ordersInDateRange };
 }));

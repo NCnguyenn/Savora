@@ -174,6 +174,7 @@ img, svg { max-width: 100%; }
 .admin-global-search {
     display: flex;
     width: min(480px, 46vw);
+    min-width: 0;
     height: 42px;
     align-items: center;
     gap: 10px;
@@ -337,6 +338,7 @@ img, svg { max-width: 100%; }
 .admin-activity-strip strong { font-size: 10px; }.admin-activity-strip p { margin: 3px 0; color: var(--admin-muted); font-size: 9px; }.admin-activity-strip small { color: #929c96; font-size: 8px; }
 
 .admin-filter-bar { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 17px; padding: 13px; border: 1px solid var(--admin-border); border-radius: 13px; background: var(--admin-white); }
+.admin-filter-bar[data-admin-create-account] { flex-wrap: wrap; }
 .admin-filter-bar label { display: grid; gap: 4px; }.admin-filter-bar select, .admin-filter-bar input { min-height: 36px; padding: 7px 10px; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-white); font-size: 10px; }
 .admin-date-range { display: flex; gap: 6px; margin: 0; padding: 0; border: 0; }.admin-date-range legend { margin-bottom: 4px; color: var(--admin-muted); font-size: 8px; font-weight: 800; }.admin-date-range label span { color: var(--admin-muted); font-size: 7px; }
 .admin-analytics-grid { display: grid; gap: 17px; margin-bottom: 17px; }

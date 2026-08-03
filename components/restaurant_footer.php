@@ -1,13 +1,13 @@
         <footer class="restaurant-footer"><span>© 2026 Savora</span><span>Restaurant portal · Local demo experience</span></footer>
     </div>
     <div id="restaurant-toast-container" class="restaurant-toast-container" aria-live="polite" aria-atomic="true"></div>
-    <script src="js/customer_state.js"></script>
     <script src="js/restaurant_state.js"></script>
-    <script src="js/driver_state.js"></script>
-    <script src="js/platform_bridge.js"></script>
+    <script src="js/api_client.js"></script>
     <script src="js/restaurant_ui.js"></script>
+    <script src="js/notifications.js"></script>
     <?php $sessionHeartbeatCsrfToken = (string) ($_SESSION['admin_csrf'] ?? ''); ?>
     <script>
+    window.SavoraCsrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     (function () {
         const csrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const intervalMs = 5 * 60 * 1000;

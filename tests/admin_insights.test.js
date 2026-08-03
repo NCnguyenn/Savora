@@ -30,7 +30,7 @@ test('Overview exposes live MySQL operations, approvals, trends and alerts', () 
 
 test('Analytics provides report filters, exports, accessible charts and performance tables', () => {
   const page = assertSharedPage('admin_analytics.php', 'Analytics & Reports');
-  for (const copy of ['Date range', 'All service areas', 'All payment methods', 'All order types', 'Export CSV', 'Export PDF', 'Gross Order Value', 'Orders', 'Completion Rate', 'Average Delivery Time', 'Order & Revenue Trend', 'Order Completion Funnel', 'Cancellation Reasons', 'Order Health', 'Hourly Demand', 'Top Restaurants', 'Driver Efficiency', 'Customer Retention']) {
+  for (const copy of ['Date range', 'All service areas', 'All payment methods', 'All order types', 'Export CSV', 'Print server report', 'Gross Order Value', 'Orders', 'Completion Rate', 'Average Delivery Time', 'Order & Revenue Trend', 'Order Completion Funnel', 'Cancellation Reasons', 'Order Health', 'Hourly Demand', 'Top Restaurants', 'Driver Efficiency', 'Customer Retention']) {
     assert.match(page, new RegExp(copy.replace('&', '&(?:amp;)?'), 'i'));
   }
   assert.match(page, /admin_page_data\s*\(\s*\$conn\s*,\s*['"]analytics['"]/);
@@ -52,7 +52,7 @@ test('Settings exposes platform, notification, security and immutable audit cont
 
 test('Repository uses grouped MySQL insight queries and action layer validates setting keys', () => {
   const repository = read('lib/admin_repository.php');
-  const actions = read('lib/admin_actions.php');
+  const actions = read('lib/admin_actions.php') + read('lib/services/admin_settings_service.php') + read('lib/services/audit_service.php');
   const schema = read('lib/platform_schema.php');
 
   for (const table of ['orders', 'restaurant_applications', 'driver_applications', 'ledger_entries', 'support_cases', 'audit_logs', 'platform_settings', 'notification_templates']) {

@@ -4,7 +4,7 @@
     <header class="page-title-block profile-title-block">
         <p class="eyebrow">Your Savora account</p>
         <h1>Profile</h1>
-        <p>Keep the contact details used by this local demo up to date.</p>
+        <p>Keep your server-backed contact and delivery details up to date.</p>
     </header>
 
     <section class="surface-card profile-summary" aria-labelledby="profile-summary-title">
@@ -12,11 +12,11 @@
         <div class="profile-summary-copy">
             <h2 id="profile-summary-title" data-profile-name><?php echo htmlspecialchars($full_name, ENT_QUOTES, 'UTF-8'); ?></h2>
             <p><i class="fa-regular fa-envelope" aria-hidden="true"></i><span data-profile-email><?php echo htmlspecialchars($username . '@savora.com', ENT_QUOTES, 'UTF-8'); ?></span></p>
-            <span class="status-chip"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>Local demo profile</span>
+            <span class="status-chip"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>Saved to your account</span>
         </div>
         <div class="profile-membership-note">
             <i class="fa-solid fa-leaf" aria-hidden="true"></i>
-            <div><strong>Savora member</strong><span>Your preferences stay on this device.</span></div>
+            <div><strong>Savora member</strong><span>Your profile follows your authenticated account.</span></div>
         </div>
     </section>
 
@@ -46,10 +46,14 @@
                     </div>
                     <div class="form-field profile-address-field">
                         <label for="profile-address">Delivery address</label>
-                        <textarea id="profile-address" name="address" autocomplete="street-address" rows="3" maxlength="300" placeholder="Street, building and delivery notes"></textarea>
+                        <textarea id="profile-address" name="address" autocomplete="street-address" rows="3" maxlength="200" placeholder="Street and building"></textarea>
                     </div>
+                    <div class="form-field"><label for="profile-address-label">Address label</label><input id="profile-address-label" name="addressLabel" maxlength="80" value="Home"></div>
+                    <div class="form-field"><label for="profile-city">City</label><input id="profile-city" name="city" maxlength="100" autocomplete="address-level2"></div>
+                    <div class="form-field"><label for="profile-latitude">Latitude</label><input id="profile-latitude" name="latitude" type="number" min="-90" max="90" step="0.0000001" required></div>
+                    <div class="form-field"><label for="profile-longitude">Longitude</label><input id="profile-longitude" name="longitude" type="number" min="-180" max="180" step="0.0000001" required></div>
                 </div>
-                <p class="form-help" id="profile-local-help">These details are local demo data and are not sent to a Savora server.</p>
+                <p class="form-help" id="profile-local-help">Coordinates are required so checkout can use a verified delivery location.</p>
                 <div class="profile-form-actions">
                     <button class="primary-action" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i>Save profile</button>
                     <p id="profile-save-status" class="profile-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -66,7 +70,7 @@
                     </div>
                     <span class="profile-card-icon"><i class="fa-solid fa-house" aria-hidden="true"></i></span>
                 </div>
-                <p class="saved-address-copy" id="saved-address-copy">No local demo address saved yet.</p>
+                <p class="saved-address-copy" id="saved-address-copy">No saved delivery address yet.</p>
                 <a class="secondary-action" href="#profile-address">Edit address</a>
             </section>
 
@@ -78,7 +82,7 @@
                     </div>
                     <span class="profile-card-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
                 </div>
-                <p>Password changes are unavailable in this UI-only demo because there is no account backend to update securely.</p>
+                <p>Password changes remain outside this profile endpoint and require the dedicated account security flow.</p>
                 <button class="secondary-action" type="button" disabled aria-describedby="password-unavailable-note">Password changes unavailable</button>
                 <p class="form-help" id="password-unavailable-note">Use the production account service when backend security support is available.</p>
             </section>
@@ -86,49 +90,74 @@
     </div>
 </main>
 
+<script src="js/api_client.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', async function () {
         const form = document.getElementById('profile-form');
         const fullNameInput = document.getElementById('profile-full-name');
         const emailInput = document.getElementById('profile-email');
         const phoneInput = document.getElementById('profile-phone');
         const addressInput = document.getElementById('profile-address');
+        const addressLabelInput = document.getElementById('profile-address-label');
+        const cityInput = document.getElementById('profile-city');
+        const latitudeInput = document.getElementById('profile-latitude');
+        const longitudeInput = document.getElementById('profile-longitude');
         const saveStatus = document.getElementById('profile-save-status');
         const addressCopy = document.getElementById('saved-address-copy');
         const summaryName = document.querySelector('[data-profile-name]');
         const summaryEmail = document.querySelector('[data-profile-email]');
         const summaryAvatar = document.querySelector('[data-profile-avatar]');
 
-        function renderProfile(profile) {
-            const fullName = typeof profile.fullName === 'string' && profile.fullName.trim() ? profile.fullName : fullNameInput.value;
-            const email = typeof profile.email === 'string' && profile.email.trim() ? profile.email : emailInput.value;
+        let snapshot = null;
+        let addressPublicId = '';
+
+        function renderSnapshot(data) {
+            snapshot = data;
+            const profile = data.profile || {};
+            const address = (data.addresses || []).find(item => item.isDefault) || (data.addresses || [])[0] || {};
+            const fullName = typeof profile.fullName === 'string' ? profile.fullName : '';
+            const email = typeof profile.email === 'string' ? profile.email : '';
             fullNameInput.value = fullName;
             emailInput.value = email;
             phoneInput.value = typeof profile.phone === 'string' ? profile.phone : '';
-            addressInput.value = typeof profile.address === 'string' ? profile.address : '';
+            addressInput.value = address.addressLine1 || '';
+            addressLabelInput.value = address.label || 'Home';
+            cityInput.value = address.city || '';
+            latitudeInput.value = Number.isFinite(Number(address.latitude)) ? address.latitude : '';
+            longitudeInput.value = Number.isFinite(Number(address.longitude)) ? address.longitude : '';
+            addressPublicId = address.publicId || addressPublicId || `address-${Date.now().toString(36)}`;
             summaryName.textContent = fullName;
             summaryEmail.textContent = email;
             summaryAvatar.textContent = fullName.trim().charAt(0).toUpperCase() || 'S';
-            addressCopy.textContent = addressInput.value.trim() || 'No local demo address saved yet.';
+            addressCopy.textContent = [address.addressLine1, address.city].filter(Boolean).join(', ') || 'No saved delivery address yet.';
         }
 
-        renderProfile(SavoraState.load().profile || {});
+        async function hydrate() {
+            renderSnapshot(await SavoraApi.get('api/profile.php'));
+        }
 
-        form.addEventListener('submit', function (event) {
+        try { await hydrate(); }
+        catch (error) { saveStatus.textContent = error.message || 'Profile is unavailable.'; form.querySelector('button[type="submit"]').disabled = true; return; }
+
+        form.addEventListener('submit', async function (event) {
             event.preventDefault();
             if (!form.reportValidity()) return;
-
-            const state = SavoraState.setProfile(SavoraState.load(), {
-                fullName: fullNameInput.value.trim(),
-                email: emailInput.value.trim(),
-                phone: phoneInput.value.trim(),
-                address: addressInput.value.trim()
-            });
-            SavoraState.persist(state);
-            SavoraUI.refreshChrome();
-            renderProfile(state.profile);
-            saveStatus.textContent = 'Profile settings saved locally on this device for this demo.';
-            SavoraUI.showToast('Profile settings saved locally on this device for this demo.');
+            const profileScope = 'customer-profile';
+            const addressScope = `customer-address-${addressPublicId}`;
+            try {
+                await SavoraApi.post('api/profile.php', { action: 'update_profile', payload: {
+                    fullName: fullNameInput.value.trim(), email: emailInput.value.trim(), phone: phoneInput.value.trim(), version: snapshot.profile.version
+                } }, SavoraApi.intentKey(profileScope));
+                await SavoraApi.post('api/profile.php', { action: 'save_address', payload: {
+                    publicId: addressPublicId, label: addressLabelInput.value.trim(), recipientName: fullNameInput.value.trim(), phone: phoneInput.value.trim(),
+                    addressLine1: addressInput.value.trim(), city: cityInput.value.trim(), latitude: Number(latitudeInput.value), longitude: Number(longitudeInput.value),
+                    isDefault: true, version: ((snapshot.addresses || []).find(item => item.publicId === addressPublicId) || {}).version || 0
+                } }, SavoraApi.intentKey(addressScope));
+                await hydrate();
+                SavoraApi.clearIntentKey(profileScope); SavoraApi.clearIntentKey(addressScope);
+                saveStatus.textContent = 'Profile and delivery address refreshed from the server.';
+                SavoraUI.showToast('Profile and address saved.');
+            } catch (error) { saveStatus.textContent = error.message || 'Profile was not saved.'; }
         });
     });
 </script>

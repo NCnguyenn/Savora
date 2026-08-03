@@ -117,31 +117,16 @@ try {
     endpoint_expect(array_keys($adminMalformed['body']) === ['ok', 'message', 'referenceId'], 'Admin malformed JSON fields must retain response ordering.');
     endpoint_expect($adminMalformed['body']['ok'] === false && $adminMalformed['body']['message'] === 'Invalid JSON request.' && preg_match('/^ADM-[A-F0-9]{10}$/', $adminMalformed['body']['referenceId']) === 1, 'Admin malformed JSON body/reference must remain exact.');
 
-    $platformMalformed = endpoint_request('api/platform_state.php', '{', $sessionId, $sessionPath, $csrf, 'role-malformed-1');
-    endpoint_expect($platformMalformed === ['status' => 400, 'raw' => '{"ok":false,"message":"Invalid JSON."}', 'body' => ['ok' => false, 'message' => 'Invalid JSON.']], 'Platform malformed JSON response must remain exact.');
+    $dispatchMalformed = endpoint_request('api/dispatch.php', '{', $sessionId, $sessionPath, $csrf, 'dispatch-malformed-1');
+    endpoint_expect($dispatchMalformed === ['status' => 400, 'raw' => '{"ok":false,"message":"Invalid JSON."}', 'body' => ['ok' => false, 'message' => 'Invalid JSON.']], 'Dispatch malformed JSON response must remain exact.');
 
     $adminCsrf = endpoint_request('admin_action.php', '{', $sessionId, $sessionPath, 'wrong-token', 'adm-csrf-1');
     endpoint_expect($adminCsrf['status'] === 403, 'Admin invalid CSRF must return 403 before parsing malformed JSON.');
     endpoint_expect(array_keys($adminCsrf['body']) === ['ok', 'message', 'referenceId'], 'Admin CSRF fields must retain response ordering.');
     endpoint_expect($adminCsrf['body']['ok'] === false && $adminCsrf['body']['message'] === 'Your secure session expired. Refresh and try again.' && preg_match('/^ADM-[A-F0-9]{10}$/', $adminCsrf['body']['referenceId']) === 1, 'Admin CSRF body/reference must remain exact.');
 
-    $platformCsrf = endpoint_request('api/platform_state.php', '{', $sessionId, $sessionPath, 'wrong-token', 'role-csrf-1');
-    endpoint_expect($platformCsrf === ['status' => 403, 'raw' => '{"ok":false,"message":"Secure session expired."}', 'body' => ['ok' => false, 'message' => 'Secure session expired.']], 'Platform CSRF must precede malformed JSON and remain exact.');
-
-    $validTrueReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
-    endpoint_expect($validTrueReplayResponse['status'] === 200 && $validTrueReplayResponse['body'] === $validTrueReplay, 'A valid ok=true platform response must replay exactly: ' . json_encode($validTrueReplayResponse, JSON_THROW_ON_ERROR));
-    $mismatchedReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{"changed":true}}', $sessionId, $sessionPath, $csrf, $validTrueReplayKey);
-    endpoint_expect(
-        $mismatchedReplayResponse === ['status' => 409, 'raw' => '{"ok":false,"message":"Idempotency key was already used for a different request."}', 'body' => ['ok' => false, 'message' => 'Idempotency key was already used for a different request.']],
-        'A reused platform key with a different payload must return 409 without replaying the stored response.'
-    );
-    $validFalseReplayResponse = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $validFalseReplayKey);
-    endpoint_expect($validFalseReplayResponse['status'] === 200 && $validFalseReplayResponse['body'] === $validFalseReplay, 'A valid ok=false platform response must replay exactly.');
-
-    foreach (['invalid-json', 'list', 'empty-object', 'missing-ok', 'non-boolean-ok'] as $label) {
-        $invalidReplay = endpoint_request('api/platform_state.php', '{"command":"replay_test","payload":{}}', $sessionId, $sessionPath, $csrf, $replayKeyPrefix . '-invalid-' . $label);
-        endpoint_expect($invalidReplay === ['status' => 500, 'raw' => '{"ok":false,"message":"Stored response is invalid."}', 'body' => ['ok' => false, 'message' => 'Stored response is invalid.']], "Invalid {$label} response must not replay successfully.");
-    }
+    $dispatchCsrf = endpoint_request('api/dispatch.php', '{', $sessionId, $sessionPath, 'wrong-token', 'dispatch-csrf-1');
+    endpoint_expect($dispatchCsrf === ['status' => 403, 'raw' => '{"ok":false,"message":"Secure session expired."}', 'body' => ['ok' => false, 'message' => 'Secure session expired.']], 'Dispatch CSRF must precede malformed JSON and remain exact.');
 } finally {
     $cleanupPattern = $replayKeyPrefix . '%';
     $deleteKeys = $conn->prepare('DELETE FROM idempotency_keys WHERE actor_user_id=? AND idempotency_key LIKE ?');

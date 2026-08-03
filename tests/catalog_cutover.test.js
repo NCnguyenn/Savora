@@ -85,6 +85,69 @@ test('API client normalizes a network rejection without producing local success 
   );
 });
 
+test('hydrated catalog derives categories before the discovery renderer reads them', () => {
+  const catalog = require(path.join(root, 'js/customer_catalog.js'));
+  catalog.replaceRecords([{ publicId: 'ramen-1', name: 'Ramen', basePrice: 12, available: true, restaurant: { id: 5, name: 'Noodle House', cuisine: 'Japanese' }, optionGroups: [] }]);
+
+  assert.deepEqual(catalog.categories, [{ id: 'japanese', label: 'Japanese' }]);
+  assert.match(read('customer_dashboard.php'), /const categories = catalog\.categories/);
+});
+
+test('menu editor preserves server option groups and choice public ids on an unchanged edit', () => {
+  const menu = require(path.join(root, 'js/restaurant_menu.js'));
+  const source = [{
+    name: 'Choose a size', selectionType: 'single', minimumChoices: 1, maximumChoices: 1, sortOrder: 0,
+    optionChoices: [{ publicId: 'size-regular', name: 'Regular', priceDelta: 0, available: true, sortOrder: 0 }]
+  }];
+  const groups = menu.editorGroupsFromServer(source);
+  const payload = menu.serverPayload({ id: 'ramen-1', name: 'Ramen', price: 12, available: true, optionGroups: groups, addOns: [] }, 3);
+
+  assert.deepEqual(groups, [{ name: 'Choose a size', required: true, selectionType: 'single', minimumChoices: 1, maximumChoices: 1, sortOrder: 0, options: [{ publicId: 'size-regular', label: 'Regular', price: 0, available: true, sortOrder: 0 }] }]);
+  assert.equal(payload.optionGroups[0].choices[0].publicId, 'size-regular');
+  assert.equal(payload.optionGroups[0].choices[0].available, true);
+});
+
+test('menu editor preserves multiple add-on semantics when serializing an unchanged edit', () => {
+  const menu = require(path.join(root, 'js/restaurant_menu.js'));
+  const editor = menu.editorDataFromServer([{
+    name: 'Add-ons', selectionType: 'multiple', minimumChoices: 0, maximumChoices: 2, sortOrder: 1,
+    optionChoices: [
+      { publicId: 'addon-egg', name: 'Egg', priceDelta: 1, available: true, sortOrder: 0 },
+      { publicId: 'addon-tofu', name: 'Tofu', priceDelta: 2, available: true, sortOrder: 1 }
+    ]
+  }]);
+  const payload = menu.serverPayload({ id: 'ramen-1', name: 'Ramen', price: 12, available: true, optionGroups: editor.optionGroups, addOns: editor.addOns }, 3);
+  const addOns = payload.optionGroups[0];
+
+  assert.equal(addOns.selectionType, 'multiple');
+  assert.equal(addOns.minimumChoices, 0);
+  assert.equal(addOns.maximumChoices, 2);
+  assert.deepEqual(addOns.choices.map(choice => choice.publicId), ['addon-egg', 'addon-tofu']);
+});
+
+test('Restaurant shell has no local catalog writer and unsupported storefront fields are absent', () => {
+  const shell = read('js/restaurant_ui.js');
+  const profile = read('restaurant_profile.php');
+  const operations = read('restaurant_operations.php');
+  const storefront = read('js/restaurant_storefront.js');
+
+  assert.doesNotMatch(shell, /setOperations|state\.profile|state\.operations/);
+  for (const unsupported of ['profile-description', 'profile-image', 'delivery-radius', 'minimum-order', 'profile-prep-minutes', 'prep-minutes', 'capacity', 'delivery-enabled', 'pickup-enabled', 'pickup-instructions']) {
+    assert.doesNotMatch(`${profile}\n${operations}`, new RegExp(`name="${unsupported}"`));
+  }
+  assert.doesNotMatch(storefront, /deliveryRadius: 5|prepMinutes: 20|capacity: 20|deliveryEnabled: true|pickupEnabled: true/);
+});
+
+test('catalog intent keys are cleared only after the authoritative refresh succeeds', () => {
+  for (const file of ['js/restaurant_menu.js', 'js/restaurant_storefront.js']) {
+    const source = read(file);
+    const command = source.indexOf('await root.SavoraApi.post');
+    const refresh = Math.max(source.indexOf('await loadSnapshot', command), source.indexOf('await hydrate', command));
+    const clear = source.indexOf('clearIntentKey(scope)', command);
+    assert.ok(command >= 0 && refresh > command && clear > refresh, `${file} must refresh before clearing its intent key`);
+  }
+});
+
 function deepEqualErrors(value) {
   return value && typeof value === 'object' && Object.keys(value).length === 0;
 }

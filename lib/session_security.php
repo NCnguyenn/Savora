@@ -107,4 +107,5 @@ function savora_end_session(): void
     if (session_status() === PHP_SESSION_ACTIVE) {
         session_destroy();
     }
+    session_id('');
 }

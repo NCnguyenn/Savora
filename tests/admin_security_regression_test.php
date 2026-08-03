@@ -3,32 +3,38 @@ declare(strict_types=1);
 putenv('SAVORA_SEED_DEMO=1');
 putenv('SAVORA_DB_NAME=' . (getenv('SAVORA_DB_NAME') ?: 'savora_test'));
 require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/../lib/admin_security.php';
 require_once __DIR__ . '/../lib/admin_actions.php';
+require_once __DIR__ . '/../lib/services/partner_application_service.php';
 
 function security_assert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
-$actorId = (int) $conn->query("SELECT id FROM users WHERE role='admin' LIMIT 1")->fetch_assoc()['id'];
+$actorId = (int) $conn->query("SELECT id FROM users WHERE role='admin' AND status='active' LIMIT 1")->fetch_assoc()['id'];
+$prefix = 'security-partner-' . bin2hex(random_bytes(5));
+$applicationId = 0;
+try {
+    $application = partner_submit_application($conn, 'driver', [
+        'fullName'=>'Security Driver','username'=>$prefix,'email'=>$prefix.'@example.test','phone'=>'+1 555 019 1000',
+        'password'=>'Strong-Driver-123!','passwordConfirmation'=>'Strong-Driver-123!','city'=>'Central City',
+        'serviceArea'=>'Central District','vehicleType'=>'Motorcycle','vehicleModel'=>'Security Bike','licensePlate'=>'SEC-1000','acceptedTerms'=>true,
+    ]);
+    security_assert(($application['ok'] ?? false) === true, 'Document-free Driver application must be accepted.');
+    $applicationId = (int) $application['data']['applicationId'];
+    $rejected = admin_execute_action($conn, 'reject_driver', ['application_id'=>$applicationId,'version'=>1,'reviewer_note'=>'Security regression rejection'], $actorId, 'security-reject-'.bin2hex(random_bytes(4)));
+    security_assert(($rejected['ok'] ?? false) === true, 'Final rejection must succeed.');
+    $final = $conn->query("SELECT status,password_hash FROM driver_applications WHERE id={$applicationId}")->fetch_assoc();
+    security_assert($final['status'] === 'rejected' && $final['password_hash'] === null, 'Final rejection must consume credentials.');
+    $claims = (int) $conn->query("SELECT COUNT(*) AS total FROM identity_claims WHERE owner_kind='driver_application' AND owner_id={$applicationId}")->fetch_assoc()['total'];
+    security_assert($claims === 0, 'Final rejection must release reserved identities.');
 
-$application = $conn->query("SELECT * FROM driver_applications WHERE reference_code='DA-2026-208' LIMIT 1")->fetch_assoc();
-security_assert((bool) $application, 'Driver application fixture is missing.');
-$appId = (int) $application['id'];
-$conn->query("UPDATE driver_applications SET status='pending',password_hash='" . $conn->real_escape_string(password_hash('123456', PASSWORD_DEFAULT)) . "',version=version+1 WHERE id={$appId}");
-$application = $conn->query("SELECT version,password_hash FROM driver_applications WHERE id={$appId}")->fetch_assoc();
-$changes = admin_execute_action($conn, 'request_driver_changes', ['application_id' => $appId, 'version' => (int) $application['version'], 'reviewer_note' => 'Upload a clearer license image'], $actorId, 'security-changes-' . bin2hex(random_bytes(4)));
-security_assert(($changes['ok'] ?? false) === true, 'Request Changes must succeed.');
-$preserved = $conn->query("SELECT password_hash FROM driver_applications WHERE id={$appId}")->fetch_assoc();
-security_assert(!empty($preserved['password_hash']), 'Request Changes must preserve application credentials.');
-$conn->query("DELETE FROM driver_application_documents WHERE application_id={$appId}");
-$arbitrary = $conn->prepare("INSERT INTO driver_application_documents(application_id,document_type,verification_status,expires_at) VALUES(?,?,'verified',DATE_ADD(NOW(),INTERVAL 1 YEAR))");
-foreach (['portrait', 'utility_bill', 'reference_letter'] as $type) { $arbitrary->bind_param('is', $appId, $type); $arbitrary->execute(); }
-$arbitrary->close();
-$invalidApproval = admin_execute_action($conn, 'approve_driver', ['application_id' => $appId, 'version' => (int) $changes['data']['version']], $actorId, 'security-docs-' . bin2hex(random_bytes(4)));
-security_assert(($invalidApproval['ok'] ?? true) === false, 'Arbitrary verified document labels must not satisfy approval.');
-
-$target = $conn->query("SELECT id,version,password FROM users WHERE username='driver-nearby-2' LIMIT 1")->fetch_assoc();
-$reset = admin_execute_action($conn, 'reset_password', ['user_id' => (int) $target['id'], 'version' => (int) $target['version'], 'reason' => 'Security regression test'], $actorId, 'security-reset-' . bin2hex(random_bytes(4)));
-security_assert(($reset['ok'] ?? false) === true, 'Password recovery must succeed.');
-security_assert(!empty($reset['data']['recovery_url']), 'Password recovery must return a usable one-time link.');
-$afterPassword = $conn->query('SELECT password FROM users WHERE id=' . (int) $target['id'])->fetch_assoc()['password'];
-security_assert(hash_equals((string) $target['password'], (string) $afterPassword), 'Issuing recovery must not destroy the existing credential.');
-echo "PASS: change requests preserve credentials and password reset issues a recovery link\n";
+    $target = $conn->query("SELECT id,version,password FROM users WHERE username='driver-nearby-2' LIMIT 1")->fetch_assoc();
+    $reset = admin_execute_action($conn, 'reset_password', ['user_id'=>(int)$target['id'],'version'=>(int)$target['version'],'reason'=>'Security regression test'], $actorId, 'security-reset-'.bin2hex(random_bytes(4)));
+    security_assert(($reset['ok'] ?? false) === true, 'Password recovery must succeed.');
+    security_assert(empty($reset['data']['recovery_url']), 'Password recovery token must not be returned in the Admin response.');
+    $delivery = $conn->query("SELECT message FROM notifications WHERE user_id=".(int)$target['id']." AND event_type='reset_password' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+    security_assert($delivery && str_contains((string)$delivery['message'], 'reset_password.php?token='), 'Password recovery must queue the one-time link in the server notification channel.');
+    $afterPassword = $conn->query('SELECT password FROM users WHERE id='.(int)$target['id'])->fetch_assoc()['password'];
+    security_assert(hash_equals((string)$target['password'], (string)$afterPassword), 'Issuing recovery must not destroy the existing credential.');
+    echo "PASS: partner rejection releases identity and password reset issues a recovery link\n";
+} finally {
+    if ($applicationId > 0) { $conn->query("DELETE FROM identity_claims WHERE owner_kind='driver_application' AND owner_id={$applicationId}"); $conn->query("DELETE FROM driver_applications WHERE id={$applicationId}"); }
+    $conn->close();
+}

@@ -60,20 +60,19 @@
                     <input id="cart-promo" name="promo" type="text" autocomplete="off" maxlength="24" placeholder="Enter demo code">
                     <button class="secondary-action" type="submit">Apply</button>
                 </div>
-                <p id="cart-promo-status" class="form-help" aria-live="polite">Try LOCALDEMO or SAVORA. Demo totals remain unchanged.</p>
+                <p id="cart-promo-status" class="form-help" aria-live="polite">The server will validate any code at checkout.</p>
             </form>
 
             <a id="btn-checkout" class="primary-action summary-primary-action" href="customer_checkout.php">
                 Continue to checkout <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
             </a>
-            <p class="secure-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Secure local demo checkout</p>
+            <p class="secure-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Totals are confirmed at server checkout</p>
         </aside>
     </div>
 </main>
 
 <script>
     (() => {
-        const DEMO_PROMO_CODES = new Set(['LOCALDEMO', 'SAVORA']);
         let appliedPromoCode = '';
 
         const money = value => `$${Number(value || 0).toFixed(2)}`;
@@ -164,7 +163,6 @@
             const el = window.SavoraUI.el;
             const itemCount = state.cart.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
             const subtotal = state.cart.reduce((sum, line) => sum + Number(line.unitPrice || 0) * Number(line.quantity || 0), 0);
-            const delivery = state.cart.length ? Number(State.DELIVERY_FEE || 2) : 0;
             const fragment = document.createDocumentFragment();
 
             if (!state.cart.length) fragment.append(createEmptyCart(el));
@@ -174,8 +172,8 @@
             document.getElementById('cart-item-count').textContent = itemCount === 1 ? '1 item' : `${itemCount} items`;
             document.getElementById('page-cart-subtotal-label').textContent = `Subtotal (${itemCount} ${itemCount === 1 ? 'item' : 'items'})`;
             document.getElementById('page-cart-subtotal').textContent = money(subtotal);
-            document.getElementById('page-cart-delivery').textContent = money(delivery);
-            document.getElementById('page-cart-total').textContent = money(subtotal + delivery);
+            document.getElementById('page-cart-delivery').textContent = state.cart.length ? 'Calculated at checkout' : '$0.00';
+            document.getElementById('page-cart-total').textContent = state.cart.length ? 'Server quote at checkout' : '$0.00';
 
             const checkoutLink = document.getElementById('btn-checkout');
             checkoutLink.hidden = state.cart.length === 0;
@@ -221,16 +219,12 @@
 
             if (!code) {
                 appliedPromoCode = '';
-                status.textContent = 'No promo code applied. Demo totals remain unchanged.';
+                status.textContent = 'No promo code applied. The server will calculate totals at checkout.';
                 showCartToast('No promo code applied.');
-            } else if (DEMO_PROMO_CODES.has(code)) {
-                appliedPromoCode = code;
-                status.textContent = `${code} will be saved with your demo order. Totals stay unchanged.`;
-                showCartToast(`${code} saved for checkout. Demo totals stay unchanged.`);
             } else {
-                appliedPromoCode = '';
-                status.textContent = 'That demo code is unavailable. Totals remain unchanged.';
-                showCartToast('That demo promo code is unavailable.');
+                appliedPromoCode = code;
+                status.textContent = `${code} will be validated by the server at checkout.`;
+                showCartToast(`${code} saved for checkout.`);
             }
             updateCheckoutLink();
         }

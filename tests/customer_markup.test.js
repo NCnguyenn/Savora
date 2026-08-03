@@ -210,7 +210,7 @@ test('small screens retain Logout and stack the full-cart layout', () => {
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*#cart-page-layout\s*\{\s*grid-template-columns:\s*1fr\s*!important;/);
 });
 
-test('checkout stacks on tablet screens and uses the state-backed wallet checkout path', () => {
+test('checkout stacks on tablet screens and uses the server-backed wallet checkout path', () => {
   const checkout = read('customer_checkout.php');
   const css = read('css/customer_style.css');
 
@@ -220,9 +220,10 @@ test('checkout stacks on tablet screens and uses the state-backed wallet checkou
   assert.doesNotMatch(checkout, /localStorage\.getItem\('savora_wallet'\)/);
   assert.doesNotMatch(checkout, /saveState\(\)/);
   assert.doesNotMatch(checkout, /window\.cart\s*=\s*\[\]/);
-  assert.match(checkout, /SavoraState\.load\(\)/);
-  assert.match(checkout, /SavoraState\.placeDemoOrder\(/);
-  assert.match(checkout, /SavoraState\.persist\(checkout\.state\)/);
+  assert.match(checkout, /api\/profile\.php/);
+  assert.match(checkout, /SavoraApi\.post\(.*api\/checkout\.php/s);
+  assert.match(checkout, /action:\s*'place_order'/);
+  assert.doesNotMatch(checkout, /placeDemoOrder|topUpWallet|localStorage\.getItem\('savora_wallet'\)/);
   assert.doesNotMatch(css, /\.checkout-order-summary\s*\{\s*grid-row:\s*1;/);
 });
 
@@ -246,12 +247,12 @@ test('full cart uses normalized state, safe DOM rendering and explicit line cont
 test('cart and checkout promo messaging never claims an uncalculated discount', () => {
   for (const source of ['customer_cart.php', 'customer_checkout.php']) {
     const page = read(source);
-    assert.match(page, /total(?:s)? (?:remain|stay) unchanged/i);
+    assert.match(page, /server[^\n]{0,100}(?:validate|calculat|confirm|checkout)/i);
     assert.doesNotMatch(page, /discount-applied|promo-savings/);
   }
 });
 
-test('checkout is a labelled, guarded form with accessible payments and local success feedback', () => {
+test('checkout is a labelled, guarded form with accessible payments and server success feedback', () => {
   const checkout = read('customer_checkout.php');
 
   assert.match(checkout, /<form[^>]*id="checkout-form"/);
@@ -262,33 +263,34 @@ test('checkout is a labelled, guarded form with accessible payments and local su
   assert.match(checkout, /<legend/);
   assert.match(checkout, /type="radio"[^>]*value="wallet"/);
   assert.match(checkout, /type="radio"[^>]*value="cash"/);
-  assert.match(checkout, /let isSubmitting = false/);
-  assert.match(checkout, /setAttribute\('aria-busy',\s*pending \? 'true' : 'false'\)/);
-  assert.match(checkout, /Demo order placed locally/);
-  assert.match(checkout, /SavoraUI\.(?:showToast|announce)/);
+  assert.match(checkout, /let submitting = false/);
+  assert.match(checkout, /setAttribute\('aria-busy',\s*String\(value\)\)/);
+  assert.match(checkout, /Order placed on the server/);
+  assert.match(checkout, /SavoraApi\.clearIntentKey\('customer-place-order'\)/);
+  assert.match(checkout, /ui\.(?:showToast|announce)/);
   assert.doesNotMatch(checkout, /\balert\s*\(/);
   assert.doesNotMatch(checkout, /onclick=/);
 });
 
-test('checkout consults Restaurant accepting state and reports a local placement error safely', () => {
+test('checkout delegates acceptance and placement to the server safely', () => {
   const checkout = read('customer_checkout.php');
   const footer = read('components/customer_footer.php');
 
   assert.match(footer, /js\/restaurant_state\.js/);
-  assert.match(checkout, /window\.SavoraRestaurantState\.load\(\)/);
-  assert.match(checkout, /SavoraState\.placeDemoOrder\([\s\S]*window\.SavoraRestaurantState\.load\(\)/);
-  assert.match(checkout, /showCheckoutToast\(error\.message/);
+  assert.match(checkout, /api\/checkout\.php/);
+  assert.match(checkout, /Order was not placed/);
+  assert.doesNotMatch(checkout, /SavoraState\.placeDemoOrder|window\.SavoraRestaurantState\.load/);
   assert.doesNotMatch(checkout, /\balert\s*\(/);
 });
 
-test('checkout persists delivery notes and orders render them as text context', () => {
+test('checkout submits delivery notes and order views render them as text context', () => {
   const state = read('js/customer_state.js');
   const checkout = read('customer_checkout.php');
   const history = read('customer_history.php');
   const dashboard = read('customer_dashboard.php');
 
-  assert.match(state, /deliveryNote/);
-  assert.match(checkout, /deliveryNote:\s*document\.getElementById\('checkout-note'\)\.value/);
+  assert.doesNotMatch(state, /deliveryNote/);
+  assert.match(checkout, /deliveryNote:\s*note\.value\.trim\(\)/);
   assert.match(history, /deliveryNote/);
   assert.match(history, /order-delivery-note/);
   assert.match(history, /active-order-delivery-note/);
@@ -318,7 +320,7 @@ test('discovery and product detail use semantic data-driven controls', () => {
   assert.match(discovery, /<section[^>]*aria-labelledby=/);
   assert.match(discovery, /<button[^>]*data-category=/);
   assert.match(discovery, /SavoraCatalog\.products/);
-  assert.match(discovery, /SavoraState\.load\(\)/);
+  assert.match(discovery, /SavoraApi\.get\('api\/profile\.php'\)/);
   assert.doesNotMatch(discovery, /innerHTML\s*=/);
 
   assert.match(detail, /<fieldset/);
@@ -338,11 +340,13 @@ test('Discover and Product expose independent accessible favorite controls', () 
   assert.match(discovery, /className:\s*'discovery-favorite-button'/);
   assert.match(discovery, /data-favorite-kind/);
   assert.match(discovery, /aria-pressed/);
-  assert.match(discovery, /toggleFavorite\(/);
+  assert.match(discovery, /api\/profile\.php/);
+  assert.match(discovery, /SavoraApi\.post\(/);
   assert.match(discovery, /ui\.announce\(/);
   assert.match(detail, /id="product-favorite-button"/);
   assert.match(detail, /aria-pressed/);
-  assert.match(detail, /toggleFavorite\(/);
+  assert.match(detail, /api\/profile\.php/);
+  assert.match(detail, /SavoraApi\.post\(/);
   assert.match(detail, /ui\.announce\(/);
   assert.match(css, /\.discovery-card-shell\s*\{/);
   assert.match(css, /\.discovery-favorite-button\s*\{/);
@@ -358,7 +362,7 @@ test('product detail handles unknown products and responsive two-column layout',
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.customer-two-column\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
-test('orders render persisted status-aware history and exact configuration reorder controls', () => {
+test('orders render server-hydrated status-aware history and exact configuration reorder controls', () => {
   const history = read('customer_history.php');
   const css = read('css/customer_style.css');
 
@@ -366,7 +370,8 @@ test('orders render persisted status-aware history and exact configuration reord
   assert.match(history, /data-order-filter="active"/);
   assert.match(history, /data-order-filter="completed"/);
   assert.match(history, /data-order-filter="cancelled"/);
-  assert.match(history, /SavoraState\.getActiveOrder\(/);
+  assert.match(history, /api\/orders\.php/);
+  assert.match(history, /SavoraApi\.get\('api\/orders\.php/);
   assert.match(history, /SavoraState\.addCartLine\(/);
   assert.match(history, /line\.options,\s*line\.note/);
   assert.match(history, /replaceChildren\(/);
@@ -389,7 +394,7 @@ test('Customer order history opens a selected Restaurant follow-up record withou
   assert.doesNotMatch(history, /reorder\(requestedOrder/);
 });
 
-test('favorites use accessible tabs, independent heart controls and state-backed empty panels', () => {
+test('favorites use accessible tabs, independent heart controls and server-backed empty panels', () => {
   const favorites = read('customer_favorites.php');
   const css = read('css/customer_style.css');
 
@@ -398,9 +403,10 @@ test('favorites use accessible tabs, independent heart controls and state-backed
   assert.match(favorites, /role="tab"[^>]*aria-controls="favorite-products-panel"/);
   assert.match(favorites, /<section[^>]*id="favorite-restaurants-panel"[^>]*role="tabpanel"/);
   assert.match(favorites, /<section[^>]*id="favorite-products-panel"[^>]*role="tabpanel"/);
-  assert.match(favorites, /SavoraState\.toggleFavorite\(/);
+  assert.match(favorites, /api\/profile\.php/);
+  assert.match(favorites, /SavoraApi\.post\(/);
   assert.match(favorites, /Remove .* from favorites/);
-  assert.match(favorites, /SavoraUI\.openMenuModal\(/);
+  assert.match(favorites, /ui\.openMenuModal\(/);
   assert.match(favorites, /replaceChildren\(/);
   assert.match(favorites, /textContent\s*=/);
   assert.match(favorites, /keydown/);
@@ -422,7 +428,7 @@ test('orders and the shared cart renderer never use a localStorage-derived image
   assert.match(sharedUi, /productImage\(catalogProduct\)/);
   assert.match(sharedUi, /addToCart:[\s\S]{0,350}\|\|\s*\{[^}]*image:\s*['"]['"][^}]*\}/);
 
-  for (const pageName of ['customer_cart.php', 'customer_checkout.php']) {
+  for (const pageName of ['customer_cart.php']) {
     const page = read(pageName);
     assert.doesNotMatch(page, /line\.image/);
     assert.match(page, /SavoraCatalog\.products\[String\(line\.id\)\]/);
@@ -439,7 +445,7 @@ test('focusable favorites tabpanels retain a visible keyboard focus indicator', 
   assert.match(css, /\.favorite-panel:focus-visible\s*\{[^}]*outline:/);
 });
 
-test('profile is a labelled local-demo form without a password update claim', () => {
+test('profile is a labelled server-backed form without a password update claim', () => {
   const profile = read('customer_profile.php');
 
   assert.match(profile, /<form[^>]*id="profile-form"/);
@@ -450,9 +456,9 @@ test('profile is a labelled local-demo form without a password update claim', ()
   assert.match(profile, /autocomplete="email"/);
   assert.match(profile, /autocomplete="tel"/);
   assert.match(profile, /autocomplete="street-address"/);
-  assert.match(profile, /saved locally on this device/i);
-  assert.match(profile, /SavoraState\.setProfile\(/);
-  assert.match(profile, /SavoraState\.persist\(/);
+  assert.match(profile, /api\/profile\.php/);
+  assert.match(profile, /SavoraApi\.post\(/);
+  assert.doesNotMatch(profile, /SavoraState\.(?:setProfile|persist)\(/);
   assert.doesNotMatch(profile, /type="password"/);
   assert.doesNotMatch(profile, /password changes saved/i);
   assert.doesNotMatch(profile, /onsubmit=/);
@@ -464,19 +470,14 @@ test('wallet uses event-driven safe rendering and an accessible top-up form', ()
   const wallet = read('customer_wallet.php');
   const css = read('css/customer_style.css');
 
-  assert.match(wallet, /id="wallet-topup-dialog"[^>]*role="dialog"[^>]*aria-modal="true"/);
-  assert.match(wallet, /aria-labelledby="wallet-topup-title"/);
-  assert.match(wallet, /<form[^>]*id="wallet-topup-form"/);
-  assert.match(wallet, /<label[^>]*for="wallet-topup-amount"/);
-  assert.match(wallet, /SavoraState\.load\(\)/);
-  assert.match(wallet, /SavoraState\.topUpWallet\(/);
-  assert.match(wallet, /SavoraState\.persist\(/);
-  assert.match(wallet, /SavoraUI\.refreshChrome\(\)/);
+  assert.match(wallet, /api\/profile\.php/);
+  assert.match(wallet, /SavoraApi\.get\('api\/profile\.php'\)/);
+  assert.match(wallet, /Top-up unavailable/);
   assert.match(wallet, /replaceChildren\(/);
   assert.match(wallet, /textContent\s*=/);
   assert.match(wallet, /['"]Credit['"]/);
   assert.match(wallet, /['"]Debit['"]/);
-  assert.match(wallet, /Local demo/);
+  assert.match(wallet, /Only confirmed server transactions/);
   assert.doesNotMatch(wallet, /setInterval\s*\(/);
   assert.doesNotMatch(wallet, /localStorage\.getItem\(/);
   assert.doesNotMatch(wallet, /innerHTML\s*=/);
@@ -493,36 +494,33 @@ test('Customer discovery hydrates its catalog from the server safely', () => {
   assert.match(catalog, /replaceRecords/);
   assert.match(dashboard, /await catalog\.hydrate\(\)/);
   assert.match(dashboard, /Catalog is temporarily unavailable/);
-  assert.match(dashboard, /restaurant\.acceptingOrders === false/);
-  assert.match(dashboard, /text:\s*restaurant\.status/);
+  assert.match(dashboard, /const categories = catalog\.categories \|\| \[\]/);
   assert.doesNotMatch(dashboard, /innerHTML\s*=/);
 });
 
-test('Customer discovery uses the menu image fallback and explicit fulfillment copy', () => {
+test('Customer discovery uses the menu image fallback and server-backed restaurant details', () => {
   const dashboard = read('customer_dashboard.php');
 
   assert.match(dashboard, /restaurant\.image\s*\?\s*SavoraCatalog\.imageFor\(\{ image: restaurant\.image \}\)\s*:\s*SavoraCatalog\.imageFor\(menu\[0\]\)/);
-  assert.match(dashboard, /Delivery and pickup available/);
-  assert.match(dashboard, /Delivery available within/);
-  assert.match(dashboard, /Pickup available/);
-  assert.match(dashboard, /Delivery and pickup unavailable/);
+  assert.match(dashboard, /restaurant\.cuisine/);
+  assert.doesNotMatch(dashboard, /deliveryRadius|deliveryEnabled|pickupEnabled|acceptingOrders/);
 });
 
-test('Customer tracking loads Driver state and renders dispatch visibility safely', () => {
+test('Customer tracking loads server order state and renders dispatch visibility safely', () => {
   const footer = read('components/customer_footer.php');
   const dashboard = read('customer_dashboard.php');
   const history = read('customer_history.php');
 
-  assert.match(footer, /js\/driver_state\.js/);
-  assert.match(dashboard, /SavoraDriverState/);
-  assert.match(dashboard, /deliveryForOrder/);
-  assert.match(dashboard, /dispatchForOrder/);
+  assert.match(dashboard, /api\/orders\.php/);
+  assert.match(dashboard, /serverOrders/);
+  assert.match(dashboard, /activeOrder\.assignment/);
+  assert.match(dashboard, /activeOrder\.dispatch/);
   assert.match(dashboard, /function initializeTrackingMap\(delivery\)/);
-  assert.match(dashboard, /const driverState = delivery && window\.SavoraDriverState/);
   assert.match(dashboard, /if \(driverLocation\) \{/);
-  assert.match(history, /SavoraDriverState/);
-  assert.match(history, /deliveryForOrder/);
-  assert.match(history, /dispatchForOrder/);
+  assert.match(history, /api\/orders\.php/);
+  assert.match(history, /serverOrders/);
+  assert.match(history, /order\.assignment/);
+  assert.match(history, /order\.dispatch/);
   assert.match(history, /Searching for a nearby driver/);
   assert.match(history, /Driver assigned/);
   assert.doesNotMatch(`${dashboard}\n${history}`, /innerHTML\s*=/);

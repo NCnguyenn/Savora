@@ -14,7 +14,7 @@ test('migration 003 never invents a hash for legacy response records', () => {
 
 test('idempotency endpoints acquire a per-key lock before lookup and mutation', () => {
   const service = fs.readFileSync('lib/idempotency.php', 'utf8');
-  const platform = fs.readFileSync('api/platform_state.php', 'utf8');
+  const platform = fs.readFileSync('api/dispatch.php', 'utf8');
   const admin = fs.readFileSync('lib/admin_actions.php', 'utf8');
   assert.match(service, /GET_LOCK/);
   assert.match(service, /RELEASE_LOCK/);

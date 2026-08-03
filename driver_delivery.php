@@ -13,8 +13,8 @@
         <div class="driver-empty-state driver-card" data-delivery-empty>
             <span><i class="fa-solid fa-route" aria-hidden="true"></i></span>
             <h2>No active delivery</h2>
-            <p>Accept a delivery offer from Overview to begin a guided pickup and drop-off.</p>
-            <a class="driver-primary-action" href="driver_dashboard.php">Find delivery offers</a>
+            <p>Delivery milestones are validated and recorded by the server.</p>
+            <a class="driver-primary-action" href="driver_dashboard.php">View server assignments</a>
         </div>
 
         <div class="driver-delivery-layout" data-delivery-content hidden>
@@ -71,7 +71,7 @@
                 </div>
 
                 <div class="driver-delivery-actions">
-                    <button class="driver-primary-action" type="button" data-delivery-primary-action>Confirm arrival</button>
+                    <button class="driver-primary-action" type="button" data-delivery-primary-action disabled>Loading server status…</button>
                     <button class="driver-danger-action" type="button" data-report-issue aria-controls="driver-issue-dialog">Report an issue</button>
                 </div>
             </div>

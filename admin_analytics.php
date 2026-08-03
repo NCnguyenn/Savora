@@ -19,7 +19,7 @@ $hourMax = max(array_map(static fn(array $row): int => (int) $row['total'], $ana
 <main class="admin-main" id="admin-main" tabindex="-1">
     <header class="admin-page-heading">
         <div><p class="admin-eyebrow">PLATFORM PERFORMANCE</p><h1>Analytics &amp; Reports</h1><p>Explore operational, financial and partner performance from authoritative order data.</p></div>
-        <div class="admin-page-heading__actions"><a class="admin-button admin-button--ghost" href="admin_analytics.php?export=csv"><i class="fa-solid fa-file-csv" aria-hidden="true"></i> Export CSV</a><button class="admin-button admin-button--primary" type="button" data-admin-print><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Export PDF</button></div>
+        <div class="admin-page-heading__actions"><a class="admin-button admin-button--ghost" href="api/admin_export.php?type=analytics&amp;from=<?= admin_escape($analytics['from']) ?>&amp;to=<?= admin_escape($analytics['to']) ?>"><i class="fa-solid fa-file-csv" aria-hidden="true"></i> Export CSV</a><button class="admin-button admin-button--primary" type="button" data-admin-print><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Print server report</button></div>
     </header>
 
     <form class="admin-filter-bar" method="get" data-admin-filter aria-label="Analytics filters">
