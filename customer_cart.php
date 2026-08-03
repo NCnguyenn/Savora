@@ -1,4 +1,7 @@
-<?php include 'components/customer_header.php'; ?>
+<?php
+include 'components/customer_header.php';
+$checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer_login_url('customer_checkout.php');
+?>
 
 <main class="container cart-page">
     <nav class="page-breadcrumb" aria-label="Breadcrumb">
@@ -63,7 +66,7 @@
                 <p id="cart-promo-status" class="form-help" aria-live="polite">The server will validate any code at checkout.</p>
             </form>
 
-            <a id="btn-checkout" class="primary-action summary-primary-action" href="customer_checkout.php">
+            <a id="btn-checkout" class="primary-action summary-primary-action" href="<?= htmlspecialchars($checkout_base, ENT_QUOTES, 'UTF-8'); ?>">
                 Continue to checkout <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
             </a>
             <p class="secure-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Totals are confirmed at server checkout</p>
@@ -74,6 +77,7 @@
 <script>
     (() => {
         let appliedPromoCode = '';
+        const checkoutBase = <?= json_encode($checkout_base, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
         const money = value => `$${Number(value || 0).toFixed(2)}`;
         const stateApi = () => window.SavoraState;
@@ -206,8 +210,13 @@
         function updateCheckoutLink() {
             const checkoutLink = document.getElementById('btn-checkout');
             if (!checkoutLink) return;
-            const query = appliedPromoCode ? `?promo=${encodeURIComponent(appliedPromoCode)}` : '';
-            checkoutLink.href = `customer_checkout.php${query}`;
+            const target = new URL(checkoutBase, window.location.href);
+            if (appliedPromoCode) {
+                const returnTo = target.searchParams.get('return_to');
+                if (returnTo) target.searchParams.set('return_to', `${returnTo}?promo=${encodeURIComponent(appliedPromoCode)}`);
+                else target.searchParams.set('promo', appliedPromoCode);
+            }
+            checkoutLink.href = `${target.pathname}${target.search}`;
         }
 
         function applyCartPromo(event) {

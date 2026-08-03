@@ -54,3 +54,11 @@ test('public customer renderers make account API calls conditional', () => {
   assert.match(read('customer_dashboard.php'), /api\/catalog\.php|catalog\.hydrate/);
   assert.match(read('product_detail.php'), /Add to cart/);
 });
+
+test('guest cart remains local and checkout has an authentication gate', () => {
+  const cart = read('customer_cart.php');
+  assert.match(cart, /SavoraState\.load/);
+  assert.match(cart, /customer_checkout\.php/);
+  assert.match(cart, /customer_login_url|login\.php/);
+  assert.match(read('customer_checkout.php'), /api\/checkout\.php/);
+});
