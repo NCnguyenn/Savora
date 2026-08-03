@@ -337,6 +337,45 @@ function catalog_for_customer(mysqli $conn, array $filters): array
     return catalog_repository_customer_items($conn, $filters);
 }
 
+function catalog_storefront_for_customer(mysqli $conn, string $publicId, ?DateTimeImmutable $at = null): array
+{
+    $publicId = trim($publicId);
+    if (!preg_match('/^[A-Za-z0-9_-]{1,60}$/', $publicId)) {
+        return catalog_error(422, 'A valid restaurant identifier is required.');
+    }
+    $restaurant = catalog_repository_customer_storefront($conn, $publicId);
+    if ($restaurant === []) {
+        return catalog_error(404, 'Restaurant not found.');
+    }
+    $restaurantId = (int) $restaurant['id'];
+    return catalog_success([
+        'restaurant' => [
+            'publicId' => (string) $restaurant['public_id'],
+            'name' => (string) $restaurant['name'],
+            'cuisine' => (string) $restaurant['cuisine'],
+            'description' => (string) ($restaurant['description'] ?? ''),
+            'slogan' => (string) ($restaurant['slogan'] ?? ''),
+            'heroImage' => (string) ($restaurant['hero_image'] ?? ''),
+            'logoPath' => (string) ($restaurant['logo_path'] ?? ''),
+            'rating' => (float) ($restaurant['rating'] ?? 0),
+            'address' => (string) ($restaurant['address'] ?? ''),
+            'city' => (string) ($restaurant['city'] ?? ''),
+            'phone' => (string) ($restaurant['phone'] ?? ''),
+            'acceptingOrders' => (bool) $restaurant['accepting_orders'],
+        ],
+        'items' => catalog_repository_customer_storefront_items($conn, $restaurantId),
+        'weeklyHours' => catalog_repository_weekly_hours($conn, $restaurantId),
+        'promotions' => array_map(static fn (array $promotion): array => [
+            'code' => (string) $promotion['code'],
+            'discountType' => (string) $promotion['discount_type'],
+            'discountValue' => (float) $promotion['discount_value'],
+            'maximumDiscount' => $promotion['maximum_discount'] === null ? null : (float) $promotion['maximum_discount'],
+            'minimumOrder' => (float) $promotion['minimum_order'],
+            'endsAt' => (string) $promotion['ends_at'],
+        ], catalog_repository_active_promotions($conn, $restaurantId, $at ?? new DateTimeImmutable('now'))),
+    ], 'Restaurant storefront loaded.');
+}
+
 function catalog_for_restaurant(mysqli $conn, int $ownerUserId): array
 {
     $restaurant = catalog_repository_restaurant($conn, $ownerUserId);

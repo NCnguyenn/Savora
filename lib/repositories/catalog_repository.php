@@ -85,6 +85,8 @@ function catalog_repository_map_item(mysqli $conn, array $row, bool $customerVis
         'description' => (string) ($row['item_description'] ?? ''),
         'imagePath' => (string) ($row['image_path'] ?? ''),
         'category' => (string) ($row['item_category'] ?? ''),
+        'itemType' => in_array((string) ($row['item_type'] ?? 'food'), ['food', 'drink'], true) ? (string) $row['item_type'] : 'food',
+        'sortOrder' => (int) ($row['sort_order'] ?? 0),
         'prepTimeMinutes' => $row['prep_time_minutes'] === null ? null : (int) $row['prep_time_minutes'],
         'calories' => $row['calories'] === null ? null : (int) $row['calories'],
         'dietaryTags' => catalog_repository_list_value($row['dietary_tags'] ?? null),
@@ -92,13 +94,17 @@ function catalog_repository_map_item(mysqli $conn, array $row, bool $customerVis
         'ingredients' => catalog_repository_list_value($row['ingredients'] ?? null),
         'restaurant' => [
             'id' => (int) $row['restaurant_id'],
+            'publicId' => (string) ($row['restaurant_public_id'] ?? ''),
             'name' => (string) $row['restaurant_name'],
             'cuisine' => (string) ($row['cuisine'] ?? ''),
             'description' => (string) ($row['restaurant_description'] ?? ''),
+            'slogan' => (string) ($row['restaurant_slogan'] ?? ''),
             'heroImage' => (string) ($row['restaurant_hero_image'] ?? ''),
+            'logoPath' => (string) ($row['restaurant_logo_path'] ?? ''),
             'rating' => (float) ($row['restaurant_rating'] ?? 0),
             'address' => (string) ($row['address'] ?? ''),
             'city' => (string) ($row['city'] ?? ''),
+            'phone' => (string) ($row['restaurant_phone'] ?? ''),
             'latitude' => $row['latitude'] === null ? null : (float) $row['latitude'],
             'longitude' => $row['longitude'] === null ? null : (float) $row['longitude'],
             'operationalAvailable' => (bool) $row['operational_available'],
@@ -114,8 +120,8 @@ function catalog_repository_customer_items(mysqli $conn, array $filters): array
     $rows = catalog_repository_rows(
         $conn,
         "SELECT m.id AS menu_item_id,m.public_id,m.name AS item_name,m.price AS base_price,m.version AS item_version,m.is_available AS item_available,
-                m.description AS item_description,m.image_path,m.category AS item_category,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
-                r.id AS restaurant_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.hero_image AS restaurant_hero_image,r.rating AS restaurant_rating,r.address,r.city,r.latitude,r.longitude,
+                m.description AS item_description,m.image_path,m.category AS item_category,m.item_type,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
+                r.id AS restaurant_id,r.public_id AS restaurant_public_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.slogan AS restaurant_slogan,r.hero_image AS restaurant_hero_image,r.logo_path AS restaurant_logo_path,r.rating AS restaurant_rating,r.address,r.city,r.phone AS restaurant_phone,r.latitude,r.longitude,
                 (r.accepting_orders=1) AS operational_available
          FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id
          WHERE r.status='active' AND m.is_available=1
@@ -126,6 +132,52 @@ function catalog_repository_customer_items(mysqli $conn, array $filters): array
         [$q, $q, $q, $restaurant, $restaurant]
     );
     return array_map(fn (array $row): array => catalog_repository_map_item($conn, $row, true), $rows);
+}
+
+function catalog_repository_customer_storefront(mysqli $conn, string $publicId): array
+{
+    return catalog_repository_one(
+        $conn,
+        "SELECT id,public_id,name,cuisine,description,slogan,hero_image,logo_path,rating,address,city,phone,accepting_orders,latitude,longitude
+         FROM restaurants
+         WHERE public_id=? AND status='active' LIMIT 1",
+        's',
+        [$publicId]
+    );
+}
+
+function catalog_repository_customer_storefront_items(mysqli $conn, int $restaurantId): array
+{
+    $rows = catalog_repository_rows(
+        $conn,
+        "SELECT m.id AS menu_item_id,m.public_id,m.name AS item_name,m.price AS base_price,m.version AS item_version,m.is_available AS item_available,
+                m.description AS item_description,m.image_path,m.category AS item_category,m.item_type,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
+                r.id AS restaurant_id,r.public_id AS restaurant_public_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.slogan AS restaurant_slogan,r.hero_image AS restaurant_hero_image,r.logo_path AS restaurant_logo_path,r.rating AS restaurant_rating,r.address,r.city,r.phone AS restaurant_phone,r.latitude,r.longitude,
+                (r.accepting_orders=1) AS operational_available
+         FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id
+         WHERE r.id=? AND r.status='active' AND m.is_available=1
+         ORDER BY m.item_type,m.sort_order,m.name,m.id",
+        'i',
+        [$restaurantId]
+    );
+    return array_map(fn (array $row): array => catalog_repository_map_item($conn, $row, true), $rows);
+}
+
+function catalog_repository_active_promotions(mysqli $conn, int $restaurantId, DateTimeImmutable $at): array
+{
+    $timestamp = $at->format('Y-m-d H:i:s');
+    $id = (string) $restaurantId;
+    $scoped = 'restaurant:' . $restaurantId;
+    return catalog_repository_rows(
+        $conn,
+        "SELECT code,discount_type,discount_value,maximum_discount,minimum_order,ends_at
+         FROM promotions
+         WHERE status='active' AND starts_at<=? AND ends_at>=?
+           AND (scope='all_restaurants' OR scope='all' OR scope=? OR scope=?)
+         ORDER BY ends_at,code",
+        'ssss',
+        [$timestamp, $timestamp, $id, $scoped]
+    );
 }
 
 function catalog_repository_restaurant(mysqli $conn, int $ownerUserId): array
@@ -145,8 +197,8 @@ function catalog_repository_restaurant_items(mysqli $conn, int $ownerUserId): ar
     $rows = catalog_repository_rows(
         $conn,
         "SELECT m.id AS menu_item_id,m.public_id,m.name AS item_name,m.price AS base_price,m.version AS item_version,m.is_available AS item_available,
-                m.description AS item_description,m.image_path,m.category AS item_category,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
-                r.id AS restaurant_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.hero_image AS restaurant_hero_image,r.rating AS restaurant_rating,r.address,r.city,r.latitude,r.longitude,
+                m.description AS item_description,m.image_path,m.category AS item_category,m.item_type,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
+                r.id AS restaurant_id,r.public_id AS restaurant_public_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.slogan AS restaurant_slogan,r.hero_image AS restaurant_hero_image,r.logo_path AS restaurant_logo_path,r.rating AS restaurant_rating,r.address,r.city,r.phone AS restaurant_phone,r.latitude,r.longitude,
                 (r.accepting_orders=1) AS operational_available
          FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id JOIN users u ON u.id=r.owner_user_id
          WHERE r.owner_user_id=? AND u.role='restaurant' AND u.status='active'
@@ -160,8 +212,8 @@ function catalog_repository_restaurant_items(mysqli $conn, int $ownerUserId): ar
 function catalog_repository_item_by_public_id(mysqli $conn, string $publicId, bool $forUpdate = false): array
 {
     $sql = "SELECT m.id AS menu_item_id,m.public_id,m.name AS item_name,m.price AS base_price,m.version AS item_version,m.is_available AS item_available,
-                   m.description AS item_description,m.image_path,m.category AS item_category,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
-                   r.id AS restaurant_id,r.owner_user_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.hero_image AS restaurant_hero_image,r.rating AS restaurant_rating,r.address,r.city,r.latitude,r.longitude,
+                   m.description AS item_description,m.image_path,m.category AS item_category,m.item_type,m.prep_time_minutes,m.calories,m.dietary_tags,m.allergens,m.ingredients,m.sort_order,
+                   r.id AS restaurant_id,r.owner_user_id,r.public_id AS restaurant_public_id,r.name AS restaurant_name,r.cuisine,r.description AS restaurant_description,r.slogan AS restaurant_slogan,r.hero_image AS restaurant_hero_image,r.logo_path AS restaurant_logo_path,r.rating AS restaurant_rating,r.address,r.city,r.phone AS restaurant_phone,r.latitude,r.longitude,
                    (r.accepting_orders=1) AS operational_available
             FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id WHERE m.public_id=? LIMIT 1";
     if ($forUpdate) {
