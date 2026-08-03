@@ -13,7 +13,7 @@ const forbidden = [
 const files = [];
 function collect(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (['.git', '.worktrees', 'node_modules'].includes(entry.name)) continue;
+    if (['.git', '.worktrees', '.superpowers', 'node_modules'].includes(entry.name)) continue;
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) collect(full);
     else if (entry.isFile() && /.(php|js)$/.test(entry.name) && !full.includes(`${path.sep}tests${path.sep}`)) files.push(full);

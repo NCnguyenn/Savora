@@ -13,9 +13,11 @@ if (!$customer_is_authenticated && !in_array($current_page, $public_customer_pag
     if ($queryString !== '') $returnTarget .= '?' . $queryString;
     customer_redirect_to_login($returnTarget);
 }
-if ($customer_is_authenticated && !savora_session_has_csrf_token($_SESSION)) {
-    savora_end_session();
-    customer_redirect_to_login($current_page, 'Your session is no longer active. Please sign in again.');
+if ($customer_is_authenticated) {
+    if (!savora_session_has_csrf_token($_SESSION)) {
+        header('Location: index.php');
+        exit();
+    }
 }
 $full_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Customer';
 $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'customer';

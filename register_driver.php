@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     else { $result = partner_submit_application($conn, 'driver', $_POST, []); if ($result['ok'] ?? false) { $_SESSION['registration_result'] = ['kind' => 'partner_pending', 'title' => 'Application submitted', 'message' => 'Your Driver application is waiting for Admin approval.', 'referenceCode' => (string) $result['data']['referenceCode']]; header('Location: registration_result.php'); exit; } $error = (string) ($result['message'] ?? 'Application could not be submitted.'); }
 }
 $v = static fn(string $key): string => htmlspecialchars((string) ($values[$key] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$authPageTitle = 'Register as a Driver'; $authNavHref = 'index.php'; $authNavLabel = 'Sign in';
+$authPageTitle = 'Register as a Driver'; $authNavHref = 'login.php'; $authNavLabel = 'Sign in';
 require __DIR__ . '/components/auth_header.php';
 ?>
 <section class="auth-panel auth-panel--padded" aria-labelledby="driver-title"><h1 class="auth-heading" id="driver-title">Register as a Driver</h1><p class="auth-lead">Become a Savora delivery partner. No legal documents are required for this demo.</p>

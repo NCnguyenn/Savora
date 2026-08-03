@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $v = static fn(string $key): string => htmlspecialchars((string) ($values[$key] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$authPageTitle = 'Create a Customer account'; $authNavHref = 'index.php'; $authNavLabel = 'Sign in';
+$authPageTitle = 'Create a Customer account'; $authNavHref = 'login.php'; $authNavLabel = 'Sign in';
 require __DIR__ . '/components/auth_header.php';
 ?>
 <section class="auth-panel auth-panel--padded" aria-labelledby="customer-title">
