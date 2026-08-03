@@ -6,13 +6,13 @@
             </section>
             <section class="footer-col" aria-labelledby="footer-explore">
                 <h2 id="footer-explore">Explore</h2>
-                <a href="customer_dashboard.php">Discover food</a>
-                <a href="customer_history.php">Your orders</a>
+                <a href="<?= htmlspecialchars($customer_link('customer_dashboard.php'), ENT_QUOTES, 'UTF-8'); ?>">Discover food</a>
+                <a href="<?= htmlspecialchars($customer_link('customer_history.php'), ENT_QUOTES, 'UTF-8'); ?>">Your orders</a>
             </section>
             <section class="footer-col" aria-labelledby="footer-account">
                 <h2 id="footer-account">Account</h2>
-                <a href="customer_wallet.php">Savora Pay</a>
-                <a href="customer_profile.php">Profile</a>
+            <a href="<?= htmlspecialchars($customer_link('customer_wallet.php'), ENT_QUOTES, 'UTF-8'); ?>">Savora Pay</a>
+            <a href="<?= htmlspecialchars($customer_link('customer_profile.php'), ENT_QUOTES, 'UTF-8'); ?>">Profile</a>
             </section>
         </div>
         <div class="footer-bottom">&copy; 2026 Savora. Local demo experience.</div>
@@ -94,6 +94,7 @@
     <script>
     window.SavoraCsrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     (function () {
+        if (!window.SavoraCustomerAuthenticated) return;
         const csrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const intervalMs = 5 * 60 * 1000;
         let lastHeartbeatAt = 0;

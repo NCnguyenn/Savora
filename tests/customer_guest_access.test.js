@@ -27,3 +27,21 @@ test('login preserves a validated return route', () => {
   assert.match(read('auth.php'), /customer_safe_return_to/);
   assert.match(read('auth.php'), /customer_login_url/);
 });
+
+test('the existing customer chrome supports guest and protected routes', () => {
+  const header = read('components/customer_header.php');
+  assert.match(header, /customer_dashboard\.php/);
+  assert.match(header, /customer_cart\.php/);
+  assert.match(header, /customer_redirect_to_login/);
+  assert.match(header, /SavoraCustomerAuthenticated/);
+  assert.match(header, /Sign in/);
+  assert.match(header, /Log out/);
+});
+
+test('the existing navigation labels remain unchanged', () => {
+  const header = read('components/customer_header.php');
+  for (const label of ['Discover', 'Orders', 'Favorites', 'Wallet', 'Profile']) {
+    assert.match(header, new RegExp(label));
+  }
+  assert.match(header, /Open cart/);
+});

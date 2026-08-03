@@ -49,6 +49,8 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .customer-nav a, .dropdown-menu a { display: inline-flex; align-items: center; gap: .5rem; border-radius: .65rem; padding: .62rem .78rem; color: var(--savora-muted); font-size: .92rem; font-weight: 700; }
 .customer-nav a:hover, .customer-nav a:focus-visible, .customer-nav a[aria-current="page"] { color: var(--savora-forest); background: var(--savora-sage); }
 .customer-actions { display: flex; align-items: center; gap: .75rem; }
+.customer-sign-in { display: inline-flex; align-items: center; border-radius: .65rem; padding: .62rem .78rem; color: var(--savora-forest); font-size: .92rem; font-weight: 800; }
+.customer-sign-in:hover, .customer-sign-in:focus-visible { color: var(--savora-forest); background: var(--savora-sage); }
 .cart-btn, .user-avatar, .icon-button, .mobile-menu-toggle { display: inline-grid; place-items: center; border: 0; color: var(--savora-forest); background: transparent; }
 .cart-btn, .user-avatar, .icon-button, .mobile-menu-toggle { width: 2.7rem; min-height: 2.7rem; border-radius: 50%; }
 .cart-btn:hover, .user-avatar:hover, .icon-button:hover, .mobile-menu-toggle:hover { background: var(--savora-sage); }

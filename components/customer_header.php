@@ -1,20 +1,29 @@
 <?php
 require_once __DIR__ . '/../lib/session_security.php';
+require_once __DIR__ . '/../lib/customer_access.php';
 require_once __DIR__ . '/../db.php';
 savora_start_session();
+$current_page = basename($_SERVER['PHP_SELF']);
+$public_customer_pages = ['customer_dashboard.php', 'product_detail.php', 'customer_cart.php'];
 $customer_session = savora_validate_session($conn, $_SESSION, session_id(), 'customer');
-if (!$customer_session['ok']) {
-    savora_end_session();
-    header('Location: index.php');
-    exit();
+$customer_is_authenticated = ($customer_session['ok'] ?? false) === true;
+if (!$customer_is_authenticated && !in_array($current_page, $public_customer_pages, true)) {
+    $returnTarget = $current_page;
+    $queryString = trim((string) ($_SERVER['QUERY_STRING'] ?? ''));
+    if ($queryString !== '') $returnTarget .= '?' . $queryString;
+    customer_redirect_to_login($returnTarget);
 }
-if (!savora_session_has_csrf_token($_SESSION)) {
-    header('Location: index.php');
-    exit();
+if ($customer_is_authenticated && !savora_session_has_csrf_token($_SESSION)) {
+    savora_end_session();
+    customer_redirect_to_login($current_page, 'Your session is no longer active. Please sign in again.');
 }
 $full_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Customer';
 $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'customer';
-$current_page = basename($_SERVER['PHP_SELF']);
+$customer_link = static function (string $route) use ($customer_is_authenticated, $public_customer_pages): string {
+    return $customer_is_authenticated || in_array($route, $public_customer_pages, true)
+        ? $route
+        : customer_login_url($route);
+};
 $page_titles = [
     'customer_dashboard.php' => 'Discover | Savora',
     'product_detail.php' => 'Dish details | Savora',
@@ -40,8 +49,9 @@ $initial = strtoupper(substr($username, 0, 1));
     <link rel="stylesheet" href="assets/vendor/fontawesome/css/all.min.css">
 </head>
 <body>
+    <script>window.SavoraCustomerAuthenticated = <?php echo $customer_is_authenticated ? 'true' : 'false'; ?>;</script>
     <nav class="customer-header" aria-label="Customer navigation">
-        <a class="brand" href="customer_dashboard.php" aria-label="Savora home">
+        <a class="brand" href="<?= htmlspecialchars($customer_link('customer_dashboard.php'), ENT_QUOTES, 'UTF-8'); ?>" aria-label="Savora home">
             <i class="fa-solid fa-utensils" aria-hidden="true"></i><span>Savora</span>
         </a>
         <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="customer-mobile-menu" aria-label="Open navigation menu">
@@ -55,20 +65,20 @@ $initial = strtoupper(substr($username, 0, 1));
                 'customer_wallet.php' => ['Wallet', 'fa-wallet'],
                 'customer_profile.php' => ['Profile', 'fa-user']
             ] as $route => [$label, $icon]): ?>
-                <a href="<?php echo $route; ?>"<?php echo $current_page === $route ? ' aria-current="page"' : ''; ?>><i class="fa-solid <?php echo $icon; ?>" aria-hidden="true"></i><span><?php echo $label; ?></span></a>
+                <a href="<?php echo htmlspecialchars($customer_link($route), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $current_page === $route ? ' aria-current="page"' : ''; ?>><i class="fa-solid <?php echo $icon; ?>" aria-hidden="true"></i><span><?php echo $label; ?></span></a>
             <?php endforeach; ?>
-            <a href="logout.php" class="logout-link mobile-logout"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>Log out</span></a>
+            <?php if ($customer_is_authenticated): ?><a href="logout.php" class="logout-link mobile-logout"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>Log out</span></a><?php endif; ?>
         </div>
         <div class="customer-actions">
             <button id="open-cart-btn" class="cart-btn" type="button" aria-label="Open cart" aria-controls="cart-overlay">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span id="cart-count" class="cart-badge" hidden>0</span>
             </button>
-            <div class="user-dropdown">
+            <?php if ($customer_is_authenticated): ?><div class="user-dropdown">
                 <button class="user-avatar" type="button" aria-label="Open account menu" aria-expanded="false" aria-controls="userDropdown" data-avatar><?php echo htmlspecialchars($initial); ?></button>
                 <div class="dropdown-menu" id="userDropdown" hidden>
                     <a href="customer_profile.php"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>My Profile</a>
                     <a href="logout.php" class="logout-link"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Log out</a>
                 </div>
-            </div>
+            </div><?php else: ?><a class="customer-sign-in" href="login.php">Sign in</a><?php endif; ?>
         </div>
     </nav>
