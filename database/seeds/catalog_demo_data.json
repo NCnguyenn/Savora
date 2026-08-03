@@ -1,6 +1,11 @@
 [
   {
     "demo_key": "lotus-kitchen",
+    "public_id": "demo-lotus-kitchen",
+    "slogan": "Vietnamese comfort, thoughtfully served.",
+    "logo_path": "assets/images/brands/lotus-kitchen.svg",
+    "opens_at": "09:00:00",
+    "closes_at": "22:00:00",
     "owner_username": "restaurant",
     "name": "Lotus Kitchen",
     "cuisine": "Vietnamese",
@@ -20,12 +25,17 @@
       {"slug":"lemongrass-chicken-banh-mi","type":"food","name":"Lemongrass Chicken Banh Mi","description":"Crisp baguette filled with grilled lemongrass chicken, pickled vegetables, herbs, and chili aioli.","price":10.50,"category":"Sandwiches","prep_time_minutes":12,"calories":580,"dietary_tags":["High Protein"],"allergens":["Wheat","Egg","Soy"],"ingredients":["Baguette","Lemongrass chicken","Pickled carrot","Cucumber","Cilantro","Chili aioli"],"sort_order":4},
       {"slug":"shrimp-summer-rolls","type":"food","name":"Shrimp Summer Rolls","description":"Three translucent rice paper rolls filled with shrimp, vermicelli, herbs, and a creamy peanut dip.","price":9.75,"category":"Fresh Rolls","prep_time_minutes":10,"calories":330,"dietary_tags":["Fresh","High Protein"],"allergens":["Shellfish","Peanuts","Fish Sauce"],"ingredients":["Rice paper","Shrimp","Rice vermicelli","Lettuce","Mint","Peanut dip"],"sort_order":5},
       {"slug":"crispy-spring-rolls","type":"food","name":"Crispy Spring Rolls","description":"Golden rolls packed with pork, glass noodles, mushrooms, and vegetables, served with herbs and dip.","price":8.50,"category":"Small Plates","prep_time_minutes":14,"calories":420,"dietary_tags":[],"allergens":["Wheat","Fish Sauce"],"ingredients":["Rice paper","Pork","Glass noodles","Wood ear mushroom","Carrot","Dipping sauce"],"sort_order":6},
-      {"slug":"vietnamese-iced-coffee","type":"beverage","name":"Vietnamese Iced Coffee","description":"Bold slow-dripped coffee poured over sweet condensed milk and plenty of ice.","price":5.50,"category":"Coffee","prep_time_minutes":5,"calories":190,"dietary_tags":[],"allergens":["Milk"],"ingredients":["Dark roast coffee","Condensed milk","Ice"],"sort_order":7},
-      {"slug":"peach-lemongrass-tea","type":"beverage","name":"Peach Lemongrass Tea","description":"Refreshing iced tea with ripe peach, fragrant lemongrass, citrus, and a clean floral finish.","price":4.75,"category":"Tea","prep_time_minutes":5,"calories":90,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Black tea","Peach","Lemongrass","Lime","Cane sugar","Ice"],"sort_order":8}
+      {"slug":"vietnamese-iced-coffee","type":"drink","name":"Vietnamese Iced Coffee","description":"Bold slow-dripped coffee poured over sweet condensed milk and plenty of ice.","price":5.50,"category":"Coffee","prep_time_minutes":5,"calories":190,"dietary_tags":[],"allergens":["Milk"],"ingredients":["Dark roast coffee","Condensed milk","Ice"],"sort_order":7},
+      {"slug":"peach-lemongrass-tea","type":"drink","name":"Peach Lemongrass Tea","description":"Refreshing iced tea with ripe peach, fragrant lemongrass, citrus, and a clean floral finish.","price":4.75,"category":"Tea","prep_time_minutes":5,"calories":90,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Black tea","Peach","Lemongrass","Lime","Cane sugar","Ice"],"sort_order":8}
     ]
   },
   {
     "demo_key": "saigon-ember-grill",
+    "public_id": "demo-saigon-ember-grill",
+    "slogan": "Fire, fragrance, and Saigon spirit.",
+    "logo_path": "assets/images/brands/saigon-ember-grill.svg",
+    "opens_at": "10:00:00",
+    "closes_at": "23:00:00",
     "owner_username": "restaurant-saigon",
     "name": "Saigon Ember Grill",
     "cuisine": "Vietnamese",
@@ -45,12 +55,17 @@
       {"slug":"turmeric-dill-fish","type":"food","name":"Turmeric Dill Fish","description":"Crisp turmeric-marinated fish with fresh dill, rice noodles, peanuts, and a zesty herb dressing.","price":15.75,"category":"Seafood Plates","prep_time_minutes":20,"calories":560,"dietary_tags":["High Protein"],"allergens":["Fish","Peanuts","Fish Sauce"],"ingredients":["White fish","Turmeric","Fresh dill","Rice noodles","Peanuts","Herb dressing"],"sort_order":4},
       {"slug":"lemongrass-chicken-wings","type":"food","name":"Lemongrass Chicken Wings","description":"Crisp chicken wings tossed in lemongrass, garlic, and chili glaze with a cool cucumber relish.","price":11.75,"category":"Small Plates","prep_time_minutes":16,"calories":690,"dietary_tags":["High Protein"],"allergens":["Soy","Fish Sauce"],"ingredients":["Chicken wings","Lemongrass","Garlic","Chili glaze","Cucumber","Cilantro"],"sort_order":5},
       {"slug":"crispy-shrimp-toast","type":"food","name":"Crispy Shrimp Toast","description":"Crunchy sesame toast topped with seasoned shrimp mousse and served with a sweet chili dip.","price":9.50,"category":"Small Plates","prep_time_minutes":13,"calories":460,"dietary_tags":[],"allergens":["Shellfish","Wheat","Sesame","Egg"],"ingredients":["Shrimp","Sourdough","Sesame","Garlic","Green onion","Sweet chili dip"],"sort_order":6},
-      {"slug":"salted-lime-soda","type":"beverage","name":"Salted Lime Soda","description":"A sparkling lime cooler balanced with a delicate pinch of sea salt and fresh citrus.","price":4.50,"category":"Coolers","prep_time_minutes":4,"calories":70,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Lime","Sparkling water","Sea salt","Cane sugar","Ice"],"sort_order":7},
-      {"slug":"pandan-coconut-smoothie","type":"beverage","name":"Pandan Coconut Smoothie","description":"Creamy coconut blended with pandan, banana, and crushed ice for a naturally fragrant finish.","price":6.25,"category":"Smoothies","prep_time_minutes":6,"calories":260,"dietary_tags":["Vegetarian"],"allergens":["Coconut","Milk"],"ingredients":["Coconut milk","Pandan","Banana","Coconut cream","Ice"],"sort_order":8}
+      {"slug":"salted-lime-soda","type":"drink","name":"Salted Lime Soda","description":"A sparkling lime cooler balanced with a delicate pinch of sea salt and fresh citrus.","price":4.50,"category":"Coolers","prep_time_minutes":4,"calories":70,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Lime","Sparkling water","Sea salt","Cane sugar","Ice"],"sort_order":7},
+      {"slug":"pandan-coconut-smoothie","type":"drink","name":"Pandan Coconut Smoothie","description":"Creamy coconut blended with pandan, banana, and crushed ice for a naturally fragrant finish.","price":6.25,"category":"Smoothies","prep_time_minutes":6,"calories":260,"dietary_tags":["Vegetarian"],"allergens":["Coconut","Milk"],"ingredients":["Coconut milk","Pandan","Banana","Coconut cream","Ice"],"sort_order":8}
     ]
   },
   {
     "demo_key": "hoi-an-garden",
+    "public_id": "demo-hoi-an-garden",
+    "slogan": "Regional flavors in full bloom.",
+    "logo_path": "assets/images/brands/hoi-an-garden.svg",
+    "opens_at": "09:30:00",
+    "closes_at": "21:30:00",
     "owner_username": "restaurant-hoian",
     "name": "Hoi An Garden",
     "cuisine": "Vietnamese",
@@ -70,12 +85,17 @@
       {"slug":"lemongrass-tofu-bowl","type":"food","name":"Lemongrass Tofu Bowl","description":"Golden tofu, jasmine rice, fresh vegetables, herbs, and lemongrass glaze in a nourishing bowl.","price":12.25,"category":"Vegetarian Bowls","prep_time_minutes":17,"calories":470,"dietary_tags":["Vegan","High Protein"],"allergens":["Soy"],"ingredients":["Crisp tofu","Jasmine rice","Lemongrass","Cucumber","Pickled carrot","Herbs"],"sort_order":4},
       {"slug":"mushroom-banh-xeo","type":"food","name":"Mushroom Banh Xeo","description":"Crisp rice crepe folded around mushrooms, bean sprouts, herbs, and a lively citrus dipping sauce.","price":11.50,"category":"Crisp Crepes","prep_time_minutes":16,"calories":430,"dietary_tags":["Vegan"],"allergens":["Rice Flour","Fish Sauce"],"ingredients":["Rice flour crepe","Mixed mushrooms","Bean sprouts","Herbs","Coconut milk","Citrus dip"],"sort_order":5},
       {"slug":"green-papaya-jackfruit-salad","type":"food","name":"Green Papaya Jackfruit Salad","description":"Shredded green papaya and young jackfruit with herbs, roasted peanuts, and a bright lime dressing.","price":10.75,"category":"Fresh Salads","prep_time_minutes":11,"calories":280,"dietary_tags":["Vegan","Fresh"],"allergens":["Peanuts","Soy"],"ingredients":["Green papaya","Young jackfruit","Thai basil","Mint","Roasted peanuts","Lime dressing"],"sort_order":6},
-      {"slug":"lotus-seed-tea","type":"beverage","name":"Lotus Seed Tea","description":"A delicate chilled herbal tea with lotus seed, jasmine, and a softly floral finish.","price":4.25,"category":"Tea","prep_time_minutes":5,"calories":45,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Lotus seed","Jasmine tea","Cane sugar","Ice"],"sort_order":7},
-      {"slug":"calamansi-sparkler","type":"beverage","name":"Calamansi Sparkler","description":"Bright calamansi citrus, sparkling water, and mint served over ice for a crisp garden refresher.","price":4.95,"category":"Coolers","prep_time_minutes":4,"calories":65,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Calamansi","Sparkling water","Mint","Cane sugar","Ice"],"sort_order":8}
+      {"slug":"lotus-seed-tea","type":"drink","name":"Lotus Seed Tea","description":"A delicate chilled herbal tea with lotus seed, jasmine, and a softly floral finish.","price":4.25,"category":"Tea","prep_time_minutes":5,"calories":45,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Lotus seed","Jasmine tea","Cane sugar","Ice"],"sort_order":7},
+      {"slug":"calamansi-sparkler","type":"drink","name":"Calamansi Sparkler","description":"Bright calamansi citrus, sparkling water, and mint served over ice for a crisp garden refresher.","price":4.95,"category":"Coolers","prep_time_minutes":4,"calories":65,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Calamansi","Sparkling water","Mint","Cane sugar","Ice"],"sort_order":8}
     ]
   },
   {
     "demo_key": "mekong-bowl-tea",
+    "public_id": "demo-mekong-bowl-tea",
+    "slogan": "Bright bowls, slow sips.",
+    "logo_path": "assets/images/brands/mekong-bowl-tea.svg",
+    "opens_at": "08:00:00",
+    "closes_at": "21:00:00",
     "owner_username": "restaurant-mekong",
     "name": "Mekong Bowl and Tea",
     "cuisine": "Vietnamese",
@@ -95,12 +115,17 @@
       {"slug":"five-spice-tofu-bowl","type":"food","name":"Five Spice Tofu Bowl","description":"Crisp five-spice tofu, brown rice, steamed greens, mushrooms, and a sweet soy ginger sauce.","price":11.75,"category":"Vegetarian Bowls","prep_time_minutes":16,"calories":490,"dietary_tags":["Vegan","High Protein"],"allergens":["Soy"],"ingredients":["Five-spice tofu","Brown rice","Steamed greens","Mushrooms","Ginger","Sweet soy sauce"],"sort_order":4},
       {"slug":"green-papaya-salad","type":"food","name":"Green Papaya Salad","description":"Crisp green papaya with carrot, herbs, roasted peanuts, and a punchy lime chili dressing.","price":9.25,"category":"Fresh Salads","prep_time_minutes":9,"calories":240,"dietary_tags":["Vegan","Fresh"],"allergens":["Peanuts","Fish Sauce"],"ingredients":["Green papaya","Carrot","Thai basil","Mint","Peanuts","Lime chili dressing"],"sort_order":5},
       {"slug":"crispy-shrimp-toast","type":"food","name":"Crispy Shrimp Toast","description":"Golden sesame toast layered with seasoned shrimp mousse, herbs, and a sweet chili dip.","price":9.50,"category":"Small Plates","prep_time_minutes":13,"calories":460,"dietary_tags":[],"allergens":["Shellfish","Wheat","Sesame","Egg"],"ingredients":["Shrimp","Sourdough","Sesame","Garlic","Green onion","Sweet chili dip"],"sort_order":6},
-      {"slug":"vietnamese-egg-coffee","type":"beverage","name":"Vietnamese Egg Coffee","description":"Silky whipped egg cream crowns strong coffee for a rich dessert-like Vietnamese coffee experience.","price":6.00,"category":"Coffee","prep_time_minutes":7,"calories":240,"dietary_tags":["Vegetarian"],"allergens":["Egg","Milk"],"ingredients":["Dark roast coffee","Egg yolk","Condensed milk","Cane sugar"],"sort_order":7},
-      {"slug":"passionfruit-iced-tea","type":"beverage","name":"Passionfruit Iced Tea","description":"Fragrant iced tea shaken with passionfruit, lime, and a bright tropical sweetness.","price":5.25,"category":"Tea","prep_time_minutes":5,"calories":110,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Black tea","Passionfruit","Lime","Cane sugar","Ice"],"sort_order":8}
+      {"slug":"vietnamese-egg-coffee","type":"drink","name":"Vietnamese Egg Coffee","description":"Silky whipped egg cream crowns strong coffee for a rich dessert-like Vietnamese coffee experience.","price":6.00,"category":"Coffee","prep_time_minutes":7,"calories":240,"dietary_tags":["Vegetarian"],"allergens":["Egg","Milk"],"ingredients":["Dark roast coffee","Egg yolk","Condensed milk","Cane sugar"],"sort_order":7},
+      {"slug":"passionfruit-iced-tea","type":"drink","name":"Passionfruit Iced Tea","description":"Fragrant iced tea shaken with passionfruit, lime, and a bright tropical sweetness.","price":5.25,"category":"Tea","prep_time_minutes":5,"calories":110,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Black tea","Passionfruit","Lime","Cane sugar","Ice"],"sort_order":8}
     ]
   },
   {
     "demo_key": "tokyo-kumo",
+    "public_id": "demo-tokyo-kumo",
+    "slogan": "Tokyo craft, light as a cloud.",
+    "logo_path": "assets/images/brands/tokyo-kumo.svg",
+    "opens_at": "11:00:00",
+    "closes_at": "22:30:00",
     "owner_username": "restaurant-tokyo",
     "name": "Tokyo Kumo",
     "cuisine": "Japanese",
@@ -120,12 +145,17 @@
       {"slug":"chicken-karaage","type":"food","name":"Chicken Karaage","description":"Juicy ginger-soy marinated chicken fried until crisp, served with lemon and a creamy dip.","price":12.75,"category":"Small Plates","prep_time_minutes":14,"calories":610,"dietary_tags":["High Protein"],"allergens":["Soy","Wheat","Egg"],"ingredients":["Chicken thigh","Ginger","Soy sauce","Potato starch","Lemon","Creamy dip"],"sort_order":4},
       {"slug":"vegetable-gyoza","type":"food","name":"Vegetable Gyoza","description":"Pan-seared dumplings filled with cabbage, shiitake, carrot, and ginger with a tangy dipping sauce.","price":9.75,"category":"Dumplings","prep_time_minutes":13,"calories":390,"dietary_tags":["Vegetarian"],"allergens":["Wheat","Soy"],"ingredients":["Gyoza wrapper","Cabbage","Shiitake","Carrot","Ginger","Dipping sauce"],"sort_order":5},
       {"slug":"edamame","type":"food","name":"Sea Salt Edamame","description":"Steamed young soybeans finished with flaky sea salt, a simple and satisfying start to the meal.","price":6.50,"category":"Small Plates","prep_time_minutes":6,"calories":190,"dietary_tags":["Vegan","High Protein"],"allergens":["Soy"],"ingredients":["Edamame","Sea salt"],"sort_order":6},
-      {"slug":"matcha-latte","type":"beverage","name":"Matcha Latte","description":"Vibrant ceremonial-style matcha whisked with steamed milk for a smooth earthy finish.","price":6.25,"category":"Tea","prep_time_minutes":6,"calories":150,"dietary_tags":["Vegetarian"],"allergens":["Milk"],"ingredients":["Matcha","Steamed milk","Cane sugar"],"sort_order":7},
-      {"slug":"yuzu-sparkling-soda","type":"beverage","name":"Yuzu Sparkling Soda","description":"Bright yuzu citrus and sparkling water with a clean aromatic finish over ice.","price":5.25,"category":"Coolers","prep_time_minutes":4,"calories":80,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Yuzu","Sparkling water","Cane sugar","Ice"],"sort_order":8}
+      {"slug":"matcha-latte","type":"drink","name":"Matcha Latte","description":"Vibrant ceremonial-style matcha whisked with steamed milk for a smooth earthy finish.","price":6.25,"category":"Tea","prep_time_minutes":6,"calories":150,"dietary_tags":["Vegetarian"],"allergens":["Milk"],"ingredients":["Matcha","Steamed milk","Cane sugar"],"sort_order":7},
+      {"slug":"yuzu-sparkling-soda","type":"drink","name":"Yuzu Sparkling Soda","description":"Bright yuzu citrus and sparkling water with a clean aromatic finish over ice.","price":5.25,"category":"Coolers","prep_time_minutes":4,"calories":80,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Yuzu","Sparkling water","Cane sugar","Ice"],"sort_order":8}
     ]
   },
   {
     "demo_key": "roma-verde",
+    "public_id": "demo-roma-verde",
+    "slogan": "Italian warmth, fresh by nature.",
+    "logo_path": "assets/images/brands/roma-verde.svg",
+    "opens_at": "11:00:00",
+    "closes_at": "22:00:00",
     "owner_username": "restaurant-roma",
     "name": "Roma Verde",
     "cuisine": "Italian",
@@ -145,8 +175,8 @@
       {"slug":"beef-lasagna","type":"food","name":"Beef Lasagna","description":"Layered pasta with slow-cooked beef ragu, creamy ricotta, mozzarella, and tomato sauce.","price":18.75,"category":"Baked Pasta","prep_time_minutes":23,"calories":860,"dietary_tags":["High Protein"],"allergens":["Wheat","Milk","Egg"],"ingredients":["Lasagna sheets","Beef ragu","Ricotta","Mozzarella","Tomato sauce","Basil"],"sort_order":4},
       {"slug":"burrata-tomato-salad","type":"food","name":"Burrata Tomato Salad","description":"Creamy burrata with ripe tomatoes, basil, olive oil, cracked pepper, and toasted country bread.","price":13.50,"category":"Fresh Salads","prep_time_minutes":9,"calories":460,"dietary_tags":["Vegetarian","Fresh"],"allergens":["Milk","Wheat"],"ingredients":["Burrata","Heirloom tomatoes","Basil","Olive oil","Black pepper","Country bread"],"sort_order":5},
       {"slug":"tiramisu","type":"food","name":"Classic Tiramisu","description":"Espresso-soaked ladyfingers layered with mascarpone cream and a light cocoa finish.","price":8.75,"category":"Desserts","prep_time_minutes":6,"calories":390,"dietary_tags":["Vegetarian"],"allergens":["Milk","Egg","Wheat"],"ingredients":["Ladyfingers","Espresso","Mascarpone","Egg","Cocoa","Cane sugar"],"sort_order":6},
-      {"slug":"classic-italian-soda","type":"beverage","name":"Classic Italian Soda","description":"A chilled sparkling citrus soda with orange, lemon, and a bright refreshing finish.","price":4.75,"category":"Coolers","prep_time_minutes":4,"calories":100,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Orange","Lemon","Sparkling water","Cane sugar","Ice"],"sort_order":7},
-      {"slug":"iced-espresso","type":"beverage","name":"Iced Espresso","description":"Double-shot espresso shaken with ice for a bold, smooth, and invigorating coffee break.","price":5.00,"category":"Coffee","prep_time_minutes":4,"calories":20,"dietary_tags":["Vegan"],"allergens":[],"ingredients":["Espresso","Ice"],"sort_order":8}
+      {"slug":"classic-italian-soda","type":"drink","name":"Classic Italian Soda","description":"A chilled sparkling citrus soda with orange, lemon, and a bright refreshing finish.","price":4.75,"category":"Coolers","prep_time_minutes":4,"calories":100,"dietary_tags":["Vegan","Refreshing"],"allergens":[],"ingredients":["Orange","Lemon","Sparkling water","Cane sugar","Ice"],"sort_order":7},
+      {"slug":"iced-espresso","type":"drink","name":"Iced Espresso","description":"Double-shot espresso shaken with ice for a bold, smooth, and invigorating coffee break.","price":5.00,"category":"Coffee","prep_time_minutes":4,"calories":20,"dietary_tags":["Vegan"],"allergens":[],"ingredients":["Espresso","Ice"],"sort_order":8}
     ]
   }
 ]
