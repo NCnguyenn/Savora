@@ -21,6 +21,7 @@ function savora_migrations(): array
         '014_partner_document_storage' => __DIR__ . '/../database/migrations/014_partner_document_storage.php',
         '015_auth_onboarding' => __DIR__ . '/../database/migrations/015_auth_onboarding.php',
         '016_profile_locations' => __DIR__ . '/../database/migrations/016_profile_locations.php',
+        '017_rich_catalog' => __DIR__ . '/../database/migrations/017_rich_catalog.php',
     ];
 }
 
