@@ -45,3 +45,12 @@ test('the existing navigation labels remain unchanged', () => {
   }
   assert.match(header, /Open cart/);
 });
+
+test('public customer renderers make account API calls conditional', () => {
+  for (const file of ['customer_dashboard.php', 'product_detail.php', 'js/customer_location.js']) {
+    const source = read(file);
+    assert.match(source, /SavoraCustomerAuthenticated/);
+  }
+  assert.match(read('customer_dashboard.php'), /api\/catalog\.php|catalog\.hydrate/);
+  assert.match(read('product_detail.php'), /Add to cart/);
+});

@@ -112,20 +112,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stateApi = window.SavoraState;
     const ui = window.SavoraUI;
     if (!catalog || !stateApi || !ui) return;
-    let profileSnapshot;
+    const isAuthenticated = window.SavoraCustomerAuthenticated === true;
+    let profileSnapshot = { favorites: [] };
     try {
         await catalog.hydrate();
-        profileSnapshot = await SavoraApi.get('api/profile.php');
     } catch (error) {
         const message = document.getElementById('product-result-count');
         if (message) message.textContent = error.message || 'Catalog is temporarily unavailable.';
         return;
     }
+    if (isAuthenticated) {
+        try { profileSnapshot = await SavoraApi.get('api/profile.php'); }
+        catch (_) { profileSnapshot = { favorites: [] }; }
+    }
     let serverOrders = [];
-    try {
-        const orderData = await SavoraApi.get('api/orders.php');
-        serverOrders = Array.isArray(orderData && orderData.orders) ? orderData.orders : [];
-    } catch (_) { serverOrders = []; }
+    if (isAuthenticated) {
+        try {
+            const orderData = await SavoraApi.get('api/orders.php');
+            serverOrders = Array.isArray(orderData && orderData.orders) ? orderData.orders : [];
+        } catch (_) { serverOrders = []; }
+    }
 
     const products = Object.values(SavoraCatalog.products);
     const categories = catalog.categories || [];
@@ -176,6 +182,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         render(favoriteSaved(kind === 'products' ? 'product' : 'restaurant', value));
         button.addEventListener('click', async () => {
+            if (!isAuthenticated) {
+                window.location.assign(`login.php?return_to=${encodeURIComponent('customer_dashboard.php')}`);
+                return;
+            }
             const type = kind === 'products' ? 'product' : 'restaurant';
             const active = !favoriteSaved(type, value); const scope = `customer-favorite-${type}-${value}`;
             button.disabled = true;
@@ -343,6 +353,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderTracking() {
         const tracking = document.getElementById('active-order-content');
+        if (!isAuthenticated) {
+            tracking.replaceChildren(createElement('div', { className: 'empty-state tracking-empty' }, [
+                createElement('i', { className: 'fa-solid fa-lock', 'aria-hidden': 'true' }),
+                createElement('h3', { text: 'Sign in to track orders' }),
+                createElement('p', { text: 'Your active deliveries and order history are available after sign in.' }),
+                createElement('a', { className: 'primary-action', href: 'login.php?return_to=customer_history.php', text: 'Sign in' })
+            ]));
+            return;
+        }
         const activeOrder = serverOrders.find(order => ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'on_the_way'].includes(order.status)) || null;
         if (!activeOrder) {
             const empty = createElement('div', { className: 'empty-state tracking-empty' }, [

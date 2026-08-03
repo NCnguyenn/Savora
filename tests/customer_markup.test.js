@@ -490,7 +490,8 @@ test('Customer location controls are optional, editable, and shared across surfa
   assert.match(checkout, /data-customer-use-gps/);
   assert.match(`${home}\n${profile}\n${checkout}`, /aria-live="polite"/);
   assert.doesNotMatch(controller, /watchPosition/);
-  assert.doesNotMatch(controller, /SavoraState\.(?:setProfile|persist)|localStorage|savora:platform-state/);
+  assert.match(controller, /savora_guest_location_v1/);
+  assert.doesNotMatch(controller, /SavoraState\.(?:setProfile|persist)|savora:platform-state/);
 });
 
 test('wallet uses event-driven safe rendering and an accessible top-up form', () => {

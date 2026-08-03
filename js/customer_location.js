@@ -5,10 +5,24 @@
   const Api = root.SavoraApi;
   const Client = root.SavoraLocationClient;
   const endpoint = 'api/location.php';
+  const isAuthenticated = root.SavoraCustomerAuthenticated === true;
+  const guestLocationKey = 'savora_guest_location_v1';
   let currentLocation = null;
   let dialogTrigger = null;
   const text = value => typeof value === 'string' ? value.trim() : '';
   const intent = scope => Api.intentKey(`customer-location-${scope}`);
+
+  function loadGuestLocation() {
+    if (!root.localStorage) return {};
+    try {
+      const value = JSON.parse(root.localStorage.getItem(guestLocationKey) || 'null');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (_) { return {}; }
+  }
+
+  function saveGuestLocation(location) {
+    if (root.localStorage) root.localStorage.setItem(guestLocationKey, JSON.stringify(location || {}));
+  }
 
   function render(location) {
     currentLocation = location || {};
@@ -43,6 +57,11 @@
   async function saveManualAddress(address) {
     const value = text(address);
     if (!value) throw new Error('Enter a delivery address.');
+    if (!isAuthenticated) {
+      const location = { ...loadGuestLocation(), address: value, method: 'manual' };
+      saveGuestLocation(location); render(location); notify(location);
+      return location;
+    }
     const scope = 'manual';
     const location = await Client.saveManual(Api, { address: value }, intent(scope));
     Api.clearIntentKey(`customer-location-${scope}`);
@@ -56,6 +75,13 @@
     setStatus('Requesting your current location...');
     try {
       const coordinates = await root.SavoraLocationClient.getPosition(root.navigator && root.navigator.geolocation);
+      if (!isAuthenticated) {
+        const location = { ...loadGuestLocation(), latitude: coordinates.latitude, longitude: coordinates.longitude, method: 'gps' };
+        saveGuestLocation(location); render(location); notify(location);
+        setStatus('Current location saved locally. Sign in to use it for checkout.');
+        if (root.SavoraUI) root.SavoraUI.showToast('Current location saved locally.');
+        return;
+      }
       const scope = 'gps';
       const location = await Client.saveGps(Api, coordinates, intent(scope));
       Api.clearIntentKey(`customer-location-${scope}`);
@@ -93,7 +119,7 @@
       catch (error) { setStatus(error.message || 'Address could not be saved.', true); }
     });
     doc.querySelectorAll('[data-customer-use-gps]').forEach(button => button.addEventListener('click', () => useCurrentLocation(button)));
-    try { render(await root.SavoraLocationClient.load(Api)); }
+    try { render(isAuthenticated ? await root.SavoraLocationClient.load(Api) : loadGuestLocation()); }
     catch (error) { setStatus(error.message || 'Saved location is unavailable.', true); }
   }
 

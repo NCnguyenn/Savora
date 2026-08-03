@@ -122,13 +122,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    let profileSnapshot;
+    const isAuthenticated = window.SavoraCustomerAuthenticated === true;
+    let profileSnapshot = { favorites: [] };
     try {
         await catalog.hydrate();
-        profileSnapshot = await SavoraApi.get('api/profile.php');
     } catch (error) {
         loading.textContent = error.message || 'Product details are temporarily unavailable.';
         return;
+    }
+    if (isAuthenticated) {
+        try { profileSnapshot = await SavoraApi.get('api/profile.php'); }
+        catch (_) { profileSnapshot = { favorites: [] }; }
     }
 
     const item = SavoraCatalog.products[String(productId)];
@@ -251,6 +255,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     renderFavoriteButton();
     favoriteButton.addEventListener('click', async () => {
+        if (!isAuthenticated) {
+            const returnTo = `product_detail.php?id=${encodeURIComponent(productId)}`;
+            window.location.assign(`login.php?return_to=${encodeURIComponent(returnTo)}`);
+            return;
+        }
         const active = !(profileSnapshot.favorites || []).some(entry => entry.type === 'product' && entry.publicId === String(item.id));
         const scope = `customer-favorite-product-${item.id}`; favoriteButton.disabled = true;
         try {
