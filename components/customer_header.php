@@ -4,7 +4,7 @@ require_once __DIR__ . '/../lib/customer_access.php';
 require_once __DIR__ . '/../db.php';
 savora_start_session();
 $current_page = basename($_SERVER['PHP_SELF']);
-$public_customer_pages = ['customer_dashboard.php', 'product_detail.php', 'customer_cart.php'];
+$public_customer_pages = ['customer_dashboard.php', 'customer_restaurant.php', 'product_detail.php', 'customer_cart.php'];
 $customer_session = savora_validate_session($conn, $_SESSION, session_id(), 'customer');
 $customer_is_authenticated = ($customer_session['ok'] ?? false) === true;
 if (!$customer_is_authenticated && !in_array($current_page, $public_customer_pages, true)) {
@@ -28,6 +28,7 @@ $customer_link = static function (string $route) use ($customer_is_authenticated
 };
 $page_titles = [
     'customer_dashboard.php' => 'Discover | Savora',
+    'customer_restaurant.php' => 'Restaurant | Savora',
     'product_detail.php' => 'Dish details | Savora',
     'customer_cart.php' => 'Your cart | Savora',
     'customer_checkout.php' => 'Checkout | Savora',
@@ -49,6 +50,9 @@ $initial = strtoupper(substr($username, 0, 1));
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="css/customer_style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="assets/vendor/fontawesome/css/all.min.css">
+    <?php foreach (($customer_page_styles ?? []) as $style): ?>
+        <link rel="stylesheet" href="<?php echo htmlspecialchars((string) $style, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo time(); ?>">
+    <?php endforeach; ?>
 </head>
 <body>
     <script>window.SavoraCustomerAuthenticated = <?php echo $customer_is_authenticated ? 'true' : 'false'; ?>;</script>

@@ -30,7 +30,7 @@ include 'components/customer_header.php';
                     <div class="restaurant-mark" aria-hidden="true"><i class="fa-solid fa-leaf"></i></div>
                     <div>
                         <p class="eyebrow">Restaurant</p>
-                        <h2 id="restaurant-detail-title"></h2>
+                        <h2 id="restaurant-detail-title"><a id="restaurant-detail-link" href="customer_dashboard.php"></a></h2>
                         <p id="restaurant-description"></p>
                         <dl class="restaurant-facts">
                             <div>
@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const restaurant = SavoraCatalog.restaurants[item.restaurant] || {
         name: item.restaurant,
+        publicId: item.restaurantPublicId,
         cuisine: item.categories[0],
         rating: '—',
         prepTime: item.prepTime
@@ -233,7 +234,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     setText('product-description', item.description);
     setText('product-base-price', money(item.price));
     setText('product-calories', `${item.calories} kcal per regular serving`);
-    setText('restaurant-detail-title', restaurant.name);
+    const restaurantLink = document.getElementById('restaurant-detail-link');
+    if (restaurantLink) {
+        restaurantLink.href = restaurant.publicId
+            ? `customer_restaurant.php?restaurant=${encodeURIComponent(restaurant.publicId)}`
+            : 'customer_dashboard.php';
+        restaurantLink.textContent = restaurant.name;
+    }
     setText('restaurant-description', restaurant.description || `${restaurant.name} brings Savora customers ${restaurant.cuisine.toLowerCase()} favorites prepared to order.`);
     setText('restaurant-prep-time', restaurant.prepTime);
     setText('restaurant-rating', `★ ${restaurant.rating}`);

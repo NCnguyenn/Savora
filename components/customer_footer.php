@@ -59,14 +59,6 @@
         </div>
     </section>
 
-    <section id="menu-modal" class="dialog" role="dialog" aria-modal="true" aria-labelledby="modal-rest-name" hidden>
-        <div class="dialog-scrim" data-close-dialog="menu-modal"></div>
-        <div class="dialog-panel menu-dialog" role="document">
-            <header class="modal-header"><h2 id="modal-rest-name">Restaurant menu</h2><button class="icon-button" type="button" aria-label="Close restaurant menu" data-close-dialog="menu-modal"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
-            <div class="modal-body"><div class="grid-4-col" id="modal-food-grid"></div></div>
-        </div>
-    </section>
-
     <section id="topup-modal" class="dialog" role="dialog" aria-modal="true" aria-labelledby="topup-title" hidden>
         <div class="dialog-scrim" data-close-dialog="topup-modal"></div>
         <div class="dialog-panel topup-dialog" role="document">
@@ -90,6 +82,9 @@
     <script src="js/customer_ui.js"></script>
     <script src="js/notifications.js"></script>
     <script src="assets/vendor/leaflet/leaflet.js"></script>
+    <?php foreach (($customer_page_scripts ?? []) as $script): ?>
+        <script src="<?php echo htmlspecialchars((string) $script, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo time(); ?>"></script>
+    <?php endforeach; ?>
     <?php $sessionHeartbeatCsrfToken = (string) ($_SESSION['admin_csrf'] ?? ''); ?>
     <script>
     window.SavoraCsrfToken = <?php echo json_encode($sessionHeartbeatCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

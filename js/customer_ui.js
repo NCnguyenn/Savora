@@ -232,31 +232,6 @@
     closeDialog('customize-modal');
   }
 
-  function openMenuModal(restName) {
-    const modal = dialogById('menu-modal');
-    const title = dialogById('modal-rest-name');
-    const grid = dialogById('modal-food-grid');
-    if (!modal || !grid) return;
-    if (title) title.textContent = `${restName} menu`;
-    const entries = Object.values(catalog().products).filter(product => product.restaurant === restName);
-    const fragment = documentRef.createDocumentFragment();
-    if (!entries.length) fragment.append(el('p', { className: 'empty-state' }, 'No menu items are available yet.'));
-    entries.forEach(product => {
-      const unavailable = product.available === false;
-      const add = el('button', {
-        className: 'primary-action',
-        type: 'button',
-        disabled: unavailable,
-        'aria-label': unavailable ? `${product.name} is currently unavailable` : `Add ${product.name} to cart`,
-        onclick: () => addCatalogProduct(product)
-      }, unavailable ? 'Unavailable' : 'Add to cart');
-      const image = el('img', { className: 'food-card-img', src: productImage(product), alt: '' });
-      fragment.append(el('article', { className: 'food-card' }, [image, el('h3', { className: 'food-card-title' }, product.name), el('p', { className: 'food-card-meta' }, product.description), el('div', { className: 'card-action-row' }, [el('strong', {}, money(product.price)), add])]));
-    });
-    grid.replaceChildren(fragment);
-    openDialog(modal);
-  }
-
   function topUpAmount(amount) {
     void amount;
     closeDialog('topup-modal');
@@ -339,7 +314,7 @@
     el, openDialog, closeDialog, refreshChrome, renderCart, announce, showToast: announce,
     openCart: () => openDialog('cart-overlay'), closeCart: () => closeDialog('cart-overlay'),
     openProductDetailModal, closeCustomizeModal: () => closeDialog('customize-modal'), changeCustQty, confirmAddCustomToCart,
-    openMenuModal, closeMenuModal: () => closeDialog('menu-modal'), openTopUpModal: () => openDialog('topup-modal'), closeTopUpModal: () => closeDialog('topup-modal'),
+    openTopUpModal: () => openDialog('topup-modal'), closeTopUpModal: () => closeDialog('topup-modal'),
     topUpAmount, toggleDropdown, changeLineQuantity, addCatalogProduct, saveLegacyState
   };
 
@@ -347,7 +322,7 @@
     Object.assign(root, {
       openCart: api.openCart, closeCart: api.closeCart, openProductDetailModal: api.openProductDetailModal,
       closeCustomizeModal: api.closeCustomizeModal, changeCustQty: api.changeCustQty, confirmAddCustomToCart: api.confirmAddCustomToCart,
-      openMenuModal: api.openMenuModal, closeMenuModal: api.closeMenuModal, openTopUpModal: api.openTopUpModal,
+      openTopUpModal: api.openTopUpModal,
       closeTopUpModal: api.closeTopUpModal, topUpAmount: api.topUpAmount, toggleDropdown: api.toggleDropdown,
       changeQty: (index, delta) => { const line = (root.cart || [])[index]; if (line) changeLineQuantity(line.lineId, delta); },
       addToCart: (name, price, img, quantity = 1) => {

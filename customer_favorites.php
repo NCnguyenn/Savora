@@ -55,10 +55,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     function restaurantCard(restaurant) {
         const product = restaurant.productIds.map(id => catalog.products[id]).find(Boolean);
-        const open = ui.el('button', { className: 'favorite-card-navigation', type: 'button', 'aria-label': `Open ${restaurant.name} menu` }, [
-            ui.el('img', { src: catalog.imageFor(product), alt: '' }), ui.el('span', { className: 'favorite-card-copy' }, [ui.el('strong', {}, restaurant.name), ui.el('span', {}, restaurant.cuisine || 'Restaurant')])
+        const open = ui.el('a', { className: 'favorite-card-navigation', href: `customer_restaurant.php?restaurant=${encodeURIComponent(restaurant.publicId)}`, 'aria-label': `Open ${restaurant.name} restaurant page` }, [
+            ui.el('img', { src: catalog.imageFor({ image: restaurant.heroImage || restaurant.image || (product && product.image) }), alt: '' }),
+            ui.el('span', { className: 'favorite-card-copy' }, [ui.el('strong', {}, restaurant.name), ui.el('span', {}, restaurant.slogan || restaurant.cuisine || 'Restaurant')])
         ]);
-        open.addEventListener('click', () => ui.openMenuModal(restaurant.name));
         return ui.el('article', { className: 'favorite-card favorite-restaurant-card' }, [open, removeButton('restaurant', restaurant.publicId, restaurant.name)]);
     }
     function productCard(product) {

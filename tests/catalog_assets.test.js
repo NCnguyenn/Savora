@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const imageRoot = path.join(root, 'assets', 'images', 'catalog');
+const brandRoot = path.join(root, 'assets', 'images', 'brands');
 
 function jpegSize(buffer) {
   assert.equal(buffer[0], 0xff, 'JPEG marker is missing');
@@ -41,5 +42,19 @@ test('rich catalog has one local 4K image for every seeded menu item', () => {
     assert.ok(fs.statSync(imagePath).size > 100000, `Catalog image is unexpectedly small: ${filename}`);
     const dimensions = jpegSize(fs.readFileSync(imagePath));
     assert.ok(dimensions.width >= 3840 && dimensions.height >= 2880, `Catalog image is not 4K: ${filename}`);
+  }
+});
+
+test('rich catalog has one local SVG brand mark for every seeded restaurant', () => {
+  const data = JSON.parse(fs.readFileSync(path.join(root, 'database', 'seeds', 'catalog_demo_data.json'), 'utf8'));
+  const expected = [...data.map(restaurant => restaurant.logo_path), 'assets/images/brands/restaurant-placeholder.svg'];
+  assert.equal(expected.length, 7);
+  for (const asset of expected) {
+    const file = path.join(root, asset.replaceAll('/', path.sep));
+    assert.ok(file.startsWith(brandRoot), `Brand asset must remain inside the local brand directory: ${asset}`);
+    assert.ok(fs.existsSync(file), `Missing brand asset: ${asset}`);
+    const svg = fs.readFileSync(file, 'utf8');
+    assert.match(svg, /<svg\b/);
+    assert.match(svg, /<title/);
   }
 });

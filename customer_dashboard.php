@@ -1,4 +1,8 @@
-<?php include 'components/customer_header.php'; ?>
+<?php
+$customer_page_styles = ['css/customer_home.css'];
+$customer_page_scripts = ['js/customer_home.js'];
+include 'components/customer_header.php';
+?>
 
 <main>
     <section class="discovery-hero" data-critical-background data-background-fallback="ivory gradient" aria-labelledby="discover-title">
@@ -20,12 +24,7 @@
                 <button class="primary-action" type="submit">Find food</button>
             </form>
 
-            <div id="category-controls" class="category-row" aria-label="Filter by category">
-                <button class="category-card" type="button" data-category="all" aria-pressed="true">
-                    <i class="fa-solid fa-grip" aria-hidden="true"></i>
-                    <span>All</span>
-                </button>
-            </div>
+            <div id="home-filter-controls" class="home-filter-controls" aria-label="Filter the Savora overview"></div>
         </div>
     </section>
 
@@ -51,8 +50,8 @@
         </div>
     </section>
 
-    <div class="container discovery-layout">
-        <div class="discovery-feed">
+    <div class="container home-overview-layout">
+        <div class="home-overview-feed">
             <section class="promo-banner" data-critical-background data-background-fallback="forest gradient" aria-labelledby="promotion-title">
                 <div>
                     <p class="eyebrow">This week only</p>
@@ -62,26 +61,37 @@
                 <a class="promo-action" href="product_detail.php?id=1">Order now <span aria-hidden="true">→</span></a>
             </section>
 
-            <section class="section-margin" aria-labelledby="products-title">
+            <section class="home-section" aria-labelledby="featured-restaurants-title">
                 <div class="section-heading-row">
                     <div>
-                        <p class="eyebrow">Curated for today</p>
-                        <h2 id="products-title">Popular dishes</h2>
-                    </div>
-                    <span id="product-result-count" class="result-count" aria-live="polite"></span>
-                </div>
-                <div class="grid-4-col discovery-card-grid" id="food-products-grid"></div>
-            </section>
-
-            <section class="section-margin" aria-labelledby="restaurants-title">
-                <div class="section-heading-row">
-                    <div>
-                        <p class="eyebrow">Explore nearby</p>
-                        <h2 id="restaurants-title">Restaurants near you</h2>
+                        <p class="eyebrow">Meet the makers</p>
+                        <h2 id="featured-restaurants-title">Featured restaurants</h2>
                     </div>
                     <span id="restaurant-result-count" class="result-count" aria-live="polite"></span>
                 </div>
-                <div class="grid-4-col discovery-card-grid" id="restaurant-grid"></div>
+                <div class="home-restaurant-grid" id="featured-restaurants-grid"></div>
+            </section>
+
+            <section class="home-section home-section--tinted" aria-labelledby="popular-food-title">
+                <div class="section-heading-row">
+                    <div>
+                        <p class="eyebrow">A little inspiration</p>
+                        <h2 id="popular-food-title">Popular dishes</h2>
+                    </div>
+                    <span id="food-result-count" class="result-count" aria-live="polite"></span>
+                </div>
+                <div class="home-product-grid" id="popular-food-grid"></div>
+            </section>
+
+            <section class="home-section" aria-labelledby="popular-drink-title">
+                <div class="section-heading-row">
+                    <div>
+                        <p class="eyebrow">Take a refreshing pause</p>
+                        <h2 id="popular-drink-title">Refreshing drinks</h2>
+                    </div>
+                    <span id="drink-result-count" class="result-count" aria-live="polite"></span>
+                </div>
+                <div class="home-product-grid" id="popular-drink-grid"></div>
             </section>
         </div>
 
@@ -117,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await catalog.hydrate();
     } catch (error) {
-        const message = document.getElementById('product-result-count');
+        const message = document.getElementById('restaurant-result-count');
         if (message) message.textContent = error.message || 'Catalog is temporarily unavailable.';
         return;
     }
@@ -133,23 +143,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (_) { serverOrders = []; }
     }
 
-    const products = Object.values(SavoraCatalog.products);
-    const categories = catalog.categories || [];
-    const restaurants = Object.values(SavoraCatalog.restaurants).map(restaurant => {
-        const menu = restaurant.productIds.map(id => SavoraCatalog.products[id]).filter(Boolean);
-        return {
-            ...restaurant,
-            categories: [...new Set(menu.flatMap(item => item.categories))],
-            image: restaurant.image ? SavoraCatalog.imageFor({ image: restaurant.image }) : SavoraCatalog.imageFor(menu[0])
-        };
-    });
-    const searchInput = document.getElementById('search-input');
-    const productGrid = document.getElementById('food-products-grid');
-    const restaurantGrid = document.getElementById('restaurant-grid');
-    const categoryControls = document.getElementById('category-controls');
-    let selectedCategory = 'all';
-    const favoriteSaved = (type, id) => (profileSnapshot.favorites || []).some(item => item.type === type && item.publicId === String(id));
-
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const createElement = (tag, attributes = {}, children = []) => {
         const node = document.createElement(tag);
@@ -162,6 +155,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return node;
     };
 
+    /* Home discovery cards are rendered by js/customer_home.js. The dashboard
+       keeps this page-level renderer focused on the server-backed order card. */
+    /*
     function favoriteButton(kind, id, name) {
         const value = String(id);
         const label = kind === 'products' ? 'dish' : 'restaurant';
@@ -197,7 +193,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         return button;
     }
+    */
 
+    /*
     function makeEmptyState(message) {
         return createElement('div', { className: 'empty-state', role: 'status' }, [
             createElement('i', { className: 'fa-solid fa-seedling', 'aria-hidden': 'true' }),
@@ -238,7 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             type: 'button',
             'aria-label': `Open ${restaurant.name} menu`
         }, [image, title, meta, action]);
-        card.addEventListener('click', () => SavoraUI.openMenuModal(restaurant.name));
+        card.addEventListener('click', () => window.location.assign('customer_restaurant.php'));
         return createElement('article', { className: 'discovery-card-shell' }, [
             card,
             favoriteButton('restaurants', restaurant.publicId, restaurant.name)
@@ -306,6 +304,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         event.preventDefault();
         filterDiscovery();
     });
+    */
 
     function initializeTrackingMap(delivery) {
         const mapElement = document.getElementById('order-map');
@@ -368,7 +367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 createElement('i', { className: 'fa-solid fa-bicycle', 'aria-hidden': 'true' }),
                 createElement('h3', { text: 'Nothing on the way yet' }),
                 createElement('p', { text: 'Choose a local favorite and your delivery progress will appear here.' }),
-                createElement('a', { className: 'primary-action', href: '#products-title', text: 'Discover dishes' })
+                createElement('a', { className: 'primary-action', href: '#popular-food-title', text: 'Discover dishes' })
             ]);
             tracking.replaceChildren(empty);
             return;
@@ -413,7 +412,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    filterDiscovery();
     renderTracking();
 });
 </script>

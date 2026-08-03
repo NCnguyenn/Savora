@@ -118,9 +118,13 @@ async function run() {
   const client = await openPage();
   try {
     await navigate(client, '');
-    await waitFor(client, "Boolean(document.querySelector('.customer-header') && document.querySelector('#food-products-grid'))", 'public Customer Home');
+    await waitFor(client, "Boolean(document.querySelector('.customer-header') && document.querySelector('#featured-restaurants-grid .home-restaurant-card'))", 'public Customer Home');
     const home = await evaluate(client, "(() => ({"
       + "path: location.pathname,"
+      + "restaurantCount: document.querySelectorAll('#featured-restaurants-grid .home-restaurant-card').length,"
+      + "foodCount: document.querySelectorAll('#popular-food-grid .home-product-card').length,"
+      + "drinkCount: document.querySelectorAll('#popular-drink-grid .home-product-card').length,"
+      + "firstRestaurantHref: [...document.querySelectorAll('#featured-restaurants-grid a')].find(node => node.href.includes('customer_restaurant.php'))?.getAttribute('href') || '',"
       + "loginForm: Boolean(document.querySelector('[name=username]')),"
       + "labels: [...document.querySelectorAll('.customer-nav a')].map(node => node.textContent.trim()),"
       + "authenticated: window.SavoraCustomerAuthenticated,"
@@ -130,6 +134,35 @@ async function run() {
     assert(!home.loginForm, 'Public Home unexpectedly rendered the login form.');
     for (const label of ['Discover', 'Orders', 'Favorites', 'Wallet', 'Profile']) assert(home.labels.includes(label), 'Navigation is missing ' + label + '.');
     assert(home.authenticated === false && home.signIn === 'Sign in', 'Guest navigation state is incorrect.');
+    assert(home.restaurantCount === 6, 'Home must show six featured restaurants: ' + home.restaurantCount);
+    assert(home.foodCount >= 6 && home.drinkCount >= 6, 'Home must show both food and drink overview cards.');
+    assert(home.firstRestaurantHref.includes('customer_restaurant.php?restaurant='), 'Home restaurant card does not link to its storefront.');
+
+    await navigate(client, home.firstRestaurantHref);
+    await waitFor(client, "Boolean(document.querySelector('#storefront-name') && document.querySelectorAll('#storefront-food-grid .restaurant-menu-card').length === 6 && document.querySelectorAll('#storefront-drink-grid .restaurant-menu-card').length === 2)", 'restaurant storefront');
+    const storefront = await evaluate(client, "(() => ({"
+      + "name: document.querySelector('#storefront-name')?.textContent.trim() || '',"
+      + "slogan: document.querySelector('#storefront-slogan')?.textContent.trim() || '',"
+      + "address: document.querySelector('#storefront-address')?.textContent.trim() || '',"
+      + "hours: document.querySelector('#storefront-hours-list')?.textContent.trim() || '',"
+      + "food: document.querySelectorAll('#storefront-food-grid .restaurant-menu-card').length,"
+      + "drinks: document.querySelectorAll('#storefront-drink-grid .restaurant-menu-card').length"
+      + "}))()"
+    );
+    assert(storefront.name && storefront.slogan && storefront.address && storefront.hours, 'Storefront is missing brand or restaurant details.');
+    assert(storefront.food === 6 && storefront.drinks === 2, 'Storefront must show six food items and two drinks.');
+    await evaluate(client, "[...document.querySelectorAll('[data-restaurant-filter]')].find(button => button.dataset.restaurantFilter === 'drinks')?.click()");
+    await waitFor(client, "document.querySelectorAll('#storefront-drink-grid .restaurant-menu-card').length === 2 && document.querySelectorAll('#storefront-food-grid .restaurant-menu-card').length === 1", 'restaurant drink filter');
+    await evaluate(client, "[...document.querySelectorAll('[data-restaurant-filter]')].find(button => button.dataset.restaurantFilter === 'all')?.click()");
+
+    for (const width of [1920, 1440, 768, 390]) {
+      await client.send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: width <= 768 });
+      await navigate(client, 'customer_dashboard.php');
+      await waitFor(client, "Boolean(document.querySelector('#featured-restaurants-grid .home-restaurant-card'))", 'responsive Customer Home');
+      const overflow = await evaluate(client, 'document.documentElement.scrollWidth <= window.innerWidth + 1');
+      assert(overflow, 'Customer Home overflows horizontally at ' + width + 'px.');
+    }
+    await client.send('Emulation.clearDeviceMetricsOverride');
 
     await navigate(client, 'product_detail.php?id=1');
     const productAvailable = await evaluate(client, "Boolean(document.querySelector('#product-title')?.textContent.trim())");

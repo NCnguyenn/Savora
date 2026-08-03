@@ -21,6 +21,7 @@
   --text-muted: var(--savora-muted);
   --border-light: var(--savora-line);
   --font-stack: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --customer-content-width: 1500px;
 }
 
 * { box-sizing: border-box; }
@@ -36,12 +37,12 @@ h1, h2, h3, p { margin-top: 0; }
 h1 { font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; }
 h2 { font-size: clamp(1.35rem, 2.5vw, 2rem); line-height: 1.2; }
 h3 { font-size: 1rem; line-height: 1.35; }
-.customer-shell, .container { width: min(1180px, calc(100% - 2rem)); margin-inline: auto; }
+.customer-shell, .container { width: min(var(--customer-content-width), calc(100% - 3rem)); margin-inline: auto; }
 .container { padding-block: 2.5rem; }
 
 .customer-header {
   position: sticky; top: 0; z-index: 1000; min-height: 4.75rem; display: grid;
-  grid-template-columns: auto 1fr auto; align-items: center; gap: 1.25rem; padding: .7rem max(1rem, calc((100vw - 1180px) / 2));
+  grid-template-columns: auto 1fr auto; align-items: center; gap: 1.25rem; padding: .7rem max(1.5rem, calc((100vw - var(--customer-content-width)) / 2));
   color: var(--savora-ink); background: rgba(251, 249, 243, .97); border-bottom: 1px solid var(--savora-line); backdrop-filter: blur(12px);
 }
 .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--savora-forest); font-size: 1.35rem; font-weight: 800; letter-spacing: -.03em; }
@@ -157,7 +158,7 @@ h3 { font-size: 1rem; line-height: 1.35; }
 
 .discovery-hero {
   min-height: 28rem; display: flex; align-items: center;
-  padding: clamp(3.25rem, 8vw, 6.5rem) max(1rem, calc((100vw - 1180px) / 2));
+  padding: clamp(3.25rem, 8vw, 6.5rem) max(1.5rem, calc((100vw - var(--customer-content-width)) / 2));
   background:
     linear-gradient(90deg, rgba(251, 249, 243, .98) 0%, rgba(251, 249, 243, .9) 42%, rgba(251, 249, 243, .16) 76%),
     url('../assets/images/backgrounds/discovery-pasta.jpg') center / cover;

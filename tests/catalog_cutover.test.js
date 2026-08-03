@@ -87,10 +87,12 @@ test('API client normalizes a network rejection without producing local success 
 
 test('hydrated catalog derives categories before the discovery renderer reads them', () => {
   const catalog = require(path.join(root, 'js/customer_catalog.js'));
+  const home = read('js/customer_home.js');
   catalog.replaceRecords([{ publicId: 'ramen-1', name: 'Ramen', basePrice: 12, available: true, restaurant: { id: 5, name: 'Noodle House', cuisine: 'Japanese' }, optionGroups: [] }]);
 
   assert.deepEqual(catalog.categories, [{ id: 'japanese', label: 'Japanese' }]);
-  assert.match(read('customer_dashboard.php'), /const categories = catalog\.categories/);
+  assert.match(home, /filterOptions/);
+  assert.match(home, /categoryLabel/);
 });
 
 test('menu editor preserves server option groups and choice public ids on an unchanged edit', () => {

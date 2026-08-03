@@ -7,6 +7,7 @@ const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 
 const customerRoutes = [
   'customer_dashboard.php',
+  'customer_restaurant.php',
   'product_detail.php',
   'customer_cart.php',
   'customer_checkout.php',
@@ -47,6 +48,7 @@ test('Customer header supplies page-specific document titles for every Customer 
   const header = read('components/customer_header.php');
   const expectedTitles = {
     'customer_dashboard.php': 'Discover | Savora',
+    'customer_restaurant.php': 'Restaurant | Savora',
     'product_detail.php': 'Dish details | Savora',
     'customer_cart.php': 'Your cart | Savora',
     'customer_checkout.php': 'Checkout | Savora',
@@ -314,12 +316,15 @@ test('discovery source contains no hard-coded active-order number', () => {
 
 test('discovery and product detail use semantic data-driven controls', () => {
   const discovery = read('customer_dashboard.php');
+  const home = read('js/customer_home.js');
   const detail = read('product_detail.php');
 
   assert.match(discovery, /<main/);
   assert.match(discovery, /<section[^>]*aria-labelledby=/);
-  assert.match(discovery, /<button[^>]*data-category=/);
-  assert.match(discovery, /SavoraCatalog\.products/);
+  assert.match(discovery, /id="home-filter-controls"/);
+  assert.match(discovery, /featured-restaurants-grid/);
+  assert.match(home, /data-home-filter/);
+  assert.match(home, /catalog\.products/);
   assert.match(discovery, /SavoraApi\.get\('api\/profile\.php'\)/);
   assert.doesNotMatch(discovery, /innerHTML\s*=/);
 
@@ -333,16 +338,16 @@ test('discovery and product detail use semantic data-driven controls', () => {
 
 test('Discover and Product expose independent accessible favorite controls', () => {
   const discovery = read('customer_dashboard.php');
+  const home = read('js/customer_home.js');
   const detail = read('product_detail.php');
   const css = read('css/customer_style.css');
 
-  assert.match(discovery, /className:\s*'discovery-card-shell'/);
-  assert.match(discovery, /className:\s*'discovery-favorite-button'/);
-  assert.match(discovery, /data-favorite-kind/);
-  assert.match(discovery, /aria-pressed/);
-  assert.match(discovery, /api\/profile\.php/);
-  assert.match(discovery, /SavoraApi\.post\(/);
-  assert.match(discovery, /ui\.announce\(/);
+  assert.match(home, /home-card-favorite/);
+  assert.match(home, /data-home-filter/);
+  assert.match(home, /aria-pressed/);
+  assert.match(home, /api\/profile\.php/);
+  assert.match(home, /apiClient\.post\(/);
+  assert.match(home, /ui\.announce\(/);
   assert.match(detail, /id="product-favorite-button"/);
   assert.match(detail, /aria-pressed/);
   assert.match(detail, /api\/profile\.php/);
@@ -406,7 +411,8 @@ test('favorites use accessible tabs, independent heart controls and server-backe
   assert.match(favorites, /api\/profile\.php/);
   assert.match(favorites, /SavoraApi\.post\(/);
   assert.match(favorites, /Remove .* from favorites/);
-  assert.match(favorites, /ui\.openMenuModal\(/);
+  assert.match(favorites, /customer_restaurant\.php\?restaurant=/);
+  assert.doesNotMatch(favorites, /openMenuModal|menu-modal/);
   assert.match(favorites, /replaceChildren\(/);
   assert.match(favorites, /textContent\s*=/);
   assert.match(favorites, /keydown/);
@@ -516,21 +522,24 @@ test('wallet uses event-driven safe rendering and an accessible top-up form', ()
 
 test('Customer discovery hydrates its catalog from the server safely', () => {
   const dashboard = read('customer_dashboard.php');
+  const home = read('js/customer_home.js');
   const catalog = read('js/customer_catalog.js');
 
   assert.match(catalog, /SavoraApi\.get/);
   assert.match(catalog, /replaceRecords/);
   assert.match(dashboard, /await catalog\.hydrate\(\)/);
   assert.match(dashboard, /Catalog is temporarily unavailable/);
-  assert.match(dashboard, /const categories = catalog\.categories \|\| \[\]/);
+  assert.match(home, /await catalog\.hydrate\(\)/);
+  assert.match(home, /filterOptions/);
   assert.doesNotMatch(dashboard, /innerHTML\s*=/);
 });
 
 test('Customer discovery uses the menu image fallback and server-backed restaurant details', () => {
   const dashboard = read('customer_dashboard.php');
+  const home = read('js/customer_home.js');
 
-  assert.match(dashboard, /restaurant\.image\s*\?\s*SavoraCatalog\.imageFor\(\{ image: restaurant\.image \}\)\s*:\s*SavoraCatalog\.imageFor\(menu\[0\]\)/);
-  assert.match(dashboard, /restaurant\.cuisine/);
+  assert.match(home, /catalog\.imageFor\(\{ image: restaurant\.heroImage \|\| restaurant\.image \}\)/);
+  assert.match(home, /restaurant\.cuisine/);
   assert.doesNotMatch(dashboard, /deliveryRadius|deliveryEnabled|pickupEnabled|acceptingOrders/);
 });
 
