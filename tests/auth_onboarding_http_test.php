@@ -17,7 +17,7 @@ $prefix = 'auth-flow-' . bin2hex(random_bytes(5));
 $userIds = []; $applicationIds = ['restaurant' => [], 'driver' => []]; $keys = [];
 $failure = null;
 try {
-    foreach (['index.php','register.php','register_customer.php','register_restaurant.php','register_driver.php','registration_result.php','forgot_password.php','reset_password.php'] as $route) onboarding_expect(is_file(__DIR__ . '/../' . $route), "Missing public route: {$route}");
+    foreach (['index.php','login.php','register.php','register_customer.php','register_restaurant.php','register_driver.php','registration_result.php','forgot_password.php','reset_password.php'] as $route) onboarding_expect(is_file(__DIR__ . '/../' . $route), "Missing public route: {$route}");
     $super = $conn->query("SELECT u.id FROM users u JOIN admin_profiles ap ON ap.user_id=u.id WHERE u.role='admin' AND u.status='active' AND ap.privilege_level='super_admin' ORDER BY u.id LIMIT 1")->fetch_assoc();
     $superId = (int) ($super['id'] ?? 0); onboarding_expect($superId > 0, 'Super Admin seed is required.');
 

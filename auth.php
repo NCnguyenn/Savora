@@ -3,29 +3,31 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/session_security.php';
 require_once __DIR__ . '/lib/admin_security.php';
+require_once __DIR__ . '/lib/customer_access.php';
 require_once __DIR__ . '/lib/services/rate_limit_service.php';
 savora_start_session();
 require_once __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: login.php');
     exit();
 }
 
 $loginUsername = trim((string) ($_POST['username'] ?? ''));
 $loginPassword = (string) ($_POST['password'] ?? '');
+$returnTo = customer_safe_return_to($_POST['return_to'] ?? '');
 $_SESSION['login_username'] = mb_substr($loginUsername, 0, 50);
 
 $actor = ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|' . mb_strtolower(mb_substr($loginUsername, 0, 120));
 if (!rate_limit_consume($conn, $actor, 'login', 8, 300)) {
     $_SESSION['error'] = 'Too many sign-in attempts. Please try again later.';
-    header('Location: index.php');
+    header('Location: ' . customer_login_url($returnTo));
     exit();
 }
 
 if ($loginUsername === '' || $loginPassword === '') {
     $_SESSION['error'] = 'Please enter both username and password.';
-    header('Location: index.php');
+    header('Location: ' . customer_login_url($returnTo));
     exit();
 }
 
@@ -37,13 +39,13 @@ $stmt->close();
 
 if (!$user || !password_verify($loginPassword, (string) $user['password'])) {
     $_SESSION['error'] = 'Invalid username or password.';
-    header('Location: index.php');
+    header('Location: ' . customer_login_url($returnTo));
     exit();
 }
 
 if (($user['status'] ?? 'active') !== 'active') {
     $_SESSION['error'] = 'This account is not active. Please contact Savora support.';
-    header('Location: index.php');
+    header('Location: ' . customer_login_url($returnTo));
     exit();
 }
 
@@ -69,5 +71,8 @@ $destinations = [
     'admin' => 'admin_dashboard.php',
 ];
 
-header('Location: ' . ($destinations[$_SESSION['role']] ?? 'index.php'));
+$destination = $_SESSION['role'] === 'customer' && $returnTo !== ''
+    ? $returnTo
+    : ($destinations[$_SESSION['role']] ?? 'customer_dashboard.php');
+header('Location: ' . $destination);
 exit();

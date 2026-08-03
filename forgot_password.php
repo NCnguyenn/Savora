@@ -12,12 +12,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     elseif (!rate_limit_consume($conn, (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), 'forgot_password', 5, 900)) $message = 'Too many recovery attempts. Please try again later.';
     else $message = 'If an active account matches those details, password recovery instructions will be sent through the configured channel.';
 }
-$authPageTitle = 'Forgot password'; $authNavHref = 'index.php'; $authNavLabel = 'Sign in';
+$authPageTitle = 'Forgot password'; $authNavHref = 'login.php'; $authNavLabel = 'Sign in';
 require __DIR__ . '/components/auth_header.php';
 ?>
 <section class="auth-panel auth-panel--padded" aria-labelledby="forgot-title">
 <h1 class="auth-heading" id="forgot-title">Forgot your password?</h1><p class="auth-lead">Enter your username or email. The response is always the same to protect account privacy.</p>
 <?php if ($message !== ''): ?><div class="auth-notice" role="status"><?= auth_escape($message) ?></div><?php endif; ?>
-<form method="post" data-auth-form data-auth-mode="login" novalidate><input type="hidden" name="_csrf" value="<?= auth_escape($csrf) ?>"><div class="auth-summary auth-summary--error" data-form-summary tabindex="-1" hidden></div><div class="auth-field"><label for="recovery-identity">Username or email</label><input class="auth-control" id="recovery-identity" name="identity" autocomplete="username" required maxlength="190"></div><div class="auth-actions"><button class="auth-button" type="submit" data-submit-label data-loading-label="Submitting...">Continue</button><a href="index.php">Return to sign in</a></div></form>
+<form method="post" data-auth-form data-auth-mode="login" novalidate><input type="hidden" name="_csrf" value="<?= auth_escape($csrf) ?>"><div class="auth-summary auth-summary--error" data-form-summary tabindex="-1" hidden></div><div class="auth-field"><label for="recovery-identity">Username or email</label><input class="auth-control" id="recovery-identity" name="identity" autocomplete="username" required maxlength="190"></div><div class="auth-actions"><button class="auth-button" type="submit" data-submit-label data-loading-label="Submitting...">Continue</button><a href="login.php">Return to sign in</a></div></form>
 </section>
 <?php require __DIR__ . '/components/auth_footer.php'; ?>

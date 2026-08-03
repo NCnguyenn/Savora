@@ -4,7 +4,7 @@ require_once __DIR__ . '/lib/session_security.php';
 savora_start_session();
 $authPageTitle = 'Create your account';
 $authPageClass = 'auth-role-page';
-$authNavHref = 'index.php';
+$authNavHref = 'login.php';
 $authNavLabel = 'Sign in';
 require __DIR__ . '/components/auth_header.php';
 ?>

@@ -55,7 +55,7 @@ test('registration result is one-time session state and never a lookup endpoint'
 });
 
 test('login, recovery, and reset screens share the English authentication shell', () => {
-  const login = read('index.php');
+  const login = read('login.php');
   for (const token of ['components/auth_header.php', 'name="username"', 'name="password"', 'data-password-toggle', 'forgot_password.php', 'register.php']) assert.match(login, new RegExp(token.replace(/[./]/g, '\\$&'), 'i'));
   assert.match(login, /savora_demo_mode\(\)/);
   assert.match(read('forgot_password.php'), /components\/auth_header\.php/);

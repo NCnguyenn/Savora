@@ -9,7 +9,7 @@ if (!function_exists('auth_escape')) {
 }
 $authPageTitle = isset($authPageTitle) ? (string) $authPageTitle : 'Savora';
 $authPageClass = isset($authPageClass) ? (string) $authPageClass : '';
-$authNavHref = isset($authNavHref) ? (string) $authNavHref : 'index.php';
+$authNavHref = isset($authNavHref) ? (string) $authNavHref : 'login.php';
 $authNavLabel = isset($authNavLabel) ? (string) $authNavLabel : 'Sign in';
 ?>
 <!DOCTYPE html>

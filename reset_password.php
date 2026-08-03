@@ -26,12 +26,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } catch (Throwable $error) { $conn->rollback(); $message = $error->getMessage(); }
     }
 }
-$authPageTitle = 'Reset password'; $authNavHref = 'index.php'; $authNavLabel = 'Sign in';
+$authPageTitle = 'Reset password'; $authNavHref = 'login.php'; $authNavLabel = 'Sign in';
 require __DIR__ . '/components/auth_header.php';
 ?>
 <section class="auth-panel auth-panel--padded" aria-labelledby="reset-title"><h1 class="auth-heading" id="reset-title">Create a new password</h1><p class="auth-lead">Recovery links expire after 30 minutes and can only be used once.</p>
 <?php if ($message !== ''): ?><div class="auth-notice" role="status"><?= auth_escape($message) ?></div><?php endif; ?>
-<?php if ($success): ?><div class="auth-actions"><a class="auth-button" href="index.php">Return to sign in</a></div><?php else: ?>
+<?php if ($success): ?><div class="auth-actions"><a class="auth-button" href="login.php">Return to sign in</a></div><?php else: ?>
 <form method="post" data-auth-form novalidate><input type="hidden" name="token" value="<?= auth_escape($token) ?>"><div class="auth-summary auth-summary--error" data-form-summary role="alert" tabindex="-1" hidden></div><div class="auth-form-grid">
 <div class="auth-field"><label for="reset-password">New password</label><div class="auth-control-wrap"><input class="auth-control" id="reset-password" name="password" type="password" minlength="10" autocomplete="new-password" required><button class="auth-password-toggle" type="button" data-password-toggle aria-label="Show password"><i class="fa-regular fa-eye"></i></button></div><div class="auth-strength" data-password-strength data-strength="weak"></div></div>
 <div class="auth-field"><label for="reset-confirmation">Confirm password</label><div class="auth-control-wrap"><input class="auth-control" id="reset-confirmation" name="password_confirmation" type="password" data-password-confirmation minlength="10" autocomplete="new-password" required><button class="auth-password-toggle" type="button" data-password-toggle aria-label="Show password"><i class="fa-regular fa-eye"></i></button></div></div></div><div class="auth-actions"><button class="auth-button" type="submit" data-submit-label data-loading-label="Updating password...">Update password</button></div></form>
