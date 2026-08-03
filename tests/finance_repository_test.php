@@ -8,7 +8,7 @@ function finance_read_expect(bool $ok, string $message): void { if (!$ok) throw 
 $conn = null;
 try {
     $conn = savora_test_database();
-    $restaurantId = (int) ($conn->query("SELECT id FROM restaurants WHERE name='Savora Burger' LIMIT 1")->fetch_assoc()['id'] ?? 0);
+    $restaurantId = (int) ($conn->query("SELECT id FROM restaurants WHERE demo_key='lotus-kitchen' LIMIT 1")->fetch_assoc()['id'] ?? 0);
     finance_read_expect($restaurantId > 0, 'Seed restaurant is required.');
     $report = finance_repository_report($conn, $restaurantId, ['from' => '2026-01-01', 'to' => '2026-12-31']);
     finance_read_expect(($report['kpis']['grossSales'] ?? 0) > 0, 'Server finance report must read seeded ledger sales.');

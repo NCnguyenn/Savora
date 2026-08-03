@@ -28,7 +28,7 @@ return static function (mysqli $conn): void {
     };
 
     $restaurantColumns = [
-        ['description', 'VARCHAR(600) NULL', 'varchar(600)', 'YES'],
+        ['description', 'VARCHAR(1000) NULL', 'varchar(1000)', 'YES'],
         ['hero_image', 'VARCHAR(255) NULL', 'varchar(255)', 'YES'],
         ['demo_key', 'VARCHAR(80) NULL', 'varchar(80)', 'YES'],
     ];

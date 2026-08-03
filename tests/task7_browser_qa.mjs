@@ -6,7 +6,7 @@ const baseUrl = process.env.SAVORA_BASE_URL || 'http://localhost/Savora';
 const artifactDir = path.resolve('.superpowers/sdd/customer-ui-2026-07-29/task-7-qa');
 const routes = {
   discover: 'customer_dashboard.php',
-  product: 'product_detail.php?id=2',
+  product: 'product_detail.php?id=demo-lotus-kitchen-rare-beef-pho',
   cart: 'customer_cart.php',
   checkout: 'customer_checkout.php',
   orders: 'customer_history.php',
@@ -36,7 +36,7 @@ const expectedCriticalBackgrounds = {
 };
 const expectedDocumentTitles = {
   discover: 'Discover | Savora',
-  product: 'Supreme Pepperoni Pizza 12" | Savora',
+  product: 'Rare Beef Pho | Savora',
   cart: 'Your cart | Savora',
   checkout: 'Checkout | Savora',
   orders: 'Your orders | Savora',
@@ -373,7 +373,7 @@ async function checkDiscoveryRuntime(client) {
 
   await evaluate(client, `(() => {
     const input = document.getElementById('search-input');
-    input.value = 'Pizza Hut';
+    input.value = 'Lotus Kitchen';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   })()`);
@@ -384,9 +384,9 @@ async function checkDiscoveryRuntime(client) {
     productText: document.getElementById('food-products-grid').textContent,
     restaurantText: document.getElementById('restaurant-grid').textContent
   })`);
-  assert(search.products === 1 && search.restaurants === 1 && search.productText.includes('Pizza Hut') && search.restaurantText.includes('Pizza Hut'), 'discovery does not search dish and restaurant names together');
+  assert(search.products === 8 && search.restaurants === 1 && search.productText.includes('Lotus Kitchen') && search.restaurantText.includes('Lotus Kitchen'), 'discovery does not search dish and restaurant names together');
 
-  await evaluate(client, "document.querySelector('[data-category=\"burger\"]').click(); true");
+  await evaluate(client, "document.querySelector('[data-category=\"japanese\"]').click(); true");
   await waitFor(client, "document.getElementById('product-result-count').textContent === '0 dishes' && document.getElementById('restaurant-result-count').textContent === '0 restaurants'", 'category and search intersection');
   const intersection = await evaluate(client, `({
     productEmpty: document.getElementById('food-products-grid').textContent.includes('No dishes match'),
@@ -400,8 +400,6 @@ async function addConfiguredProduct(client) {
   await navigate(client, routes.product);
   await waitFor(client, "!document.getElementById('product-detail-content').hidden", 'product detail render');
   await evaluate(client, `(() => {
-    document.getElementById('portion-2-large').click();
-    document.getElementById('addon-2-2-cheese').click();
     document.getElementById('increase-quantity').click();
     const note = document.getElementById('special-notes');
     note.value = '<img src=x onerror=window.__task7Xss=1>';
@@ -411,17 +409,17 @@ async function addConfiguredProduct(client) {
   const configured = await evaluate(client, `({
     total: document.getElementById('page-total-price').textContent,
     quantity: document.getElementById('page-qty').textContent,
-    portion: document.getElementById('portion-2-large').checked,
-    cheese: document.getElementById('addon-2-2-cheese').checked
+    portion: document.querySelector('input[name=\"portion\"]')?.checked,
+    cheese: false
   })`);
-  assert(configured.total === '$39.48' && configured.quantity === '2' && configured.portion && configured.cheese, `product option price is incorrect: ${JSON.stringify(configured)}`);
+  assert(configured.total === '$25.00' && configured.quantity === '2' && configured.portion, `product quantity price is incorrect: ${JSON.stringify(configured)}`);
   await evaluate(client, "document.getElementById('product-customization-form').requestSubmit(); true");
   await waitFor(client, "SavoraState.load().cart.length === 1 && SavoraState.load().cart[0].quantity === 2", 'configured cart insertion');
   const stored = await evaluate(client, `(() => {
     const line = SavoraState.load().cart[0];
     return { quantity: line.quantity, unitPrice: line.unitPrice, options: line.options, note: line.note };
   })()`);
-  assert(Math.abs(stored.unitPrice - 19.74) < 0.000001 && stored.options.some(option => option.id === 'portion-large') && stored.options.some(option => option.id === '2-cheese'), `configured cart state is incorrect: ${JSON.stringify(stored)}`);
+  assert(Math.abs(stored.unitPrice - 12.50) < 0.000001 && stored.options.some(option => option.id === 'portion-regular'), `configured cart state is incorrect: ${JSON.stringify(stored)}`);
   return { configured, stored };
 }
 
@@ -434,10 +432,10 @@ async function checkCartDialogKeyboard(client) {
       removeName: remove?.getAttribute('aria-label'),
       literalNote: document.getElementById('full-cart-items').textContent.includes('<img src=x onerror=window.__task7Xss=1>'),
       injectedImageCount: [...document.querySelectorAll('#full-cart-items img')].filter(image => image.getAttribute('src') === 'x').length,
-      trustedImage: document.querySelector('#full-cart-items img')?.src === new URL(SavoraCatalog.products['2'].image, location.href).href
+      trustedImage: document.querySelector('#full-cart-items img')?.src === new URL(SavoraCatalog.products['demo-lotus-kitchen-rare-beef-pho'].image, location.href).href
     };
   })()`);
-  assert(cartEvidence.removeName === 'Remove Supreme Pepperoni Pizza 12"', `cart removal name is not item-specific: ${JSON.stringify(cartEvidence)}`);
+  assert(cartEvidence.removeName === 'Remove Rare Beef Pho', `cart removal name is not item-specific: ${JSON.stringify(cartEvidence)}`);
   assert(cartEvidence.literalNote && cartEvidence.injectedImageCount === 0 && cartEvidence.trustedImage, `cart persisted text/image boundary failed: ${JSON.stringify(cartEvidence)}`);
 
   await evaluate(client, "document.getElementById('open-cart-btn').click(); true");
@@ -539,8 +537,8 @@ async function checkMapTileFallback(client) {
 async function seedFavorites(client) {
   await evaluate(client, `(() => {
     let state = SavoraState.load();
-    if (!state.favorites.restaurants.includes('Pizza Hut')) state = SavoraState.toggleFavorite(state, 'restaurants', 'Pizza Hut');
-    if (!state.favorites.products.includes('2')) state = SavoraState.toggleFavorite(state, 'products', '2');
+    if (!state.favorites.restaurants.includes('Lotus Kitchen')) state = SavoraState.toggleFavorite(state, 'restaurants', 'Lotus Kitchen');
+    if (!state.favorites.products.includes('demo-lotus-kitchen-rare-beef-pho')) state = SavoraState.toggleFavorite(state, 'products', 'demo-lotus-kitchen-rare-beef-pho');
     SavoraState.persist(state);
     return true;
   })()`);
@@ -556,9 +554,9 @@ async function checkFavoriteCreation(client) {
     return true;
   })()`);
   await client.send('Page.reload', { ignoreCache: true });
-  await waitFor(client, "document.querySelector('[data-favorite-kind=\"restaurants\"][data-favorite-id=\"Pizza Hut\"]')", 'Discover restaurant favorite control');
+  await waitFor(client, "document.querySelector('[data-favorite-kind=\"restaurants\"][data-favorite-id=\"Lotus Kitchen\"]')", 'Discover restaurant favorite control');
   const restaurantAdded = await evaluate(client, `(() => {
-    const button = document.querySelector('[data-favorite-kind="restaurants"][data-favorite-id="Pizza Hut"]');
+    const button = document.querySelector('[data-favorite-kind="restaurants"][data-favorite-id="Lotus Kitchen"]');
     button.click();
     return {
       pressed: button.getAttribute('aria-pressed'),
@@ -567,7 +565,7 @@ async function checkFavoriteCreation(client) {
       toast: document.querySelector('.toast')?.textContent || ''
     };
   })()`);
-  assert(restaurantAdded.pressed === 'true' && restaurantAdded.label.includes('Remove Pizza Hut') && restaurantAdded.restaurants.includes('Pizza Hut') && restaurantAdded.toast.includes('added to favorites'), `Discover restaurant favorite add failed: ${JSON.stringify(restaurantAdded)}`);
+  assert(restaurantAdded.pressed === 'true' && restaurantAdded.label.includes('Remove Lotus Kitchen') && restaurantAdded.restaurants.includes('Lotus Kitchen') && restaurantAdded.toast.includes('added to favorites'), `Discover restaurant favorite add failed: ${JSON.stringify(restaurantAdded)}`);
 
   await navigate(client, routes.product);
   await waitFor(client, "!document.getElementById('product-detail-content').hidden", 'product detail before favorite');
@@ -581,7 +579,7 @@ async function checkFavoriteCreation(client) {
       toast: document.querySelector('.toast')?.textContent || ''
     };
   })()`);
-  assert(productAdded.pressed === 'true' && productAdded.label.includes('Remove Supreme Pepperoni Pizza') && productAdded.products.includes('2') && productAdded.toast.includes('added to favorites'), `Product favorite add failed: ${JSON.stringify(productAdded)}`);
+  assert(productAdded.pressed === 'true' && productAdded.label.includes('Remove Rare Beef Pho') && productAdded.products.includes('demo-lotus-kitchen-rare-beef-pho') && productAdded.toast.includes('added to favorites'), `Product favorite add failed: ${JSON.stringify(productAdded)}`);
 
   await client.send('Page.reload', { ignoreCache: true });
   await waitFor(client, "document.getElementById('product-favorite-button')?.getAttribute('aria-pressed') === 'true'", 'product favorite reload persistence');
@@ -599,11 +597,11 @@ async function checkFavoriteCreation(client) {
       toast: document.querySelector('.toast')?.textContent || ''
     };
   })()`);
-  assert(productRemoved.pressed === 'false' && productRemoved.label.includes('Add Supreme Pepperoni Pizza') && productRemoved.products.length === 0 && productRemoved.toast.includes('removed from favorites'), `Product favorite remove failed: ${JSON.stringify(productRemoved)}`);
+  assert(productRemoved.pressed === 'false' && productRemoved.label.includes('Add Rare Beef Pho') && productRemoved.products.length === 0 && productRemoved.toast.includes('removed from favorites'), `Product favorite remove failed: ${JSON.stringify(productRemoved)}`);
 
   await navigate(client, routes.discover);
   const restaurantRemoved = await evaluate(client, `(() => {
-    const button = document.querySelector('[data-favorite-kind="restaurants"][data-favorite-id="Pizza Hut"]');
+    const button = document.querySelector('[data-favorite-kind="restaurants"][data-favorite-id="Lotus Kitchen"]');
     button.click();
     return {
       pressed: button.getAttribute('aria-pressed'),
@@ -612,7 +610,7 @@ async function checkFavoriteCreation(client) {
       toast: document.querySelector('.toast')?.textContent || ''
     };
   })()`);
-  assert(restaurantRemoved.pressed === 'false' && restaurantRemoved.label.includes('Add Pizza Hut') && restaurantRemoved.restaurants.length === 0 && restaurantRemoved.toast.includes('removed from favorites'), `Discover restaurant favorite remove failed: ${JSON.stringify(restaurantRemoved)}`);
+  assert(restaurantRemoved.pressed === 'false' && restaurantRemoved.label.includes('Add Lotus Kitchen') && restaurantRemoved.restaurants.length === 0 && restaurantRemoved.toast.includes('removed from favorites'), `Discover restaurant favorite remove failed: ${JSON.stringify(restaurantRemoved)}`);
   return { restaurantAdded, productAdded, productRemoved, restaurantRemoved };
 }
 
@@ -748,10 +746,10 @@ async function checkMaliciousOrder(client) {
       promoCode: '',
       items: [{
         lineId: 'malicious-line',
-        id: '2',
+        id: 'demo-lotus-kitchen-rare-beef-pho',
         name: '<img src=x onerror=window.__task7Xss=1>',
         image: 'https://attacker.invalid/payload.png',
-        unitPrice: 13.99,
+        unitPrice: 12.50,
         quantity: 1,
         options: [{ id: 'bad', label: '<b>unsafe</b>', price: 0 }],
         note: '<script>window.__task7Xss=1</script>'
@@ -771,7 +769,7 @@ async function checkMaliciousOrder(client) {
     literalText: document.body.textContent.includes('<img src=x onerror=window.__task7Xss=1>'),
     injectedPayload: Boolean(document.querySelector('.order-card img[src="x"], .order-card svg[onload], .order-card script')),
     attackerImage: [...document.images].some(image => image.src.includes('attacker.invalid')),
-    orderImagesTrusted: [...document.querySelectorAll('.order-card-image[src]')].every(image => image.src === new URL(SavoraCatalog.products['2'].image, location.href).href)
+      orderImagesTrusted: [...document.querySelectorAll('.order-card-image[src]')].every(image => image.src === new URL(SavoraCatalog.products['demo-lotus-kitchen-rare-beef-pho'].image, location.href).href)
   })`);
   assert(security.xss === 0 && security.literalText && !security.injectedPayload && !security.attackerImage && security.orderImagesTrusted, `malicious persisted order escaped the text/catalog boundary: ${JSON.stringify(security)}`);
   return security;

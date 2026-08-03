@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/catalog_demo_seed.php';
+
 function platform_column_exists(mysqli $conn, string $table, string $column): bool
 {
     $database = (string) $conn->query('SELECT DATABASE() AS name')->fetch_assoc()['name'];
@@ -232,6 +234,7 @@ function platform_seed(mysqli $conn): void
 
 function platform_seed_operations(mysqli $conn): void
 {
+    catalog_demo_seed($conn);
     $ids = [];
     $userLookup = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
     foreach (['customer', 'restaurant', 'driver', 'admin', 'driver-nearby-2', 'driver-nearby-3'] as $username) {
@@ -252,30 +255,13 @@ function platform_seed_operations(mysqli $conn): void
     $customerProfile->execute();
     $customerProfile->close();
 
-    $restaurant = $conn->prepare("INSERT IGNORE INTO restaurants (owner_user_id, name, cuisine, address, city, phone, status, accepting_orders, rating, cancellation_rate) VALUES (?, 'Savora Burger', 'Burgers', '80 Riverside Avenue', 'Central City', '+1 555 0188', 'active', 1, 4.82, 2.40)");
-    $restaurant->bind_param('i', $ids['restaurant']);
-    $restaurant->execute();
-    $restaurant->close();
-    $restaurantLookup = $conn->prepare('SELECT id FROM restaurants WHERE owner_user_id = ? LIMIT 1');
-    $restaurantLookup->bind_param('i', $ids['restaurant']);
+    $restaurantLookup = $conn->prepare("SELECT id FROM restaurants WHERE demo_key = 'lotus-kitchen' LIMIT 1");
     $restaurantLookup->execute();
     $restaurantId = (int) ($restaurantLookup->get_result()->fetch_assoc()['id'] ?? 0);
     $restaurantLookup->close();
     if ($restaurantId === 0) {
         return;
     }
-
-    $menu = $conn->prepare('INSERT IGNORE INTO menu_items (public_id, restaurant_id, name, price, is_available) VALUES (?, ?, ?, ?, 1)');
-    foreach ([
-        ['1', 'Mega Burger Feast Combo', 14.99],
-        ['2', 'Supreme Pepperoni Pizza 12"', 13.99],
-        ['3', 'Deluxe Salmon & Tuna Sushi Set', 24.99],
-        ['4', 'Brown Sugar Boba Milk Tea', 5.50],
-    ] as [$publicId, $name, $price]) {
-        $menu->bind_param('sisd', $publicId, $restaurantId, $name, $price);
-        $menu->execute();
-    }
-    $menu->close();
 
     $driverProfiles = [
         [$ids['driver'], 'Motorbike', 'Honda Vision', 'SVR-1042', 'Central District', 'online', 4.91, 94.50, 98.20],
