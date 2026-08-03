@@ -547,6 +547,8 @@ h3 { font-size: 1rem; line-height: 1.35; }
   .dialog-panel { max-height: 94vh; }
   .dialog-actions { align-items: stretch; flex-direction: column; }
   .dialog-actions .primary-action { width: 100%; }
+  .customer-location-mode { flex-direction: column; }
+  .customer-location-mode button { width: 100%; }
   .orders-page, .favorites-page { width: min(100% - 1rem, 1180px); }
   .order-filter-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .order-filter-bar button { justify-content: center; padding-inline: .55rem; }
@@ -591,6 +593,12 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .customer-location-dialog-panel form { display: grid; gap: .85rem; padding: 1.25rem; }
 .customer-location-dialog-panel .form-field { display: grid; gap: .45rem; }
 .customer-location-dialog-panel .form-field textarea { width: 100%; min-height: 6rem; padding: .7rem .8rem; border: 1px solid var(--savora-line); border-radius: .7rem; resize: vertical; }
+.customer-location-mode { display: flex; gap: .6rem; flex-wrap: wrap; }
+.customer-location-preview { display: grid; gap: .35rem; padding: .85rem; border: 1px solid var(--savora-line); border-radius: .8rem; background: #fff; }
+.customer-location-preview p { margin: 0; }
+.customer-location-preview [data-customer-location-preview-address] { color: var(--savora-ink); font-weight: 800; line-height: 1.45; }
+.customer-location-preview [data-customer-location-retry] { justify-self: start; }
+.customer-location-dialog-panel [data-customer-location-save]:disabled { opacity: .55; cursor: not-allowed; }
 .customer-location-actions { padding-top: .25rem; border-top: 0; }
 [data-customer-location-status].is-error { color: #a23d2d; }
 .profile-form-actions { display: flex; align-items: center; gap: 1rem; margin-top: 1.25rem; }

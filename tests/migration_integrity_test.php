@@ -107,7 +107,7 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations', '017_rich_catalog', '018_customer_storefront', '019_customer_gps_confirmation'], 'Migration registry order is incorrect.');
 
 $deleteMigration = $conn->prepare('DELETE FROM schema_migrations WHERE version=?');
 foreach ($versions as $version) { $deleteMigration->bind_param('s', $version); $deleteMigration->execute(); }
@@ -126,6 +126,22 @@ migration_expect(migration_column_matches($driverFileSize, 'int', 'NO'), 'Driver
 migration_expect(migration_column_matches($driverSha256, 'char(64)', 'YES'), 'Driver document hash metadata must exist: ' . json_encode($driverSha256));
 migration_expect(migration_column_matches($restaurantFileSize, 'int', 'NO'), 'Restaurant document size metadata must exist: ' . json_encode($restaurantFileSize));
 migration_expect(migration_column_matches($restaurantSha256, 'char(64)', 'YES'), 'Restaurant document hash metadata must exist: ' . json_encode($restaurantSha256));
+migration_expect(
+    migration_column_matches(migration_column($conn, 'customer_profiles', 'delivery_details'), 'varchar(300)', 'YES'),
+    'Customer profile delivery details must be nullable VARCHAR(300).'
+);
+migration_expect(
+    migration_column_matches(migration_column($conn, 'customer_addresses', 'delivery_details'), 'varchar(300)', 'YES'),
+    'Customer address delivery details must be nullable VARCHAR(300).'
+);
+migration_expect(
+    migration_column_matches(migration_column($conn, 'customer_addresses', 'latitude'), 'decimal(10,7)', 'YES'),
+    'Customer address latitude must be nullable for manual saves.'
+);
+migration_expect(
+    migration_column_matches(migration_column($conn, 'customer_addresses', 'longitude'), 'decimal(10,7)', 'YES'),
+    'Customer address longitude must be nullable for manual saves.'
+);
 
 $expected = [
     'fk_orders_customer' => ['orders', 'customer_user_id', 'users', 'id', 'RESTRICT'],

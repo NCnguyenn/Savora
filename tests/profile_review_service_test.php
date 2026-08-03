@@ -77,11 +77,13 @@ try {
     $profile->bind_param('iss', $customerB, $email, $phone); $profile->execute();
     $profile->close();
 
-    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,name,status,accepting_orders) VALUES(?,?,'active',1)");
+    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,public_id,name,status,accepting_orders) VALUES(?,?,?,'active',1)");
+    $restaurantPublicId = $prefix . '-restaurant-a';
     $restaurantName = 'Profile Restaurant A';
-    $restaurant->bind_param('is', $ownerA, $restaurantName); $restaurant->execute(); $restaurantA = $conn->insert_id;
+    $restaurant->bind_param('iss', $ownerA, $restaurantPublicId, $restaurantName); $restaurant->execute(); $restaurantA = $conn->insert_id;
+    $restaurantPublicId = $prefix . '-restaurant-b';
     $restaurantName = 'Profile Restaurant B';
-    $restaurant->bind_param('is', $ownerB, $restaurantName); $restaurant->execute(); $restaurantB = $conn->insert_id;
+    $restaurant->bind_param('iss', $ownerB, $restaurantPublicId, $restaurantName); $restaurant->execute(); $restaurantB = $conn->insert_id;
     $restaurant->close();
 
     $item = $conn->prepare('INSERT INTO menu_items(public_id,restaurant_id,name,price,is_available,version) VALUES(?,?,?,9.50,1,1)');

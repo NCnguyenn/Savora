@@ -28,28 +28,6 @@ include 'components/customer_header.php';
         </div>
     </section>
 
-    <section id="customer-location-dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="customer-location-title" hidden>
-        <div class="dialog-scrim" data-customer-location-close></div>
-        <div class="dialog-panel customer-location-dialog-panel" role="document">
-            <header class="modal-header">
-                <div><p class="eyebrow">Delivery location</p><h2 id="customer-location-title">Where should we deliver?</h2></div>
-                <button class="icon-button" type="button" aria-label="Close delivery location" data-customer-location-close><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
-            </header>
-            <form data-customer-location-form>
-                <label class="form-field" for="customer-location-address">Delivery address
-                    <textarea id="customer-location-address" data-customer-location-input rows="3" maxlength="500" autocomplete="street-address" placeholder="Street, building and area"></textarea>
-                </label>
-                <p class="form-help" data-customer-location-status aria-live="polite" aria-atomic="true"></p>
-                <div class="dialog-actions customer-location-actions">
-                    <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
-                    <button class="primary-action" type="submit">Save address</button>
-                    <button class="secondary-action" type="button" data-customer-location-skip>Skip</button>
-                </div>
-                <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
-            </form>
-        </div>
-    </section>
-
     <div class="container home-overview-layout">
         <div class="home-overview-feed">
             <section class="promo-banner" data-critical-background data-background-fallback="forest gradient" aria-labelledby="promotion-title">

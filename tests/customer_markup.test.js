@@ -260,6 +260,7 @@ test('checkout is a labelled, guarded form with accessible payments and server s
   assert.match(checkout, /<form[^>]*id="checkout-form"/);
   assert.match(checkout, /<label[^>]*for="checkout-address"/);
   assert.match(checkout, /<label[^>]*for="checkout-note"/);
+  assert.match(checkout, /id="checkout-note"[^>]*maxlength="300"/);
   assert.match(checkout, /<label[^>]*for="checkout-promo"/);
   assert.match(checkout, /<fieldset/);
   assert.match(checkout, /<legend/);
@@ -293,6 +294,7 @@ test('checkout submits delivery notes and order views render them as text contex
 
   assert.doesNotMatch(state, /deliveryNote/);
   assert.match(checkout, /deliveryNote:\s*note\.value\.trim\(\)/);
+  assert.match(checkout, /selectedAddress\.deliveryDetails/);
   assert.match(history, /deliveryNote/);
   assert.match(history, /order-delivery-note/);
   assert.match(history, /active-order-delivery-note/);
@@ -455,13 +457,14 @@ test('profile is a labelled server-backed form without a password update claim',
   const profile = read('customer_profile.php');
 
   assert.match(profile, /<form[^>]*id="profile-form"/);
-  for (const id of ['profile-full-name', 'profile-email', 'profile-phone', 'profile-address']) {
+  for (const id of ['profile-full-name', 'profile-email', 'profile-phone', 'profile-address', 'profile-delivery-details']) {
     assert.match(profile, new RegExp(`<label[^>]*for="${id}"`));
   }
   assert.match(profile, /autocomplete="name"/);
   assert.match(profile, /autocomplete="email"/);
   assert.match(profile, /autocomplete="tel"/);
   assert.match(profile, /autocomplete="street-address"/);
+  assert.match(profile, /id="profile-delivery-details"[^>]*maxlength="300"/);
   assert.match(profile, /api\/profile\.php/);
   assert.match(profile, /SavoraApi\.post\(/);
   assert.doesNotMatch(profile, /SavoraState\.(?:setProfile|persist)\(/);
@@ -488,10 +491,13 @@ test('Customer location controls are optional, editable, and shared across surfa
   assert.match(controller, /savora:customer-location-changed/);
   assert.match(checkout, /savora:customer-location-changed/);
   assert.match(checkout, /await requestQuote\(\)/);
-  assert.match(home, /id="customer-location-dialog"[^>]*role="dialog"[^>]*aria-modal="true"/);
-  assert.match(home, /data-customer-use-gps/);
-  assert.match(home, /data-customer-location-skip/);
-  assert.match(home, /Powered by Geoapify/);
+  assert.match(footer, /id="customer-location-dialog"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  assert.doesNotMatch(home, /id="customer-location-dialog"/);
+  assert.match(footer, /data-customer-use-gps/);
+  assert.match(footer, /data-customer-location-skip/);
+  assert.match(footer, /data-customer-location-preview/);
+  assert.match(footer, /data-customer-delivery-details/);
+  assert.match(footer, /Powered by Geoapify/);
   assert.match(profile, /data-customer-use-gps/);
   assert.match(checkout, /data-customer-use-gps/);
   assert.match(`${home}\n${profile}\n${checkout}`, /aria-live="polite"/);

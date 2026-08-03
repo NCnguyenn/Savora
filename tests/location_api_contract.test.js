@@ -27,3 +27,18 @@ test('manual persistence clears stale coordinates', () => {
   assert.match(repository, /longitude\s*=\s*NULL/);
   assert.doesNotMatch(repository, /\$_(?:GET|POST|REQUEST).*user/i);
 });
+
+test('public GPS preview is a bounded, rate-limited, non-mutating JSON boundary', () => {
+  const endpoint = read('api/location_preview.php');
+  assert.match(endpoint, /savora_start_session/);
+  assert.match(endpoint, /REQUEST_METHOD.*POST/);
+  assert.match(endpoint, /application\/json/);
+  assert.match(endpoint, /CONTENT_LENGTH.*4096/);
+  assert.match(endpoint, /strlen\(\$raw\).*4096/);
+  assert.match(endpoint, /customer_location_same_origin/);
+  assert.match(endpoint, /rate_limit_consume\(\$conn, \$remoteAddress, 'customer_location_preview', 10, 600\)/);
+  assert.match(endpoint, /customer_location_preview/);
+  assert.doesNotMatch(endpoint, /savora_require_idempotency_key/);
+  assert.doesNotMatch(endpoint, /savora_request_actor/);
+  assert.match(read('lib/customer_location_preview.php'), /customer_location_same_origin/);
+});

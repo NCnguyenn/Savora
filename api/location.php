@@ -39,6 +39,7 @@ try {
     } else {
         $resolved = null;
         $coordinates = null;
+        $deliveryDetails = savora_delivery_details($payload['deliveryDetails'] ?? '');
         if ($action === 'save_gps_location') {
             $coordinates = savora_validate_coordinates($payload['latitude'] ?? null, $payload['longitude'] ?? null);
             $resolved = savora_reverse_geocode($coordinates['latitude'], $coordinates['longitude']);
@@ -46,7 +47,7 @@ try {
         $conn->begin_transaction();
         $transaction = true;
         $location = $action === 'save_gps_location'
-            ? savora_save_gps_location($conn, $role, $userId, $resolved ?? [], (float) $coordinates['latitude'], (float) $coordinates['longitude'])
+            ? savora_save_gps_location($conn, $role, $userId, $resolved ?? [], (float) $coordinates['latitude'], (float) $coordinates['longitude'], $role === 'customer' ? $deliveryDetails : '')
             : savora_save_manual_location($conn, $role, $userId, $payload);
         $response = ['ok' => true, 'status' => 200, 'message' => 'Location saved.', 'data' => ['location' => $location]];
         savora_idempotency_store($conn, $userId, $idempotencyKey, $action, $requestHash, $response);

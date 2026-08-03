@@ -47,16 +47,20 @@
                     <div class="form-field profile-address-field">
                         <label for="profile-address">Delivery address</label>
                         <textarea id="profile-address" name="address" autocomplete="street-address" rows="3" maxlength="200" placeholder="Street and building"></textarea>
-                        <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                        <button class="secondary-action" type="button" data-customer-use-gps data-customer-location-trigger aria-controls="customer-location-dialog" aria-expanded="false"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
                         <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
                         <p class="form-help" data-customer-location-status aria-live="polite"></p>
                     </div>
+                    <div class="form-field profile-address-field">
+                        <label for="profile-delivery-details">Delivery details (optional)</label>
+                        <textarea id="profile-delivery-details" name="deliveryDetails" rows="2" maxlength="300" placeholder="Apartment, floor, gate, or landmark"></textarea>
+                    </div>
                     <div class="form-field"><label for="profile-address-label">Address label</label><input id="profile-address-label" name="addressLabel" maxlength="80" value="Home"></div>
                     <div class="form-field"><label for="profile-city">City</label><input id="profile-city" name="city" maxlength="100" autocomplete="address-level2"></div>
-                    <div class="form-field"><label for="profile-latitude">Latitude</label><input id="profile-latitude" name="latitude" type="number" min="-90" max="90" step="0.0000001" required></div>
-                    <div class="form-field"><label for="profile-longitude">Longitude</label><input id="profile-longitude" name="longitude" type="number" min="-180" max="180" step="0.0000001" required></div>
+                    <div class="form-field"><label for="profile-latitude">Latitude</label><input id="profile-latitude" name="latitude" type="number" min="-90" max="90" step="0.0000001"></div>
+                    <div class="form-field"><label for="profile-longitude">Longitude</label><input id="profile-longitude" name="longitude" type="number" min="-180" max="180" step="0.0000001"></div>
                 </div>
-                <p class="form-help" id="profile-local-help">Coordinates are required so checkout can use a verified delivery location.</p>
+                <p class="form-help" id="profile-local-help">GPS coordinates are optional for manual addresses and are kept only for a confirmed GPS location.</p>
                 <div class="profile-form-actions">
                     <button class="primary-action" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i>Save profile</button>
                     <p id="profile-save-status" class="profile-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -102,6 +106,7 @@
         const phoneInput = document.getElementById('profile-phone');
         const addressInput = document.getElementById('profile-address');
         const addressLabelInput = document.getElementById('profile-address-label');
+        const deliveryDetailsInput = document.getElementById('profile-delivery-details');
         const cityInput = document.getElementById('profile-city');
         const latitudeInput = document.getElementById('profile-latitude');
         const longitudeInput = document.getElementById('profile-longitude');
@@ -124,10 +129,11 @@
             emailInput.value = email;
             phoneInput.value = typeof profile.phone === 'string' ? profile.phone : '';
             addressInput.value = address.addressLine1 || '';
+            deliveryDetailsInput.value = address.deliveryDetails || '';
             addressLabelInput.value = address.label || 'Home';
             cityInput.value = address.city || '';
-            latitudeInput.value = Number.isFinite(Number(address.latitude)) ? address.latitude : '';
-            longitudeInput.value = Number.isFinite(Number(address.longitude)) ? address.longitude : '';
+            latitudeInput.value = address.latitude === null || address.latitude === undefined || address.latitude === '' ? '' : address.latitude;
+            longitudeInput.value = address.longitude === null || address.longitude === undefined || address.longitude === '' ? '' : address.longitude;
             addressPublicId = address.publicId || addressPublicId || `address-${Date.now().toString(36)}`;
             summaryName.textContent = fullName;
             summaryEmail.textContent = email;
@@ -151,18 +157,24 @@
             if (!form.reportValidity()) return;
             const profileScope = 'customer-profile';
             const addressScope = `customer-address-${addressPublicId}`;
-            const locationScope = 'customer-profile-manual-location';
+            const locationScope = 'customer-profile-location';
+            const latitude = latitudeInput.value.trim() === '' ? null : Number(latitudeInput.value);
+            const longitude = longitudeInput.value.trim() === '' ? null : Number(longitudeInput.value);
             try {
                 await SavoraApi.post('api/profile.php', { action: 'update_profile', payload: {
                     fullName: fullNameInput.value.trim(), email: emailInput.value.trim(), phone: phoneInput.value.trim(), version: snapshot.profile.version
                 } }, SavoraApi.intentKey(profileScope));
                 await SavoraApi.post('api/profile.php', { action: 'save_address', payload: {
                     publicId: addressPublicId, label: addressLabelInput.value.trim(), recipientName: fullNameInput.value.trim(), phone: phoneInput.value.trim(),
-                    addressLine1: addressInput.value.trim(), city: cityInput.value.trim(), latitude: Number(latitudeInput.value), longitude: Number(longitudeInput.value),
+                    addressLine1: addressInput.value.trim(), city: cityInput.value.trim(), deliveryDetails: deliveryDetailsInput.value.trim(), latitude, longitude,
                     isDefault: true, version: ((snapshot.addresses || []).find(item => item.publicId === addressPublicId) || {}).version || 0
                 } }, SavoraApi.intentKey(addressScope));
                 if (window.SavoraLocationClient) {
-                    await window.SavoraLocationClient.saveManual(SavoraApi, { address: addressInput.value.trim() }, SavoraApi.intentKey(locationScope));
+                    if (latitude === null && longitude === null) {
+                        await window.SavoraLocationClient.saveManual(SavoraApi, { address: addressInput.value.trim(), deliveryDetails: deliveryDetailsInput.value.trim() }, SavoraApi.intentKey(locationScope));
+                    } else {
+                        await window.SavoraLocationClient.saveGps(SavoraApi, { latitude, longitude }, SavoraApi.intentKey(locationScope), deliveryDetailsInput.value.trim());
+                    }
                 }
                 await hydrate();
                 SavoraApi.clearIntentKey(profileScope); SavoraApi.clearIntentKey(addressScope); SavoraApi.clearIntentKey(locationScope);

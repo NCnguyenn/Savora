@@ -23,6 +23,7 @@ function savora_migrations(): array
         '016_profile_locations' => __DIR__ . '/../database/migrations/016_profile_locations.php',
         '017_rich_catalog' => __DIR__ . '/../database/migrations/017_rich_catalog.php',
         '018_customer_storefront' => __DIR__ . '/../database/migrations/018_customer_storefront.php',
+        '019_customer_gps_confirmation' => __DIR__ . '/../database/migrations/019_customer_gps_confirmation.php',
     ];
 }
 

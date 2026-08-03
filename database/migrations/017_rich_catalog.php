@@ -22,7 +22,9 @@ return static function (mysqli $conn): void {
             }
             return;
         }
-        if (strtolower((string) $existing['COLUMN_TYPE']) !== strtolower($type) || (string) $existing['IS_NULLABLE'] !== $nullable) {
+        $actualType = strtolower((string) $existing['COLUMN_TYPE']);
+        $actualType = (string) preg_replace('/^int\(\d+\)$/', 'int', $actualType);
+        if ($actualType !== strtolower($type) || (string) $existing['IS_NULLABLE'] !== $nullable) {
             throw new RuntimeException("Existing rich catalog column {$table}.{$column} does not match the migration definition.");
         }
     };

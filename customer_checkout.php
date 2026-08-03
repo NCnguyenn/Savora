@@ -13,7 +13,7 @@
                 <section class="surface-card checkout-section" aria-labelledby="delivery-heading">
                     <div class="checkout-section-heading"><span aria-hidden="true"><i class="fa-solid fa-location-dot"></i></span><div><h2 id="delivery-heading">Saved delivery address</h2><p>Checkout uses an address already saved to your account.</p></div></div>
                     <div class="form-group"><label for="checkout-address">Address</label><textarea id="checkout-address" name="address" rows="3" maxlength="300" required readonly aria-describedby="checkout-address-help checkout-address-error"></textarea><button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button><p id="checkout-address-help" class="form-help">Update delivery addresses from your <a href="customer_profile.php">Profile</a>. Powered by Geoapify for GPS-assisted addresses.</p><p class="form-help" data-customer-location-status aria-live="polite"></p><p id="checkout-address-error" class="field-error" aria-live="polite"></p></div>
-                    <div class="form-group"><label for="checkout-note">Delivery note <span>(optional)</span></label><textarea id="checkout-note" name="note" rows="3" maxlength="120" aria-describedby="checkout-note-count" placeholder="e.g. Leave at the front desk"></textarea><p id="checkout-note-count" class="form-help align-right">0/120</p></div>
+                    <div class="form-group"><label for="checkout-note">Delivery note <span>(optional)</span></label><textarea id="checkout-note" name="note" rows="3" maxlength="300" aria-describedby="checkout-note-count" placeholder="e.g. Leave at the front desk"></textarea><p id="checkout-note-count" class="form-help align-right">0/300</p></div>
                 </section>
                 <section class="surface-card checkout-section" aria-labelledby="payment-heading">
                     <div class="checkout-section-heading"><span aria-hidden="true"><i class="fa-solid fa-credit-card"></i></span><div><h2 id="payment-heading">Payment method</h2><p>Wallet debits are server-atomic; cash remains pending until collected.</p></div></div>
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const form = document.getElementById('checkout-form'); const address = document.getElementById('checkout-address'); const note = document.getElementById('checkout-note');
     const promo = document.getElementById('checkout-promo'); const promoStatus = document.getElementById('checkout-promo-status'); const feedback = document.getElementById('checkout-feedback');
     const submit = document.getElementById('place-order-button'); const cancel = document.getElementById('cancel-checkout-button'); const itemList = document.getElementById('checkout-items-list');
-    let snapshot = null; let quote = null; let submitting = false;
+    let snapshot = null; let quote = null; let submitting = false; let noteState = window.SavoraCustomerCheckoutNote.create();
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const cartPayload = () => stateApi.load().cart.map(line => ({ itemPublicId: String(line.id), quantity: Number(line.quantity || 0), optionPublicIds: (line.options || []).map(option => String(option.id)) }));
     const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
@@ -66,6 +66,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderSelectedAddress() {
         const selectedAddress = (snapshot && snapshot.addresses || []).find(item => item.isDefault) || (snapshot && snapshot.addresses || [])[0];
         address.value = selectedAddress ? [selectedAddress.addressLine1, selectedAddress.city].filter(Boolean).join(', ') : '';
+        noteState = window.SavoraCustomerCheckoutNote.applyAddressDetails(noteState, selectedAddress ? selectedAddress.deliveryDetails : '');
+        note.value = noteState.value;
+        setText('checkout-note-count', `${note.value.length}/300`);
     }
     async function refreshAfterLocationChange() {
         snapshot = await SavoraApi.get('api/profile.php');
@@ -85,7 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) { feedback.textContent = error.message || 'Checkout is unavailable.'; submit.disabled = true; }
     promo.addEventListener('input', () => { quote = null; submit.disabled = true; });
     document.getElementById('checkout-apply-promo').addEventListener('click', async () => { try { await requestQuote(); } catch (error) { feedback.textContent = error.message || 'Quote was not refreshed.'; } });
-    note.addEventListener('input', event => setText('checkout-note-count', `${event.target.value.length}/120`));
+    note.addEventListener('input', event => { noteState = window.SavoraCustomerCheckoutNote.edit(noteState, event.target.value); setText('checkout-note-count', `${event.target.value.length}/300`); });
     form.addEventListener('submit', async event => {
         event.preventDefault(); if (submitting || !quote) return; setBusy(true);
         try {

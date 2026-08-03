@@ -38,6 +38,21 @@ test('loads and saves locations through the focused API', async () => {
   ]);
 });
 
+test('previews GPS coordinates without using the authenticated save API', async () => {
+  const calls = [];
+  const api = {
+    postPublic: async (url, body) => {
+      calls.push({ method: 'POST_PUBLIC', url, body });
+      return { location: { address: 'Preview Road', latitude: body.latitude, longitude: body.longitude } };
+    },
+    post: async () => { throw new Error('Preview must not call authenticated save.'); },
+    get: async () => ({ location: {} })
+  };
+  const result = await Client.previewGps(api, { latitude: 13.7563, longitude: 100.5018 });
+  assert.equal(result.address, 'Preview Road');
+  assert.deepEqual(calls, [{ method: 'POST_PUBLIC', url: 'api/location_preview.php', body: { latitude: 13.7563, longitude: 100.5018 } }]);
+});
+
 test('maps denied, unavailable, and timeout errors distinctly', () => {
   assert.match(Client.messageForGeolocationError({ code: 1 }), /permission/i);
   assert.match(Client.messageForGeolocationError({ code: 2 }), /unavailable/i);

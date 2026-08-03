@@ -8,6 +8,7 @@ if (getenv('SAVORA_ENV') !== 'test' || getenv('SAVORA_DB_NAME') !== 'savora_test
 
 require_once __DIR__ . '/../lib/profile_locations.php';
 require_once __DIR__ . '/support/test_database.php';
+require_once __DIR__ . '/../lib/repositories/profile_repository.php';
 
 function profile_location_expect(bool $condition, string $message): void
 {
@@ -47,18 +48,34 @@ try {
     $address->close();
 
     $resolved = ['address' => '100 Server Street, Bangkok', 'addressLine1' => '100 Server Street', 'city' => 'Bangkok'];
-    $saved = savora_save_gps_location($conn, 'customer', $customerId, $resolved, 13.7563, 100.5018);
+    $saved = savora_save_gps_location($conn, 'customer', $customerId, $resolved, 13.7563, 100.5018, 'Tower B, floor 12');
     profile_location_expect($saved['locationMethod'] === 'gps', 'Customer GPS location should be authoritative.');
-    $storedAddress = $conn->query("SELECT address_line1,city,latitude,longitude,version FROM customer_addresses WHERE customer_user_id={$customerId} AND is_default=1")->fetch_assoc();
+    profile_location_expect(($saved['deliveryDetails'] ?? '') === 'Tower B, floor 12', 'GPS details must be returned by the location read model.');
+    $storedAddress = $conn->query("SELECT address_line1,city,latitude,longitude,delivery_details,version FROM customer_addresses WHERE customer_user_id={$customerId} AND is_default=1")->fetch_assoc();
     profile_location_expect(($storedAddress['address_line1'] ?? '') === '100 Server Street', 'Customer GPS must update the checkout address.');
     profile_location_expect(($storedAddress['city'] ?? '') === 'Bangkok', 'Customer GPS must update the checkout city.');
     profile_location_expect(abs((float) ($storedAddress['latitude'] ?? 0) - 13.7563) < 0.0000001, 'Customer checkout latitude must match GPS.');
+    profile_location_expect(($storedAddress['delivery_details'] ?? '') === 'Tower B, floor 12', 'Customer checkout details must match GPS details.');
     profile_location_expect((int) ($storedAddress['version'] ?? 0) === 2, 'Customer GPS must version the checkout address.');
 
-    $manual = savora_save_manual_location($conn, 'customer', $customerId, ['address' => 'Manual display location']);
+    $manual = savora_save_manual_location($conn, 'customer', $customerId, ['address' => 'Manual display location', 'deliveryDetails' => 'Blue gate']);
     profile_location_expect($manual['locationMethod'] === 'manual' && $manual['latitude'] === null, 'Manual customer location must clear stale profile coordinates.');
-    $checkoutAddress = $conn->query("SELECT address_line1,latitude,longitude FROM customer_addresses WHERE customer_user_id={$customerId} AND is_default=1")->fetch_assoc();
-    profile_location_expect(($checkoutAddress['address_line1'] ?? '') === '100 Server Street', 'Manual display location must not forge checkout coordinates.');
+    profile_location_expect(($manual['deliveryDetails'] ?? '') === 'Blue gate', 'Manual details must be returned by the location read model.');
+    $checkoutAddress = $conn->query("SELECT address_line1,latitude,longitude,delivery_details FROM customer_addresses WHERE customer_user_id={$customerId} AND is_default=1")->fetch_assoc();
+    profile_location_expect(($checkoutAddress['address_line1'] ?? '') === 'Manual display location', 'Manual display location must synchronize checkout address text.');
+    profile_location_expect($checkoutAddress['latitude'] === null && $checkoutAddress['longitude'] === null, 'Manual checkout address must clear stale coordinates.');
+    profile_location_expect(($checkoutAddress['delivery_details'] ?? '') === 'Blue gate', 'Manual checkout details must be persisted.');
+
+    $snapshot = profile_repository_snapshot($conn, $customerId);
+    $snapshotAddress = $snapshot['addresses'][0] ?? [];
+    profile_location_expect(($snapshotAddress['deliveryDetails'] ?? '') === 'Blue gate', 'Profile snapshot must expose delivery details.');
+    profile_location_expect(array_key_exists('latitude', $snapshotAddress) && array_key_exists('longitude', $snapshotAddress) && $snapshotAddress['latitude'] === null && $snapshotAddress['longitude'] === null, 'Profile snapshot must preserve nullable coordinates.');
+
+    try {
+        savora_save_manual_location($conn, 'customer', $customerId, ['address' => 'Too long', 'deliveryDetails' => str_repeat('x', 301)]);
+        throw new RuntimeException('Delivery details longer than 300 characters should fail.');
+    } catch (InvalidArgumentException) {
+    }
 
     echo "PASS: Profile locations and customer checkout coordinates stay authoritative\n";
     $conn->rollback();

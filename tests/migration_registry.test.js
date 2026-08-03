@@ -65,3 +65,12 @@ test('profile location migration is registered after auth onboarding', () => {
   assert.ok(profileLocations > onboarding, 'profile location migration must follow auth onboarding');
   assert.match(registry, /database\/migrations\/016_profile_locations\.php/);
 });
+
+test('customer GPS confirmation migration is registered after the customer storefront migrations', () => {
+  const registry = fs.readFileSync('lib/migrations.php', 'utf8');
+  const storefront = registry.indexOf("'018_customer_storefront'");
+  const gpsConfirmation = registry.indexOf("'019_customer_gps_confirmation'");
+  assert.ok(storefront >= 0, 'customer storefront migration must be registered');
+  assert.ok(gpsConfirmation > storefront, 'GPS confirmation migration must follow customer storefront migration');
+  assert.match(registry, /database\/migrations\/019_customer_gps_confirmation\.php/);
+});

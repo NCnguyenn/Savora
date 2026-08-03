@@ -96,7 +96,10 @@ return static function (mysqli $conn): void {
             $matches = $integer
                 ? strtolower((string) ($actual['DATA_TYPE'] ?? '')) === $expectedType
                 : strtolower((string) ($actual['COLUMN_TYPE'] ?? '')) === $expectedType;
-            if (!$actual || !$matches || $actual['IS_NULLABLE'] !== 'NO') {
+            $nullableMatches = in_array($requiredColumn, ['latitude', 'longitude'], true)
+                ? in_array((string) ($actual['IS_NULLABLE'] ?? ''), ['NO', 'YES'], true)
+                : (string) ($actual['IS_NULLABLE'] ?? '') === 'NO';
+            if (!$actual || !$matches || !$nullableMatches) {
                 throw new RuntimeException("Existing profile/review column {$requiredTable}.{$requiredColumn} does not match the migration contract.");
             }
         }

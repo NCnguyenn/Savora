@@ -90,10 +90,18 @@ function profile_save_address_mutation(mysqli $conn, int $userId, array $input, 
         $city = profile_text($input['city'] ?? '', 100, 'City', true);
         $region = profile_text($input['region'] ?? '', 100, 'Region');
         $postalCode = profile_text($input['postalCode'] ?? '', 30, 'Postal code');
-        $latitude = filter_var($input['latitude'] ?? null, FILTER_VALIDATE_FLOAT);
-        $longitude = filter_var($input['longitude'] ?? null, FILTER_VALIDATE_FLOAT);
-        if ($latitude === false || $longitude === false || $latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
-            return profile_error(422, 'Valid address coordinates are required.');
+        $deliveryDetails = profile_text($input['deliveryDetails'] ?? '', 300, 'Delivery details');
+        $latitudeInput = $input['latitude'] ?? null;
+        $longitudeInput = $input['longitude'] ?? null;
+        $hasLatitude = $latitudeInput !== null && $latitudeInput !== '';
+        $hasLongitude = $longitudeInput !== null && $longitudeInput !== '';
+        if ($hasLatitude !== $hasLongitude) {
+            return profile_error(422, 'Both address coordinates are required together.');
+        }
+        $latitude = $hasLatitude ? filter_var($latitudeInput, FILTER_VALIDATE_FLOAT) : null;
+        $longitude = $hasLongitude ? filter_var($longitudeInput, FILTER_VALIDATE_FLOAT) : null;
+        if ($hasLatitude && ($latitude === false || $longitude === false || $latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180)) {
+            return profile_error(422, 'Address coordinates are invalid.');
         }
         $owner = profile_repository_customer($conn, $userId, true);
         if ($owner === [] || (string) $owner['status'] !== 'active') return profile_error(403, 'Customer ownership could not be verified.');
@@ -108,17 +116,33 @@ function profile_save_address_mutation(mysqli $conn, int $userId, array $input, 
         }
         $defaultValue = $isDefault ? 1 : 0;
         if ($existing === []) {
-            $save = $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,address_line2,city,region,postal_code,latitude,longitude,is_default,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1)');
-            $save->bind_param('isssssssssddi', $userId, $publicId, $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $latitude, $longitude, $defaultValue);
+            $save = $latitude === null
+                ? $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,address_line2,city,region,postal_code,delivery_details,latitude,longitude,is_default,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,1)')
+                : $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,address_line2,city,region,postal_code,delivery_details,latitude,longitude,is_default,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)');
+            if ($latitude === null) {
+                $save->bind_param('i' . str_repeat('s', 10) . 'i', $userId, $publicId, $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $deliveryDetails, $defaultValue);
+            } else {
+                $save->bind_param('i' . str_repeat('s', 10) . 'ddi', $userId, $publicId, $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $deliveryDetails, $latitude, $longitude, $defaultValue);
+            }
             $nextVersion = 1;
         } else {
             $addressId = (int) $existing['id'];
-            $save = $conn->prepare('UPDATE customer_addresses SET label=?,recipient_name=?,phone=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,latitude=?,longitude=?,is_default=?,version=version+1 WHERE id=? AND customer_user_id=? AND version=?');
-            $save->bind_param('ssssssssddiiii', $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $latitude, $longitude, $defaultValue, $addressId, $userId, $expectedVersion);
+            $save = $latitude === null
+                ? $conn->prepare('UPDATE customer_addresses SET label=?,recipient_name=?,phone=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,delivery_details=?,latitude=NULL,longitude=NULL,is_default=?,version=version+1 WHERE id=? AND customer_user_id=? AND version=?')
+                : $conn->prepare('UPDATE customer_addresses SET label=?,recipient_name=?,phone=?,address_line1=?,address_line2=?,city=?,region=?,postal_code=?,delivery_details=?,latitude=?,longitude=?,is_default=?,version=version+1 WHERE id=? AND customer_user_id=? AND version=?');
+            if ($latitude === null) {
+                $save->bind_param('sssssssssiiii', $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $deliveryDetails, $defaultValue, $addressId, $userId, $expectedVersion);
+            } else {
+                $save->bind_param('sssssssssddiiii', $label, $recipient, $phone, $line1, $line2, $city, $region, $postalCode, $deliveryDetails, $latitude, $longitude, $defaultValue, $addressId, $userId, $expectedVersion);
+            }
             $nextVersion = $expectedVersion + 1;
         }
         $save->execute(); $affected = $save->affected_rows; $save->close();
         if ($affected !== 1) return profile_error(409, 'Address changed. Refresh before retrying.');
+        $profile = $conn->prepare('UPDATE customer_profiles SET delivery_details=? WHERE user_id=?');
+        $profile->bind_param('si', $deliveryDetails, $userId);
+        $profile->execute();
+        $profile->close();
         return profile_success(['publicId' => $publicId, 'version' => $nextVersion, 'isDefault' => $isDefault], 'Address saved.');
     } catch (InvalidArgumentException $exception) {
         return profile_error(422, $exception->getMessage());

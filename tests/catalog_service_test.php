@@ -59,13 +59,15 @@ try {
     $ownerB = $conn->insert_id;
     $owner->close();
 
-    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,name,status,accepting_orders) VALUES(?,?,'active',1)");
+    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,public_id,name,status,accepting_orders) VALUES(?,?,?,'active',1)");
+    $restaurantAPublicId = $prefix . '-restaurant-a';
     $restaurantAName = 'Catalog Fixture A';
-    $restaurant->bind_param('is', $ownerA, $restaurantAName);
+    $restaurant->bind_param('iss', $ownerA, $restaurantAPublicId, $restaurantAName);
     $restaurant->execute();
     $restaurantA = $conn->insert_id;
+    $restaurantBPublicId = $prefix . '-restaurant-b';
     $restaurantBName = 'Catalog Fixture B';
-    $restaurant->bind_param('is', $ownerB, $restaurantBName);
+    $restaurant->bind_param('iss', $ownerB, $restaurantBPublicId, $restaurantBName);
     $restaurant->execute();
     $restaurantB = $conn->insert_id;
     $restaurant->close();

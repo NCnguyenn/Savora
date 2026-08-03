@@ -34,7 +34,7 @@ function profile_repository_addresses(mysqli $conn, int $userId): array
 {
     return profile_repository_rows(
         $conn,
-        'SELECT public_id,label,recipient_name,phone,address_line1,address_line2,city,region,postal_code,latitude,longitude,is_default,version
+        'SELECT public_id,label,recipient_name,phone,address_line1,address_line2,city,region,postal_code,latitude,longitude,delivery_details,is_default,version
          FROM customer_addresses WHERE customer_user_id=? ORDER BY is_default DESC,updated_at DESC,id DESC',
         'i',
         [$userId]
@@ -112,7 +112,8 @@ function profile_repository_snapshot(mysqli $conn, int $userId): array
             'recipientName' => (string) $row['recipient_name'], 'phone' => (string) $row['phone'],
             'addressLine1' => (string) $row['address_line1'], 'addressLine2' => (string) ($row['address_line2'] ?? ''),
             'city' => (string) $row['city'], 'region' => (string) ($row['region'] ?? ''), 'postalCode' => (string) ($row['postal_code'] ?? ''),
-            'latitude' => (float) $row['latitude'], 'longitude' => (float) $row['longitude'],
+            'deliveryDetails' => (string) ($row['delivery_details'] ?? ''),
+            'latitude' => $row['latitude'] === null ? null : (float) $row['latitude'], 'longitude' => $row['longitude'] === null ? null : (float) $row['longitude'],
             'isDefault' => (bool) $row['is_default'], 'version' => (int) $row['version'],
         ], profile_repository_addresses($conn, $userId)),
         'favorites' => array_map(static fn (array $row): array => [

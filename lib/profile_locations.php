@@ -13,6 +13,7 @@ function savora_location_empty(): array
         'state' => '',
         'postalCode' => '',
         'country' => '',
+        'deliveryDetails' => '',
         'latitude' => null,
         'longitude' => null,
         'locationMethod' => 'manual',
@@ -24,7 +25,7 @@ function savora_location_query(string $role): array
 {
     return match ($role) {
         'customer' => [
-            'sql' => 'SELECT address, latitude, longitude, location_method, location_updated_at FROM customer_profiles WHERE user_id=? LIMIT 1',
+            'sql' => 'SELECT address, delivery_details, latitude, longitude, location_method, location_updated_at FROM customer_profiles WHERE user_id=? LIMIT 1',
             'address' => 'address',
             'key' => 'user_id',
         ],
@@ -52,6 +53,7 @@ function savora_location_from_row(array $row): array
     $location['state'] = savora_location_text($row['state'] ?? '', 100);
     $location['postalCode'] = savora_location_text($row['postal_code'] ?? '', 30);
     $location['country'] = savora_location_text($row['country'] ?? '', 100);
+    $location['deliveryDetails'] = savora_location_text($row['delivery_details'] ?? '', 300);
     if ($location['addressLine1'] === '' && $location['address'] !== '') {
         $location['addressLine1'] = $location['address'];
     }
@@ -78,6 +80,16 @@ function savora_location_payload_text(array $payload, string $key, int $limit): 
     return savora_location_text($payload[$key] ?? '', $limit);
 }
 
+function savora_delivery_details(mixed $value): string
+{
+    if (!is_string($value)) throw new InvalidArgumentException('Delivery details must be text.');
+    $value = trim($value);
+    if (function_exists('mb_strlen') ? mb_strlen($value) > 300 : strlen($value) > 300) {
+        throw new InvalidArgumentException('Delivery details must be 300 characters or fewer.');
+    }
+    return $value;
+}
+
 function savora_update_location(mysqli $conn, string $sql, string $types, array $values): void
 {
     $stmt = $conn->prepare($sql);
@@ -90,12 +102,20 @@ function savora_update_location(mysqli $conn, string $sql, string $types, array 
     $stmt->close();
 }
 
-function savora_sync_customer_checkout_gps(mysqli $conn, int $userId, array $resolved, float $latitude, float $longitude): void
+function savora_sync_customer_checkout_location(
+    mysqli $conn,
+    int $userId,
+    array $resolved,
+    ?float $latitude,
+    ?float $longitude,
+    string $deliveryDetails
+): void
 {
     $line1 = savora_location_text($resolved['addressLine1'] ?? $resolved['address'] ?? '', 200);
+    $line2 = savora_location_text($resolved['addressLine2'] ?? '', 200);
     $city = savora_location_text($resolved['city'] ?? '', 100);
     if ($line1 === '') $line1 = savora_location_text($resolved['address'] ?? '', 200);
-    if ($city === '') $city = 'Current location';
+    if ($city === '' && $latitude !== null && $longitude !== null) $city = 'Current location';
 
     $lookup = $conn->prepare('SELECT id FROM customer_addresses WHERE customer_user_id=? ORDER BY is_default DESC,updated_at DESC,id DESC LIMIT 1 FOR UPDATE');
     $lookup->bind_param('i', $userId);
@@ -105,12 +125,21 @@ function savora_sync_customer_checkout_gps(mysqli $conn, int $userId, array $res
 
     if ($existing) {
         $addressId = (int) $existing['id'];
-        $update = $conn->prepare('UPDATE customer_addresses SET address_line1=?,city=?,latitude=?,longitude=?,version=version+1 WHERE id=? AND customer_user_id=?');
-        $update->bind_param('ssddii', $line1, $city, $latitude, $longitude, $addressId, $userId);
+        $update = $latitude !== null && $longitude !== null
+            ? $conn->prepare('UPDATE customer_addresses SET address_line1=?,address_line2=?,city=?,latitude=?,longitude=?,delivery_details=?,version=version+1 WHERE id=? AND customer_user_id=?')
+            : $conn->prepare('UPDATE customer_addresses SET address_line1=?,address_line2=?,city=?,latitude=NULL,longitude=NULL,delivery_details=?,version=version+1 WHERE id=? AND customer_user_id=?');
+        if ($latitude !== null && $longitude !== null) {
+            $update->bind_param('sssddsii', $line1, $line2, $city, $latitude, $longitude, $deliveryDetails, $addressId, $userId);
+        } else {
+            $update->bind_param('ssssii', $line1, $line2, $city, $deliveryDetails, $addressId, $userId);
+        }
         $update->execute();
-        $affected = $update->affected_rows;
+        if ($update->errno !== 0) {
+            $message = $update->error;
+            $update->close();
+            throw new RuntimeException('Customer delivery address could not be synchronized: ' . $message);
+        }
         $update->close();
-        if ($affected !== 1) throw new RuntimeException('Customer delivery address could not be synchronized.');
         return;
     }
 
@@ -125,13 +154,24 @@ function savora_sync_customer_checkout_gps(mysqli $conn, int $userId, array $res
     $label = 'Current location';
     $recipient = savora_location_text($profile['full_name'] ?? '', 120);
     $phone = savora_location_text($profile['phone'] ?? '', 40);
-    $insert = $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,city,latitude,longitude,is_default,version) VALUES(?,?,?,?,?,?,?,?,?,1,1)');
-    $insert->bind_param('issssssdd', $userId, $publicId, $label, $recipient, $phone, $line1, $city, $latitude, $longitude);
+    $insert = $latitude !== null && $longitude !== null
+        ? $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,address_line2,city,latitude,longitude,delivery_details,is_default,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,1)')
+        : $conn->prepare('INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,address_line2,city,latitude,longitude,delivery_details,is_default,version) VALUES(?,?,?,?,?,?,?,?,NULL,NULL,?,1,1)');
+    if ($latitude !== null && $longitude !== null) {
+        $insert->bind_param('isssssssdds', $userId, $publicId, $label, $recipient, $phone, $line1, $line2, $city, $latitude, $longitude, $deliveryDetails);
+    } else {
+        $insert->bind_param('issssssss', $userId, $publicId, $label, $recipient, $phone, $line1, $line2, $city, $deliveryDetails);
+    }
     $insert->execute();
+    if ($insert->errno !== 0) {
+        $message = $insert->error;
+        $insert->close();
+        throw new RuntimeException('Customer delivery address could not be synchronized: ' . $message);
+    }
     $insert->close();
 }
 
-function savora_save_gps_location(mysqli $conn, string $role, int $userId, array $resolved, float $latitude, float $longitude): array
+function savora_save_gps_location(mysqli $conn, string $role, int $userId, array $resolved, float $latitude, float $longitude, string $deliveryDetails = ''): array
 {
     $coordinates = savora_validate_coordinates($latitude, $longitude);
     $address = savora_location_text($resolved['address'] ?? '', 500);
@@ -139,8 +179,9 @@ function savora_save_gps_location(mysqli $conn, string $role, int $userId, array
         throw new InvalidArgumentException('A readable address is required.');
     }
     if ($role === 'customer') {
-        savora_update_location($conn, 'UPDATE customer_profiles SET address=?, latitude=?, longitude=?, location_method=\'gps\', location_updated_at=NOW() WHERE user_id=?', 'sddi', [$address, $coordinates['latitude'], $coordinates['longitude'], $userId]);
-        savora_sync_customer_checkout_gps($conn, $userId, $resolved, $coordinates['latitude'], $coordinates['longitude']);
+        $deliveryDetails = savora_delivery_details($deliveryDetails);
+        savora_update_location($conn, 'UPDATE customer_profiles SET address=?, delivery_details=?, latitude=?, longitude=?, location_method=\'gps\', location_updated_at=NOW() WHERE user_id=?', 'ssddi', [$address, $deliveryDetails, $coordinates['latitude'], $coordinates['longitude'], $userId]);
+        savora_sync_customer_checkout_location($conn, $userId, $resolved, $coordinates['latitude'], $coordinates['longitude'], $deliveryDetails);
     } elseif ($role === 'driver') {
         savora_update_location($conn, 'UPDATE driver_profiles SET address=?, latitude=?, longitude=?, location_method=\'gps\', location_updated_at=NOW() WHERE user_id=?', 'sddi', [$address, $coordinates['latitude'], $coordinates['longitude'], $userId]);
     } elseif ($role === 'restaurant') {
@@ -182,9 +223,13 @@ function savora_save_manual_location(mysqli $conn, string $role, int $userId, ar
         if ($address === '') {
             throw new InvalidArgumentException('Enter an address.');
         }
-        $table = $role === 'customer' ? 'customer_profiles' : 'driver_profiles';
-        $key = $role === 'customer' ? 'user_id' : 'user_id';
-        savora_update_location($conn, "UPDATE {$table} SET address=?, latitude=NULL, longitude=NULL, location_method='manual', location_updated_at=NOW() WHERE {$key}=?", 'si', [$address, $userId]);
+        if ($role === 'customer') {
+            $deliveryDetails = savora_delivery_details($payload['deliveryDetails'] ?? '');
+            savora_update_location($conn, "UPDATE customer_profiles SET address=?, delivery_details=?, latitude=NULL, longitude=NULL, location_method='manual', location_updated_at=NOW() WHERE user_id=?", 'ssi', [$address, $deliveryDetails, $userId]);
+            savora_sync_customer_checkout_location($conn, $userId, ['address' => $address, 'addressLine1' => $address], null, null, $deliveryDetails);
+        } else {
+            savora_update_location($conn, "UPDATE driver_profiles SET address=?, latitude=NULL, longitude=NULL, location_method='manual', location_updated_at=NOW() WHERE user_id=?", 'si', [$address, $userId]);
+        }
     } else {
         throw new InvalidArgumentException('Location is not available for this role.');
     }

@@ -20,6 +20,39 @@
 
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+    <section id="customer-location-dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="customer-location-title" hidden>
+        <div class="dialog-scrim" data-customer-location-close></div>
+        <div class="dialog-panel customer-location-dialog-panel" role="document">
+            <header class="modal-header">
+                <div><p class="eyebrow">Delivery location</p><h2 id="customer-location-title">Where should we deliver?</h2></div>
+                <button class="icon-button" type="button" aria-label="Close delivery location" data-customer-location-close><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <form data-customer-location-form>
+                <div class="customer-location-mode" role="group" aria-label="Address entry mode">
+                    <button class="secondary-action" type="button" data-customer-location-manual>Enter address manually</button>
+                    <button class="secondary-action" type="button" data-customer-use-gps><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>Use current location</button>
+                </div>
+                <label class="form-field" for="customer-location-address">Delivery address
+                    <textarea id="customer-location-address" data-customer-location-input rows="3" maxlength="500" autocomplete="street-address" placeholder="Street, building and area"></textarea>
+                </label>
+                <div class="customer-location-preview" data-customer-location-preview hidden aria-labelledby="customer-location-preview-title">
+                    <p class="eyebrow">Detected address</p>
+                    <p id="customer-location-preview-title" data-customer-location-preview-address></p>
+                    <button class="secondary-action" type="button" data-customer-location-retry>Try GPS again</button>
+                </div>
+                <label class="form-field" for="customer-delivery-details">Delivery details (optional)
+                    <textarea id="customer-delivery-details" data-customer-delivery-details rows="2" maxlength="300" placeholder="Apartment, floor, gate, or landmark"></textarea>
+                </label>
+                <p class="form-help" data-customer-location-status aria-live="polite" aria-atomic="true"></p>
+                <div class="dialog-actions customer-location-actions">
+                    <button class="primary-action" type="submit" data-customer-location-save disabled>Save address</button>
+                    <button class="secondary-action" type="button" data-customer-location-skip>Skip</button>
+                </div>
+                <small class="form-help">Powered by Geoapify for GPS-assisted addresses.</small>
+            </form>
+        </div>
+    </section>
+
     <aside id="cart-overlay" class="dialog drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" hidden>
         <div class="dialog-scrim" data-close-dialog="cart-overlay"></div>
         <div class="dialog-panel cart-drawer" role="document">
@@ -78,6 +111,8 @@
     <script src="js/driver_state.js"></script>
     <script src="js/api_client.js"></script>
     <script src="js/location_client.js"></script>
+    <script src="js/customer_location_state.js"></script>
+    <script src="js/customer_checkout_note.js"></script>
     <script src="js/customer_location.js"></script>
     <script src="js/customer_ui.js"></script>
     <script src="js/notifications.js"></script>

@@ -52,6 +52,21 @@
     return payload.data;
   }
 
+  async function postPublic(url, body) {
+    let response;
+    try {
+      response = await root.fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+    } catch (error) { throw requestError({ status: 0 }, { message: error.message }); }
+    const payload = await decode(response);
+    if (!response.ok || !payload.ok) throw requestError(response, payload);
+    return payload.data;
+  }
+
   function intentKey(scope) {
     const key = `savora_intent_${String(scope || 'default')}`;
     if (root.localStorage) {
@@ -69,5 +84,5 @@
     if (root.localStorage) root.localStorage.removeItem(`savora_intent_${String(scope || 'default')}`);
   }
 
-  return { get, post, intentKey, clearIntentKey };
+  return { get, post, postPublic, intentKey, clearIntentKey };
 }));
