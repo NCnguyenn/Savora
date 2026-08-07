@@ -32,8 +32,10 @@ function payment_confirm_transaction(
     }
     $reference = trim((string) ($event['referenceCode'] ?? ''));
     $provider = trim((string) ($event['transactionId'] ?? ''));
-    $conn->begin_transaction();
+    $transactionStarted = false;
     try {
+        $conn->begin_transaction();
+        $transactionStarted = true;
         if ($idempotency !== null) {
             $stored = savora_idempotency_find(
                 $conn,
@@ -121,10 +123,10 @@ function payment_confirm_transaction(
         $conn->commit();
         return $result;
     } catch (SavoraIdempotencyConflict) {
-        $conn->rollback();
+        if ($transactionStarted) $conn->rollback();
         return payment_confirmation_result(false, 409, 'Idempotency key was already used for a different demo payment request.');
     } catch (Throwable $exception) {
-        $conn->rollback();
+        if ($transactionStarted) $conn->rollback();
         error_log('Payment confirmation failed: ' . $exception->getMessage());
         return payment_confirmation_result(false, 500, 'Payment confirmation could not be completed.');
     }
