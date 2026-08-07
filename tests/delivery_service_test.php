@@ -16,6 +16,7 @@ function delivery_test_expect(bool $condition, string $message): void
 }
 
 $conn = null;
+$failure = null;
 $ids = [];
 $prefix = 'task16-delivery-' . bin2hex(random_bytes(5));
 $uploadRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $prefix;
@@ -31,8 +32,8 @@ try {
     $role = 'driver'; $name = 'Delivery Driver'; $username = $prefix . '-driver'; $user->bind_param('ssss', $username, $password, $role, $name); $user->execute(); $driver = (int) $conn->insert_id; $ids['driver'] = $driver;
     $role = 'driver'; $name = 'Other Driver'; $username = $prefix . '-other'; $user->bind_param('ssss', $username, $password, $role, $name); $user->execute(); $otherDriver = (int) $conn->insert_id; $ids['other'] = $otherDriver; $user->close();
 
-    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,name,address,city,status,accepting_orders,latitude,longitude) VALUES(?,?,?,'Test City','active',1,13.7563000,100.5018000)");
-    $restaurantName = 'Delivery Restaurant'; $address = 'Pickup Street'; $restaurant->bind_param('iss', $owner, $restaurantName, $address); $restaurant->execute(); $restaurantId = (int) $conn->insert_id; $restaurant->close(); $ids['restaurant'] = $restaurantId;
+    $restaurant = $conn->prepare("INSERT INTO restaurants(owner_user_id,public_id,name,address,city,status,accepting_orders,latitude,longitude) VALUES(?,?,?,?, 'Test City','active',1,13.7563000,100.5018000)");
+    $restaurantPublicId = strtolower($prefix); $restaurantName = 'Delivery Restaurant'; $address = 'Pickup Street'; $restaurant->bind_param('isss', $owner, $restaurantPublicId, $restaurantName, $address); $restaurant->execute(); $restaurantId = (int) $conn->insert_id; $restaurant->close(); $ids['restaurant'] = $restaurantId;
     $profile = $conn->prepare("INSERT INTO driver_profiles(user_id,city,eligibility_status,availability_status,rating,version) VALUES(?, 'Test City','eligible','online',4.5,1)");
     $profile->bind_param('i', $driver); $profile->execute(); $profile->close();
     $profile = $conn->prepare("INSERT INTO driver_profiles(user_id,city,eligibility_status,availability_status,rating,version) VALUES(?, 'Test City','eligible','offline',4.5,1)");
@@ -78,14 +79,12 @@ try {
     $completed = delivery_record_completion($conn, $driver, $deliveryId, 3, $prefix . '-complete', [(int) $storedEvidence['evidenceId']]);
     delivery_test_expect(($completed['ok'] ?? false) === true && ($completed['data']['status'] ?? '') === 'delivered', 'Picked-up cash delivery should complete with proof.');
     $paymentStatus = (string) ($conn->query("SELECT status FROM payments WHERE order_id={$orderId}")->fetch_assoc()['status'] ?? '');
-    delivery_test_expect($paymentStatus === 'paid', 'Cash completion should mark payment collected.');
+    delivery_test_expect($paymentStatus === 'pending', 'Driver delivery must leave cash payment pending for Customer receipt confirmation.');
     $milestones = (int) ($conn->query("SELECT COUNT(*) AS total FROM delivery_milestones WHERE delivery_id={$deliveryId}")->fetch_assoc()['total'] ?? 0);
     delivery_test_expect($milestones === 3, 'Three delivery milestones should retain server timestamps.');
 
-    echo "PASS: authoritative delivery location, milestones, and proof metadata hold\n";
 } catch (Throwable $exception) {
-    fwrite(STDERR, $exception->getMessage() . "\n");
-    exit(1);
+    $failure = $exception;
 } finally {
     if ($conn instanceof mysqli) {
         $pattern = $prefix . '%';
@@ -112,3 +111,9 @@ try {
     if (getenv('SAVORA_UPLOAD_ROOT') === $uploadRoot) putenv('SAVORA_UPLOAD_ROOT');
     if (is_dir($uploadRoot)) { $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadRoot, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach ($iterator as $item) $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname()); rmdir($uploadRoot); }
 }
+
+if ($failure instanceof Throwable) {
+    fwrite(STDERR, $failure->getMessage() . "\n");
+    exit(1);
+}
+echo "PASS: authoritative delivery location, milestones, and proof metadata hold\n";
