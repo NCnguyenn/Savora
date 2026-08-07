@@ -129,7 +129,7 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
 
 function order_repository_count(mysqli $conn, string $where, string $types = '', array $params = []): int
 {
-    $rows = order_repository_rows($conn, 'SELECT COUNT(*) AS total FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN deliveries d ON d.order_id=o.id WHERE ' . $where, $types, $params);
+    $rows = order_repository_rows($conn, 'SELECT COUNT(*) AS total FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN deliveries d ON d.order_id=o.id WHERE ' . $where, $types, $params);
     return (int) ($rows[0]['total'] ?? 0);
 }
 
@@ -259,7 +259,7 @@ function order_repository_scoped(mysqli $conn, string $scope, int $userId, array
     if ($scope === 'customer') {
         $where .= ' AND o.customer_user_id=?'; $types .= 'i'; $params[] = $userId;
     } elseif ($scope === 'restaurant') {
-        $where .= ' AND r.owner_user_id=?'; $types .= 'i'; $params[] = $userId;
+        $where .= " AND r.owner_user_id=? AND (o.payment_method='cash' OR p.status='paid')"; $types .= 'i'; $params[] = $userId;
     } elseif ($scope === 'driver') {
         $where .= ' AND d.driver_user_id=?'; $types .= 'i'; $params[] = $userId;
     }
@@ -302,8 +302,9 @@ function order_repository_admin(mysqli $conn, int $orderId): array
 function order_repository_transition_target(mysqli $conn, string $referenceCode, bool $forUpdate = false): array
 {
     $sql = 'SELECT o.id,o.reference_code,o.customer_user_id,o.restaurant_id,o.status,o.payment_method,o.version,
-                   r.owner_user_id,d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.version AS delivery_version
+                   p.status AS payment_status,r.owner_user_id,d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.version AS delivery_version
             FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+            JOIN payments p ON p.order_id=o.id
             LEFT JOIN deliveries d ON d.order_id=o.id
             WHERE o.reference_code=? LIMIT 1';
     if ($forUpdate) $sql .= ' FOR UPDATE';

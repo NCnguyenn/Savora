@@ -286,6 +286,13 @@ test('checkout delegates acceptance and placement to the server safely', () => {
   assert.doesNotMatch(checkout, /\balert\s*\(/);
 });
 
+test('SeaPay checkout exposes only the safe local demo control and no committed bank identity', () => {
+  const seapay = read('seapay_checkout.php');
+
+  assert.match(seapay, /data-demo-seapay-confirm/);
+  assert.doesNotMatch(seapay, /0366564953|NGUYEN CHI NGUYEN/);
+});
+
 test('checkout submits delivery notes and order views render them as text context', () => {
   const state = read('js/customer_state.js');
   const checkout = read('customer_checkout.php');

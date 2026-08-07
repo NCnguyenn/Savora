@@ -42,6 +42,9 @@ function order_transition(mysqli $conn, array $actor, string $referenceCode, str
         if ($role === 'restaurant' && (int) $order['owner_user_id'] !== $actorId) {
             return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 403, 'This Restaurant cannot change the order.'));
         }
+        if ($role === 'restaurant' && (string) $order['payment_method'] !== 'cash' && (string) ($order['payment_status'] ?? 'pending') !== 'paid') {
+            return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 409, 'Online payment must be confirmed before the Restaurant can process this order.'));
+        }
         if ($role === 'driver' && ((int) ($order['driver_user_id'] ?? 0) !== $actorId || $order['delivery_id'] === null)) {
             return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 403, 'This Driver is not assigned to the order.'));
         }
