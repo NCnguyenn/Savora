@@ -75,10 +75,18 @@ test('customer GPS confirmation migration is registered after the customer store
   assert.match(registry, /database\/migrations\/019_customer_gps_confirmation\.php/);
 });
 
-test('SeaPay webhook hardening migration is registered last', () => {
+test('SeaPay webhook hardening migration follows GPS confirmation', () => {
   const registry = fs.readFileSync('lib/migrations.php', 'utf8');
   const gpsConfirmation = registry.indexOf("'019_customer_gps_confirmation'");
   const sepay = registry.indexOf("'020_sepay_webhook_hardening'");
   assert.ok(sepay > gpsConfirmation, 'SeaPay hardening must follow the existing migrations');
   assert.match(registry, /database\/migrations\/020_sepay_webhook_hardening\.php/);
+});
+
+test('hybrid payment GPS migration follows SeaPay hardening', () => {
+  const registry = fs.readFileSync('lib/migrations.php', 'utf8');
+  const sepay = registry.indexOf("'020_sepay_webhook_hardening'");
+  const hybrid = registry.indexOf("'021_hybrid_payment_gps_demo'");
+  assert.ok(hybrid > sepay);
+  assert.match(registry, /database\/migrations\/021_hybrid_payment_gps_demo\.php/);
 });

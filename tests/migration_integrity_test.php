@@ -107,13 +107,18 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations', '017_rich_catalog', '018_customer_storefront', '019_customer_gps_confirmation', '020_sepay_webhook_hardening'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations', '017_rich_catalog', '018_customer_storefront', '019_customer_gps_confirmation', '020_sepay_webhook_hardening', '021_hybrid_payment_gps_demo'], 'Migration registry order is incorrect.');
 
+$conn->query('DROP TABLE IF EXISTS delivery_demo_routes');
 $deleteMigration = $conn->prepare('DELETE FROM schema_migrations WHERE version=?');
 foreach ($versions as $version) { $deleteMigration->bind_param('s', $version); $deleteMigration->execute(); }
 $deleteMigration->close();
 migration_expect(savora_apply_migrations($conn) === $versions, 'Both migrations must apply in registry order.');
 migration_expect(savora_apply_migrations($conn) === [], 'A second migration pass must be a no-op.');
+$routeTable = $conn->query("SELECT COUNT(*) AS total FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='delivery_demo_routes'")->fetch_assoc();
+migration_expect((int) $routeTable['total'] === 1, 'Demo route table must exist.');
+$deliveryIndex = $conn->query("SELECT NON_UNIQUE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='delivery_demo_routes' AND INDEX_NAME='uq_demo_route_delivery'")->fetch_assoc();
+migration_expect($deliveryIndex !== null && (int) $deliveryIndex['NON_UNIQUE'] === 0, 'Each delivery must have at most one demo route.');
 migration_expect(
     migration_column($conn, 'idempotency_keys', 'request_hash') === ['COLUMN_TYPE' => 'char(64)', 'IS_NULLABLE' => 'NO'],
     'Idempotency request hashes must be stored as non-null SHA-256 values.'

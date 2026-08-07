@@ -25,6 +25,7 @@ function savora_migrations(): array
         '018_customer_storefront' => __DIR__ . '/../database/migrations/018_customer_storefront.php',
         '019_customer_gps_confirmation' => __DIR__ . '/../database/migrations/019_customer_gps_confirmation.php',
         '020_sepay_webhook_hardening' => __DIR__ . '/../database/migrations/020_sepay_webhook_hardening.php',
+        '021_hybrid_payment_gps_demo' => __DIR__ . '/../database/migrations/021_hybrid_payment_gps_demo.php',
     ];
 }
 
