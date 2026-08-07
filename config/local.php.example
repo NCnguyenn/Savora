@@ -1,0 +1,7 @@
+<?php
+declare(strict_types=1);
+
+return [
+    'GEOAPIFY_API_KEY' => 'PASTE_YOUR_GEOAPIFY_API_KEY_HERE',
+    'SEPAY_WEBHOOK_API_KEY' => 'PASTE_YOUR_SEPAY_WEBHOOK_API_KEY_HERE',
+];

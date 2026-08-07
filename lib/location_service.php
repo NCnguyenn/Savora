@@ -96,10 +96,29 @@ function savora_geoapify_transport(string $url, array $options): array
     return ['status' => $status, 'body' => (string) $body];
 }
 
+function savora_geoapify_api_key(?string $localPath = null): string
+{
+    $environmentKey = trim((string) getenv('GEOAPIFY_API_KEY'));
+    if ($environmentKey !== '' && !preg_match('/^(PASTE_YOUR_|YOUR_API_KEY|<.*>)/i', $environmentKey)) {
+        return $environmentKey;
+    }
+
+    $localPath ??= __DIR__ . '/../config/local.php';
+    if (!is_file($localPath)) return '';
+    try {
+        $local = require $localPath;
+    } catch (Throwable) {
+        return '';
+    }
+    if (!is_array($local)) return '';
+    $key = trim((string) ($local['GEOAPIFY_API_KEY'] ?? ''));
+    return preg_match('/^(PASTE_YOUR_|YOUR_API_KEY|<.*>)/i', $key) ? '' : $key;
+}
+
 function savora_reverse_geocode(float $latitude, float $longitude, ?callable $transport = null): array
 {
     $coordinates = savora_validate_coordinates($latitude, $longitude);
-    $key = trim((string) getenv('GEOAPIFY_API_KEY'));
+    $key = savora_geoapify_api_key();
     if ($key === '') {
         throw new RuntimeException('Automatic address lookup is not configured.');
     }

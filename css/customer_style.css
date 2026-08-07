@@ -423,9 +423,15 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .order-status-chip { display: inline-flex; align-items: center; gap: .35rem; width: max-content; padding: .3rem .6rem; border-radius: 999px; color: var(--savora-forest); background: var(--savora-sage); font-size: .75rem; font-weight: 900; }
 .order-status-chip.is-cancelled { color: #9b3327; background: #fce4de; }
 .order-status-chip.is-on_the_way { color: #225875; background: #e1eff6; }
-.order-card-actions { grid-column: 2 / -1; display: flex; justify-content: flex-end; padding-top: .8rem; border-top: 1px solid var(--savora-line); }
+.order-card-actions { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .75rem; padding-top: .8rem; border-top: 1px solid var(--savora-line); }
 .order-reorder-button { min-height: 2.4rem; padding: .45rem .8rem; }
 .order-reorder-button:disabled { opacity: .5; cursor: not-allowed; }
+.order-review-form { display: grid; grid-template-columns: auto minmax(11rem, 1fr) auto; flex: 1 1 36rem; align-items: center; gap: .5rem; width: min(100%, 44rem); min-width: 0; }
+.order-review-form select, .order-review-form textarea { min-width: 0; border: 1px solid var(--savora-line); border-radius: .7rem; color: var(--savora-ink); background: #fff; }
+.order-review-form select { min-height: 2.75rem; padding: .55rem .7rem; }
+.order-review-form textarea { min-height: 2.75rem; padding: .55rem .7rem; resize: vertical; }
+.order-review-form .secondary-action { white-space: nowrap; }
+.order-review-form .form-help { grid-column: 1 / -1; margin: 0; }
 .active-order-panel { position: sticky; top: 6rem; padding: 1.25rem; }
 .active-order-panel .section-heading-row > i { color: var(--savora-forest); font-size: 1.2rem; }
 .active-order-summary > h3 { margin: .9rem 0 .35rem; overflow-wrap: anywhere; }
@@ -555,8 +561,11 @@ h3 { font-size: 1rem; line-height: 1.35; }
   .order-card { grid-template-columns: 4.75rem minmax(0, 1fr); gap: .75rem; padding: .8rem; }
   .order-card-image { width: 4.75rem; height: 4.75rem; grid-row: auto; }
   .order-card-total { grid-column: 1 / -1; align-items: center; flex-direction: row; justify-content: space-between; }
-  .order-card-actions { grid-column: 1 / -1; }
+  .order-card-actions { grid-column: 1 / -1; align-items: stretch; }
   .order-reorder-button { width: 100%; }
+  .order-review-form { grid-template-columns: 1fr; width: 100%; max-width: none; }
+  .order-review-form select, .order-review-form textarea, .order-review-form .secondary-action { width: 100%; }
+  .order-review-form .form-help { grid-column: auto; }
   .order-item-summary { white-space: normal; }
   .order-progress small { display: none; }
   .favorite-tabs { width: 100%; }

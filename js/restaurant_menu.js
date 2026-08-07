@@ -6,9 +6,17 @@
   'use strict';
 
   const PLACEHOLDER_IMAGE = 'assets/images/food-placeholder.svg';
+  const imagePath = value => typeof value === 'string'
+    && /^assets\/images\/catalog\/[a-z0-9][a-z0-9-]*\.(?:jpg|jpeg|png|webp)$/.test(value)
+    ? value
+    : PLACEHOLDER_IMAGE;
   const text = value => typeof value === 'string' ? value.trim().slice(0, 500) : '';
   const money = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   const bool = value => value === true || value === 'true' || value === 'on' || value === '1';
+  const list = value => Array.isArray(value) ? value.map(text).filter(Boolean).slice(0, 12) : [];
+  const prepTime = value => Number.isFinite(Number(value)) && Number(value) > 0
+    ? `${Math.round(Number(value))} min`
+    : 'Prepared to order';
   const safeOptions = value => Array.isArray(value) ? value.map(option => {
     const label = text(option && option.label);
     return label ? { publicId: text(option.publicId), label, price: money(option.price), available: option.available !== false, sortOrder: Number.isInteger(Number(option.sortOrder)) ? Number(option.sortOrder) : 0 } : null;
@@ -56,10 +64,21 @@
   const get = selector => documentRef && documentRef.querySelector(selector);
   const getAll = selector => documentRef ? [...documentRef.querySelectorAll(selector)] : [];
   const el = (tag, attributes, content) => ui().el(tag, attributes, content);
-  const serverItem = item => ({
-    id: String(item.publicId || ''), name: text(item.name), price: money(item.basePrice), available: item.available !== false,
-    version: Number(item.version || 0), category: text(snapshot.restaurant && snapshot.restaurant.cuisine) || 'Menu', optionGroups: Array.isArray(item.optionGroups) ? item.optionGroups : []
-  });
+  const mapServerItem = (item, restaurant = {}) => {
+    const prepTimeMinutes = Number.isFinite(Number(item && item.prepTimeMinutes)) && Number(item.prepTimeMinutes) > 0
+      ? Math.round(Number(item.prepTimeMinutes))
+      : null;
+    return {
+      id: String(item && item.publicId || ''), name: text(item && item.name), price: money(item && item.basePrice), available: item && item.available !== false,
+      version: Number(item && item.version || 0), description: text(item && item.description), image: imagePath(item && item.imagePath),
+      category: text(item && item.category) || text(restaurant && restaurant.cuisine) || 'Menu',
+      itemType: item && item.itemType === 'drink' ? 'drink' : 'food', prepTimeMinutes, prepTime: prepTime(prepTimeMinutes),
+      calories: Number.isFinite(Number(item && item.calories)) ? Number(item.calories) : 0,
+      dietaryTags: list(item && item.dietaryTags), allergens: list(item && item.allergens), ingredients: list(item && item.ingredients),
+      optionGroups: Array.isArray(item && item.optionGroups) ? item.optionGroups : []
+    };
+  };
+  const serverItem = item => mapServerItem(item, snapshot.restaurant);
   function editorGroupsFromServer(groups) {
     return safeGroups((Array.isArray(groups) ? groups : []).map(group => ({
       name: group.name,
@@ -93,10 +112,12 @@
     if (!list || !ui()) return;
     const items = filteredItems();
     list.replaceChildren(...(items.length ? items.map(item => el('article', { className: 'restaurant-menu-card' }, [
-      el('img', { src: PLACEHOLDER_IMAGE, alt: item.name || 'Menu item', className: 'restaurant-menu-image' }),
+      el('img', { src: item.image, alt: item.name || 'Menu item', className: 'restaurant-menu-image' }),
       el('div', { className: 'restaurant-menu-card-content' }, [
-        el('p', { className: 'restaurant-menu-category' }, item.category), el('h2', {}, item.name || 'Untitled menu item'),
+        el('p', { className: 'restaurant-menu-category' }, `${item.category} · ${item.itemType === 'drink' ? 'Drink' : 'Food'}`), el('h2', {}, item.name || 'Untitled menu item'),
+        el('p', { className: 'restaurant-menu-description' }, item.description || 'Prepared fresh to order.'),
         el('p', { className: 'restaurant-menu-price' }, ui().formatMoney(item.price)),
+        el('p', { className: 'restaurant-menu-stock' }, `${item.prepTime}${item.calories ? ` · ${item.calories} cal` : ''}`),
         el('div', { className: 'restaurant-menu-card-actions' }, [
           el('button', { type: 'button', className: 'restaurant-availability-toggle', 'data-menu-availability-toggle': item.id, 'data-menu-version': String(item.version), 'aria-pressed': String(item.available) }, item.available ? 'Available' : 'Unavailable'),
           el('a', { href: `restaurant_menu_item.php?id=${encodeURIComponent(item.id)}` }, 'Edit item')
@@ -169,5 +190,5 @@
     });
   }
   if (root && documentRef) { const initialize = () => { bindMenu(); bindEditor(); }; if (documentRef.readyState === 'loading') documentRef.addEventListener('DOMContentLoaded', initialize, { once: true }); else initialize(); }
-  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, clearValidationState, editorFieldName, ensureDraftId, validateMenuItem, validateMenuItemForStatus, menuItemFromDraft, editorGroupsFromServer, editorDataFromServer, serverPayload, loadSnapshot, renderMenu };
+  return { PLACEHOLDER_IMAGE, appendAddOn, appendOptionGroup, clearValidationState, editorFieldName, ensureDraftId, validateMenuItem, validateMenuItemForStatus, menuItemFromDraft, mapServerItem, editorGroupsFromServer, editorDataFromServer, serverPayload, loadSnapshot, renderMenu };
 }));

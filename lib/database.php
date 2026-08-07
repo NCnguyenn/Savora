@@ -9,8 +9,8 @@ function savora_database_config(): array
         throw new RuntimeException('Invalid database name.');
     }
     $config = [
-        'host' => (string) (getenv('SAVORA_DB_HOST') ?: '127.0.0.1'),
-        'port' => (int) (getenv('SAVORA_DB_PORT') ?: 3306),
+        'host' => 'localhost',
+        'port' => (int) (getenv('SAVORA_DB_PORT') ?: 3307),
         'user' => (string) (getenv('SAVORA_DB_USER') ?: 'root'),
         'password' => (string) (getenv('SAVORA_DB_PASSWORD') ?: ''),
         'name' => $name,

@@ -389,6 +389,17 @@ test('orders render server-hydrated status-aware history and exact configuration
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.orders-layout\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
+test('completed order review controls have a responsive layout contract', () => {
+  const history = read('customer_history.php');
+  const css = read('css/customer_style.css');
+
+  assert.match(history, /className:\s*'order-review-form'/);
+  assert.match(css, /\.order-card-actions\s*\{[^}]*flex-wrap:\s*wrap;/);
+  assert.match(css, /\.order-review-form\s*\{[^}]*display:\s*grid;/);
+  assert.match(css, /\.order-review-form\s*\{[^}]*grid-template-columns:\s*auto\s+minmax\(11rem,\s*1fr\)\s+auto;/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.order-review-form\s*\{[^}]*grid-template-columns:\s*1fr;/);
+});
+
 test('Customer order history opens a selected Restaurant follow-up record without reordering it', () => {
   const history = read('customer_history.php');
 

@@ -3,3 +3,6 @@
 .DS_Store
 Thumbs.db
 *.log
+/config/local.php
+/.sessions/
+/seapay_webhook_log.txt

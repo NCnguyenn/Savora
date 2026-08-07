@@ -34,6 +34,21 @@ $normalized = savora_normalize_geoapify(['features' => [['properties' => [
 location_test_assert($normalized['addressLine1'] === '12 Đường Lê Lợi', 'street normalized');
 location_test_assert($normalized['city'] === 'Hồ Chí Minh', 'city normalized');
 
+$tempConfig = tempnam(sys_get_temp_dir(), 'savora-location-config-');
+if ($tempConfig === false) throw new RuntimeException('unable to create temporary location config');
+$missingConfig = $tempConfig . '-missing';
+file_put_contents($tempConfig, "<?php return ['GEOAPIFY_API_KEY' => 'local-key'];");
+try {
+    putenv('GEOAPIFY_API_KEY=environment-key');
+    location_test_assert(savora_geoapify_api_key($tempConfig) === 'environment-key', 'environment key wins');
+    putenv('GEOAPIFY_API_KEY=');
+    location_test_assert(savora_geoapify_api_key($tempConfig) === 'local-key', 'local key is used as fallback');
+    location_test_assert(savora_geoapify_api_key($missingConfig) === '', 'missing key is empty');
+} finally {
+    @unlink($tempConfig);
+    putenv('GEOAPIFY_API_KEY=');
+}
+
 putenv('GEOAPIFY_API_KEY=test-secret-key');
 $transport = static function (string $url, array $options): array {
     location_test_assert(str_contains($url, 'lang=vi'), 'Vietnamese requested');

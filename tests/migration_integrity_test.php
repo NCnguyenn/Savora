@@ -107,7 +107,7 @@ require_once __DIR__ . '/../lib/migrations.php';
 migration_expect(savora_test_selected_database($conn) === 'savora_test', 'Integration fixtures require a live savora_test connection.');
 
 $versions = array_keys(savora_migrations());
-migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations', '017_rich_catalog', '018_customer_storefront', '019_customer_gps_confirmation'], 'Migration registry order is incorrect.');
+migration_expect($versions === ['001_existing_schema', '002_core_integrity', '003_idempotency_request_hash', '004_catalog_contract', '004a_profiles_reviews', '005_checkout_quotes', '006_dispatch_location', '007_delivery_evidence', '008_driver_profile_authority', '009_delivery_reassignment', '010_notification_outbox', '011_notification_version', '012_commercial_rule_versions', '013_rate_limits', '014_partner_document_storage', '015_auth_onboarding', '016_profile_locations', '017_rich_catalog', '018_customer_storefront', '019_customer_gps_confirmation', '020_sepay_webhook_hardening'], 'Migration registry order is incorrect.');
 
 $deleteMigration = $conn->prepare('DELETE FROM schema_migrations WHERE version=?');
 foreach ($versions as $version) { $deleteMigration->bind_param('s', $version); $deleteMigration->execute(); }

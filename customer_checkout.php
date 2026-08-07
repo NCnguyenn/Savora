@@ -17,7 +17,7 @@
                 </section>
                 <section class="surface-card checkout-section" aria-labelledby="payment-heading">
                     <div class="checkout-section-heading"><span aria-hidden="true"><i class="fa-solid fa-credit-card"></i></span><div><h2 id="payment-heading">Payment method</h2><p>Wallet debits are server-atomic; cash remains pending until collected.</p></div></div>
-                    <fieldset class="payment-options"><legend class="sr-only">Payment method</legend><div class="payment-option"><input id="pay_savora" type="radio" name="payment" value="wallet" checked><label for="pay_savora"><span class="payment-icon" aria-hidden="true"><i class="fa-solid fa-wallet"></i></span><span><strong>Savora Pay</strong><small id="checkout-wallet-balance">Balance: unavailable</small></span></label></div><div class="payment-option"><input id="pay_cash" type="radio" name="payment" value="cash"><label for="pay_cash"><span class="payment-icon" aria-hidden="true"><i class="fa-solid fa-money-bill-wave"></i></span><span><strong>Cash on delivery</strong><small>Payment remains pending on the server</small></span></label></div></fieldset>
+                    <fieldset class="payment-options"><legend class="sr-only">Payment method</legend><div class="payment-option"><input id="pay_savora" type="radio" name="payment" value="wallet" checked><label for="pay_savora"><span class="payment-icon" aria-hidden="true"><i class="fa-solid fa-wallet"></i></span><span><strong>Savora Pay</strong><small id="checkout-wallet-balance">Balance: unavailable</small></span></label></div><div class="payment-option"><input id="pay_seapay" type="radio" name="payment" value="seapay"><label for="pay_seapay"><span class="payment-icon" aria-hidden="true"><i class="fa-solid fa-qrcode"></i></span><span><strong>SePay Gateway</strong><small>Pay securely via bank transfer</small></span></label></div><div class="payment-option"><input id="pay_cash" type="radio" name="payment" value="cash"><label for="pay_cash"><span class="payment-icon" aria-hidden="true"><i class="fa-solid fa-money-bill-wave"></i></span><span><strong>Cash on delivery</strong><small>Payment remains pending on the server</small></span></label></div></fieldset>
                 </section>
                 <section class="surface-card checkout-section checkout-promo-section" aria-labelledby="checkout-promo-heading"><div><h2 id="checkout-promo-heading">Promotion code</h2><p>The server validates eligibility and calculates any discount.</p></div><label for="checkout-promo">Promo code</label><div class="promo-control"><span aria-hidden="true"><i class="fa-solid fa-tag"></i></span><input id="checkout-promo" name="promo" type="text" autocomplete="off" maxlength="50" placeholder="Optional code"><button id="checkout-apply-promo" class="secondary-action" type="button">Apply</button></div><p id="checkout-promo-status" class="form-help" aria-live="polite">No promotion code applied.</p></section>
                 <div class="secure-payment-note"><span aria-hidden="true"><i class="fa-solid fa-shield-halved"></i></span><div><strong>Server-authoritative checkout</strong><p>Only the returned server quote can be submitted.</p></div></div>
@@ -95,11 +95,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const payment = document.querySelector('input[name="payment"]:checked');
             const result = await SavoraApi.post('api/checkout.php', { action: 'place_order', payload: { quoteId: quote.quoteId, paymentMethod: payment ? payment.value : 'cash', deliveryNote: note.value.trim() } }, SavoraApi.intentKey('customer-place-order'));
             stateApi.persist({ cart: [] }); SavoraApi.clearIntentKey('customer-place-order');
-            document.getElementById('checkout-success').hidden = false; ui.showToast(`Order ${result.referenceCode} placed.`); window.setTimeout(() => window.location.assign('customer_history.php'), 850);
+            document.getElementById('checkout-success').hidden = false;
+            if (payment && payment.value === 'seapay') {
+                document.getElementById('checkout-success').querySelector('p').textContent = 'Redirecting to SePay payment gateway...';
+                window.setTimeout(() => window.location.assign('seapay_checkout.php?order=' + result.referenceCode), 850);
+            } else {
+                ui.showToast(`Order ${result.referenceCode} placed.`); window.setTimeout(() => window.location.assign('customer_history.php'), 850);
+            }
         } catch (error) { setBusy(false); feedback.textContent = error.message || 'Order was not placed.'; }
     });
     cancel.addEventListener('click', () => { if (submitting) return; SavoraApi.clearIntentKey('customer-checkout-quote'); SavoraApi.clearIntentKey('customer-place-order'); window.location.assign('customer_cart.php'); });
 });
 </script>
-
 <?php include 'components/customer_footer.php'; ?>
