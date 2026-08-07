@@ -37,3 +37,54 @@ function payment_repository_debit_wallet(mysqli $conn, int $customerUserId, floa
     $debit->close();
     return $affected;
 }
+
+function payment_repository_target_by_reference(
+    mysqli $conn,
+    string $referenceCode,
+    ?int $customerUserId = null,
+    bool $forUpdate = false
+): array {
+    $sql = "SELECT p.id AS payment_id,p.order_id,p.method,p.amount,p.status,p.provider_reference,p.version,
+                   o.reference_code,o.customer_user_id
+            FROM payments p JOIN orders o ON o.id=p.order_id
+            WHERE o.reference_code=?";
+    if ($customerUserId !== null) $sql .= ' AND o.customer_user_id=?';
+    $sql .= ' LIMIT 1';
+    if ($forUpdate) $sql .= ' FOR UPDATE';
+
+    $statement = $conn->prepare($sql);
+    if ($customerUserId === null) {
+        $statement->bind_param('s', $referenceCode);
+    } else {
+        $statement->bind_param('si', $referenceCode, $customerUserId);
+    }
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc();
+    $statement->close();
+    return is_array($row) ? $row : [];
+}
+
+function payment_repository_by_provider_reference(mysqli $conn, string $providerReference, bool $forUpdate = false): array
+{
+    $sql = "SELECT p.id AS payment_id,p.order_id,p.method,p.amount,p.status,p.provider_reference,p.version,
+                   o.reference_code,o.customer_user_id
+            FROM payments p JOIN orders o ON o.id=p.order_id
+            WHERE p.provider_reference=? LIMIT 1";
+    if ($forUpdate) $sql .= ' FOR UPDATE';
+    $statement = $conn->prepare($sql);
+    $statement->bind_param('s', $providerReference);
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc();
+    $statement->close();
+    return is_array($row) ? $row : [];
+}
+
+function payment_repository_mark_paid(mysqli $conn, int $paymentId, int $expectedVersion, string $providerReference): bool
+{
+    $statement = $conn->prepare("UPDATE payments SET status='paid',provider_reference=?,paid_at=NOW(),version=version+1 WHERE id=? AND version=? AND status='pending' AND (provider_reference IS NULL OR provider_reference='')");
+    $statement->bind_param('sii', $providerReference, $paymentId, $expectedVersion);
+    $statement->execute();
+    $ok = $statement->affected_rows === 1;
+    $statement->close();
+    return $ok;
+}

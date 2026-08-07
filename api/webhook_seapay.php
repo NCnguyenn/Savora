@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../lib/services/sepay_webhook_service.php';
+require_once __DIR__ . '/../lib/services/payment_confirmation_service.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -33,60 +33,11 @@ try {
     sepay_webhook_reply(400, ['success' => false, 'message' => 'Invalid webhook payload.']);
 }
 
-if ($event['state'] === 'ignored') {
-    sepay_webhook_reply(200, ['success' => true, 'message' => 'Webhook ignored.']);
+$response = payment_confirm_incoming($conn, $event, 'seapay');
+$serviceStatus = (int) ($response['status'] ?? 500);
+if ($serviceStatus >= 500) {
+    sepay_webhook_reply(500, ['success' => false, 'message' => 'Payment confirmation could not be completed.']);
 }
-
-$conn->begin_transaction();
-try {
-    $referenceCode = (string) $event['referenceCode'];
-    $transactionId = (string) $event['transactionId'];
-    $lookup = $conn->prepare(
-        "SELECT o.id AS order_id, p.id AS payment_id, p.method, p.amount, p.status, p.provider_reference
-         FROM orders o JOIN payments p ON p.order_id=o.id
-         WHERE o.reference_code=? LIMIT 1 FOR UPDATE"
-    );
-    $lookup->bind_param('s', $referenceCode);
-    $lookup->execute();
-    $payment = $lookup->get_result()->fetch_assoc();
-    $lookup->close();
-
-    if ($payment === null || (string) $payment['method'] !== 'seapay') {
-        $conn->commit();
-        sepay_webhook_reply(200, ['success' => true, 'message' => 'Webhook ignored.']);
-    }
-
-    $seen = $conn->prepare('SELECT order_id FROM payments WHERE provider_reference=? LIMIT 1 FOR UPDATE');
-    $seen->bind_param('s', $transactionId);
-    $seen->execute();
-    $seenPayment = $seen->get_result()->fetch_assoc();
-    $seen->close();
-    if ($seenPayment !== null) {
-        $conn->commit();
-        sepay_webhook_reply(200, ['success' => true, 'message' => ((int) $seenPayment['order_id'] === (int) $payment['order_id']) ? 'Webhook already processed.' : 'Webhook ignored.']);
-    }
-
-    if ((string) $payment['status'] !== 'pending') {
-        $conn->commit();
-        sepay_webhook_reply(200, ['success' => true, 'message' => 'Payment is not awaiting SeaPay confirmation.']);
-    }
-    if (!sepay_webhook_amount_matches((int) $event['amountCents'], $payment['amount'])) {
-        $conn->commit();
-        sepay_webhook_reply(200, ['success' => true, 'message' => 'Payment amount does not match.']);
-    }
-
-    $paymentId = (int) $payment['payment_id'];
-    $update = $conn->prepare(
-        "UPDATE payments SET status='paid', provider_reference=?, paid_at=NOW(), version=version+1
-         WHERE id=? AND status='pending' AND (provider_reference IS NULL OR provider_reference='')"
-    );
-    $update->bind_param('si', $transactionId, $paymentId);
-    $update->execute();
-    if ($update->affected_rows !== 1) throw new RuntimeException('Payment confirmation was not applied.');
-    $update->close();
-    $conn->commit();
-    sepay_webhook_reply(200, ['success' => true, 'message' => 'Payment confirmed.']);
-} catch (Throwable) {
-    $conn->rollback();
-    sepay_webhook_reply(500, ['success' => false, 'message' => 'Webhook could not be processed.']);
-}
+// Acknowledge valid, parsed provider events even when Savora safely ignores or
+// rejects the business match, so SeaPay does not retry an unprocessable event.
+sepay_webhook_reply(200, ['success' => true, 'message' => (string) ($response['message'] ?? 'Payment event acknowledged.')]);

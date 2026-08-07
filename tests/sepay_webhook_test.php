@@ -46,6 +46,10 @@ sepay_test_expect(
     !sepay_webhook_amount_matches(12549, '125.50'),
     'An underpayment should be rejected.'
 );
+sepay_test_expect(
+    !sepay_webhook_amount_matches(12550, 'not-a-money-value'),
+    'A malformed stored payment amount must be rejected safely.'
+);
 
 $missingIdRejected = false;
 try {
