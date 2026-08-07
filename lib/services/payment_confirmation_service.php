@@ -20,6 +20,15 @@ function payment_confirmation_data(string $referenceCode, string $paymentStatus)
     return ['referenceCode' => $referenceCode, 'paymentStatus' => $paymentStatus];
 }
 
+function payment_confirmation_rollback_safely(mysqli $conn): void
+{
+    try {
+        $conn->rollback();
+    } catch (Throwable $exception) {
+        error_log('Payment rollback failed: ' . $exception->getMessage());
+    }
+}
+
 function payment_confirm_transaction(
     mysqli $conn,
     array $event,
@@ -123,10 +132,10 @@ function payment_confirm_transaction(
         $conn->commit();
         return $result;
     } catch (SavoraIdempotencyConflict) {
-        if ($transactionStarted) $conn->rollback();
+        if ($transactionStarted) payment_confirmation_rollback_safely($conn);
         return payment_confirmation_result(false, 409, 'Idempotency key was already used for a different demo payment request.');
     } catch (Throwable $exception) {
-        if ($transactionStarted) $conn->rollback();
+        if ($transactionStarted) payment_confirmation_rollback_safely($conn);
         error_log('Payment confirmation failed: ' . $exception->getMessage());
         return payment_confirmation_result(false, 500, 'Payment confirmation could not be completed.');
     }
