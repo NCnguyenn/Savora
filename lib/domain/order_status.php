@@ -1,15 +1,21 @@
 <?php
 declare(strict_types=1);
 
-const SAVORA_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered', 'cancelled', 'refunded'];
+const SAVORA_ORDER_STATUSES = [
+    'pending', 'confirmed', 'preparing', 'ready_for_pickup',
+    'assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'refunded'
+];
 
 function savora_order_transitions(): array
 {
     return [
         'restaurant' => [
             'pending' => ['confirmed', 'cancelled'],
-            'confirmed' => ['preparing', 'cancelled'],
+            'confirmed' => ['preparing', 'ready_for_pickup', 'cancelled'],
             'preparing' => ['ready_for_pickup', 'cancelled'],
+        ],
+        'customer' => [
+            'delivered' => ['completed'],
         ],
         'driver' => [
             'assigned' => ['picked_up'],

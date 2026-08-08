@@ -13,6 +13,9 @@ try {
     $conn = savora_test_database();
     $result = order_transition($conn, ['userId' => 1, 'role' => 'restaurant'], 'missing-order', 'confirmed', 1, 'transition-test-1');
     if (!isset($result['ok'], $result['status'])) throw new RuntimeException('Transition response envelope is incomplete.');
+    if (!str_contains((string) file_get_contents(__DIR__ . '/../lib/services/order_transition_service.php'), 'Online payment must be confirmed before the Restaurant can process this order.')) {
+        throw new RuntimeException('Restaurant transitions must explicitly guard pending online payments.');
+    }
     $conn->close();
     echo "order transition service ok\n";
 } catch (Throwable $exception) {

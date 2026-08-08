@@ -2,6 +2,10 @@
 declare(strict_types=1);
 
 return [
+    'SAVORA_DEMO_MODE' => false,
     'GEOAPIFY_API_KEY' => 'PASTE_YOUR_GEOAPIFY_API_KEY_HERE',
     'SEPAY_WEBHOOK_API_KEY' => 'PASTE_YOUR_SEPAY_WEBHOOK_API_KEY_HERE',
+    'SEPAY_BANK_BIN' => '',
+    'SEPAY_BANK_ACCOUNT' => '',
+    'SEPAY_ACCOUNT_NAME' => '',
 ];

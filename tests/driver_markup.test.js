@@ -89,6 +89,7 @@ test('Driver UI renders persisted values with DOM nodes and exposes dialog and t
 
 test('Driver Overview exposes location, server summary and read-only dispatch status', () => {
   const page = read('driver_dashboard.php');
+  const controller = read('js/driver_dashboard.js');
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
   assert.equal((page.match(/<main\b/gi) || []).length, 1);
@@ -101,8 +102,17 @@ test('Driver Overview exposes location, server summary and read-only dispatch st
     'data-driver-summary',
     'data-delivery-offer',
     'data-driver-dispatch-status',
-    'data-server-order-list'
+    'data-server-order-list',
+    'data-demo-start-shift'
   ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /Start demo shift/);
+  assert.match(page, /SavoraDemoMode/);
+  assert.match(controller, /demo_start_shift/);
+  assert.match(controller, /visibilityState/);
+  assert.match(controller, /setTimeout/);
+  assert.match(controller, /\b2000\b/);
+  assert.match(controller, /\b15000\b/);
+  assert.doesNotMatch(controller, /watchPosition/);
   assert.match(page, /server dispatch status|Server availability/i);
   assert.doesNotMatch(page, /data-accept-offer|data-decline-offer/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
@@ -111,6 +121,7 @@ test('Driver Overview exposes location, server summary and read-only dispatch st
 
 test('Active Delivery exposes server route data and a server milestone action', () => {
   const page = read('driver_delivery.php');
+  const controller = read('js/driver_delivery.js');
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_header\.php['"]/);
   assert.match(page, /require_once\s+__DIR__\s*\.\s*['"]\/components\/driver_footer\.php['"]/);
   assert.equal((page.match(/<main\b/gi) || []).length, 1);
@@ -124,8 +135,16 @@ test('Active Delivery exposes server route data and a server milestone action', 
     'data-delivery-items',
     'data-delivery-payment',
     'data-delivery-primary-action',
-    'data-report-issue'
+    'data-report-issue',
+    'data-demo-route-progress'
   ]) assert.match(page, new RegExp(hook));
+  assert.match(page, /SavoraDemoMode/);
+  assert.match(controller, /demo_start_delivery/);
+  assert.match(controller, /Picked up - start delivery/);
+  assert.match(controller, /Delivered to Customer/);
+  assert.match(controller, /api\/tracking\.php\?order=/);
+  assert.match(controller, /route\.arrived/);
+  assert.doesNotMatch(controller, /watchPosition/);
   assert.match(page, /Loading server status|data-delivery-primary-action/);
   assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
   assert.doesNotMatch(page, /href\s*=\s*["']#["']/i);

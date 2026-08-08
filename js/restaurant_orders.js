@@ -1,19 +1,33 @@
+function actionsFor(order) {
+  if (order?.status === 'pending') return { primary: 'accept', target: 'confirmed', label: 'Accept and start preparing', reject: true };
+  if (['confirmed', 'preparing'].includes(order?.status)) return { primary: 'ready', target: 'ready_for_pickup', label: 'Food is ready', reject: true };
+  return { primary: null, target: null, label: '', reject: false };
+}
+
+function nextRestaurantDelay(failures) {
+  return Math.min(15000, 2000 * (2 ** Math.max(0, Number(failures) || 0)));
+}
+
+if (typeof module !== 'undefined') module.exports = { actionsFor, nextRestaurantDelay };
+
 (function attachRestaurantOrders(root) {
   'use strict';
 
   if (!root || !root.document) return;
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
-  const liveStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way'];
+  const liveStatuses = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'on_the_way'];
   const historyStatuses = ['delivered', 'completed', 'cancelled', 'refunded'];
-  const labels = { pending: 'New', confirmed: 'Accepted', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', assigned: 'Assigned', picked_up: 'Picked up', delivered: 'Completed', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
+  const labels = { pending: 'New', confirmed: 'Preparing', preparing: 'Preparing', ready_for_pickup: 'Ready for pickup', on_the_way: 'On the way', assigned: 'Assigned', picked_up: 'Picked up', delivered: 'Completed', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded' };
   const HISTORY_PAGE_SIZE = 7;
   const state = { liveFilter: 'all', liveSearch: '', selectedLiveId: '', selectedHistoryId: '', historyPage: 1, historyView: 'order', requestedHistoryOrderId: '' };
   let serverOrders = [];
+  let refreshTimer = null;
+  let refreshFailures = 0;
   const text = value => typeof value === 'string' ? value : '';
   const ordersForRestaurant = () => serverOrders.slice();
   async function refreshOrders() {
-    const snapshot = await root.SavoraApi.get('api/orders.php');
+    const snapshot = await root.SavoraApi.get('api/orders.php?pageSize=50');
     serverOrders = Array.isArray(snapshot && snapshot.orders) ? snapshot.orders : [];
     return serverOrders;
   }
@@ -74,25 +88,20 @@
     }
     const items = ui().el('ul', { className: 'restaurant-queue-list', 'aria-label': 'Order items' });
     (order.items || []).forEach(item => items.append(ui().el('li', {}, [ui().el('span', {}, `${item.quantity || 1} × ${text(item.name) || 'Menu item'}`), ui().el('strong', {}, ui().formatMoney((Number(item.unitPrice) || 0) * (Number(item.quantity) || 1)))])));
-    const prep = ui().el('select', { id: 'prep-minutes', name: 'prep-minutes', 'aria-label': 'Preparation time' }, [10, 15, 20, 25, 30, 40, 50, 60].map(minutes => ui().el('option', { value: minutes, selected: Number(order.prepMinutes || 20) === minutes }, `${minutes} minutes`)));
+    const action = actionsFor(order);
+    const prep = ui().el('select', { id: 'prep-minutes', name: 'prep-minutes', 'aria-label': 'Preparation time', disabled: !action.primary }, [10, 15, 20, 25, 30, 40, 50, 60].map(minutes => ui().el('option', { value: minutes, selected: Number(order.prepMinutes || 20) === minutes }, `${minutes} minutes`)));
     const actions = ui().el('div', { className: 'restaurant-actions', 'aria-label': 'Order actions' });
-    actions.append(
-      button('Reject order', 'reject', !['pending', 'confirmed', 'preparing'].includes(order.status)),
-      button('Accept order', 'accept', order.status !== 'pending'),
-      button('Ready for pickup', 'ready', order.status !== 'preparing')
-    );
-    if (order.status === 'confirmed') {
-      actions.append(button('Start preparing', 'prepare', false));
-    }
+    if (action.primary) actions.append(button(action.label, action.primary, false));
+    if (action.reject) actions.append(button('Reject order', 'reject', false));
     const delivery = order.assignment || null;
     const dispatchState = order.dispatch || null;
     const dispatchCopy = delivery
       ? `${delivery.driverName || 'Assigned driver'} · ${delivery.status.replace(/_/g, ' ')}`
-      : dispatchState && dispatchState.status === 'offer_sent'
-        ? 'Offer sent to an eligible nearby driver'
       : order.status === 'ready_for_pickup'
-        ? 'Searching for an available driver'
-        : 'Driver assignment begins when this order is ready for pickup';
+        ? 'Waiting for a Driver'
+        : dispatchState
+          ? `Driver dispatch is ${dispatchState.status.replace(/_/g, ' ')}`
+          : 'Driver assignment begins when this order is ready for pickup';
     const dispatch = ui().el('section', { className: 'restaurant-dispatch-status' }, [
       heading('h3', 'Driver dispatch'),
       ui().el('p', {}, dispatchCopy),
@@ -117,7 +126,8 @@
   async function updateSelectedOrder(action) {
     const order = ordersForRestaurant().find(item => item.id === state.selectedLiveId);
     if (!order) return;
-    const target = { accept: 'confirmed', reject: 'cancelled', prepare: 'preparing', ready: 'ready_for_pickup' }[action];
+    const actionContract = actionsFor(order);
+    const target = action === 'reject' && actionContract.reject ? 'cancelled' : actionContract.primary === action ? actionContract.target : null;
     if (!target) return;
     const prep = doc.querySelector('[name="prep-minutes"]');
     try {
@@ -284,12 +294,48 @@
     renderHistory();
   }
 
+  function renderOrders() {
+    renderLiveList();
+    renderHistory();
+  }
+
+  function stopRestaurantRefresh() {
+    if (refreshTimer !== null) root.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+
+  function scheduleRestaurantRefresh(delay) {
+    stopRestaurantRefresh();
+    if (document.visibilityState !== 'visible') return;
+    refreshTimer = root.setTimeout(async () => {
+      try {
+        await refreshOrders();
+        refreshFailures = 0;
+        renderOrders();
+      } catch (error) {
+        refreshFailures += 1;
+        announce('[data-order-feedback]', text(error && error.message) || 'Orders are unavailable.');
+      }
+      scheduleRestaurantRefresh(nextRestaurantDelay(refreshFailures));
+    }, delay);
+  }
+
+  function bindRestaurantRefresh() {
+    doc.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return stopRestaurantRefresh();
+      scheduleRestaurantRefresh(0);
+    });
+    root.addEventListener('unload', stopRestaurantRefresh, { once: true });
+    scheduleRestaurantRefresh(nextRestaurantDelay(refreshFailures));
+  }
+
   async function initialize() {
     if (!root.SavoraApi || !ui()) return;
     try { await refreshOrders(); }
     catch (error) { announce('[data-order-feedback]', text(error && error.message) || 'Orders are unavailable.'); }
     bindLiveCenter();
     bindHistory();
+    bindRestaurantRefresh();
   }
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', initialize, { once: true });

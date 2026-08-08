@@ -29,3 +29,10 @@ test('orders API exposes one authenticated transition command', () => {
   assert.match(api, /order_transition/);
   assert.match(api, /savora_idempotency_unlock/);
 });
+
+test('order domain includes customer completion and simple Restaurant ready action', () => {
+  const source = fs.readFileSync('lib/domain/order_status.php', 'utf8');
+  assert.match(source, /'completed'/);
+  assert.match(source, /'customer'\s*=>\s*\[\s*'delivered'\s*=>\s*\['completed'\]/s);
+  assert.match(source, /'confirmed'\s*=>\s*\['preparing',\s*'ready_for_pickup',\s*'cancelled'\]/);
+});

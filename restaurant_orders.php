@@ -7,7 +7,7 @@
     <p class="restaurant-empty" data-order-feedback aria-live="polite" aria-atomic="true"></p>
     <section class="restaurant-kpi-grid" data-live-order-counts aria-label="Live order status summary">
         <article class="restaurant-card restaurant-kpi"><i class="fa-regular fa-file-lines restaurant-kpi-icon" aria-hidden="true"></i><div><p>New</p><h2 data-order-count="pending">0</h2></div></article>
-        <article class="restaurant-card restaurant-kpi"><i class="fa-regular fa-circle-check restaurant-kpi-icon" aria-hidden="true"></i><div><p>Accepted</p><h2 data-order-count="confirmed">0</h2></div></article>
+        <article class="restaurant-card restaurant-kpi"><i class="fa-regular fa-circle-check restaurant-kpi-icon" aria-hidden="true"></i><div><p>Preparing</p><h2 data-order-count="confirmed">0</h2></div></article>
         <article class="restaurant-card restaurant-kpi"><i class="fa-solid fa-utensils restaurant-kpi-icon" aria-hidden="true"></i><div><p>Preparing</p><h2 data-order-count="preparing">0</h2></div></article>
         <article class="restaurant-card restaurant-kpi"><i class="fa-solid fa-bag-shopping restaurant-kpi-icon" aria-hidden="true"></i><div><p>Ready</p><h2 data-order-count="ready_for_pickup">0</h2></div></article>
     </section>
@@ -17,7 +17,7 @@
             <div role="tablist" aria-label="Filter live orders">
                 <button type="button" data-live-order-filter="all" role="tab" aria-selected="true">All</button>
                 <button type="button" data-live-order-filter="pending" role="tab" aria-selected="false">New</button>
-                <button type="button" data-live-order-filter="confirmed" role="tab" aria-selected="false">Accepted</button>
+                <button type="button" data-live-order-filter="confirmed" role="tab" aria-selected="false">Preparing</button>
                 <button type="button" data-live-order-filter="preparing" role="tab" aria-selected="false">Preparing</button>
                 <button type="button" data-live-order-filter="ready_for_pickup" role="tab" aria-selected="false">Ready</button>
             </div>
@@ -28,7 +28,7 @@
             <h2 id="live-order-details-title">Order details</h2>
             <p class="restaurant-empty">Select a live order to review its items and actions.</p>
             <label class="restaurant-field" for="prep-minutes"><span>Preparation time</span><select id="prep-minutes" name="prep-minutes" disabled><option>20 minutes</option></select></label>
-            <div class="restaurant-actions" aria-label="Order actions"><button type="button" data-order-action="reject" disabled>Reject order</button><button type="button" data-order-action="ready" disabled>Ready for pickup</button><button type="button" data-order-action="accept" disabled>Accept order</button></div>
+            <div class="restaurant-actions" aria-label="Order actions"><button type="button" data-order-action="accept" disabled>Accept and start preparing</button><button type="button" data-order-action="ready" disabled>Food is ready</button><button type="button" data-order-action="reject" disabled>Reject order</button></div>
         </aside>
     </section>
 </main>

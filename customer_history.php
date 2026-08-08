@@ -1,4 +1,5 @@
 <?php include 'components/customer_header.php'; ?>
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 
 <main class="container orders-page">
     <header class="page-title-block orders-title-row">
@@ -12,9 +13,6 @@
     <div class="order-filter-bar" aria-label="Filter orders by status">
         <button type="button" data-order-filter="all" aria-pressed="true">
             <i class="fa-solid fa-list" aria-hidden="true"></i><span>All</span>
-        </button>
-        <button type="button" data-order-filter="active" aria-pressed="false">
-            <i class="fa-solid fa-circle" aria-hidden="true"></i><span>Active</span>
         </button>
         <button type="button" data-order-filter="completed" aria-pressed="false">
             <i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Completed</span>
@@ -44,12 +42,24 @@
                 </div>
                 <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
             </div>
-            <div id="active-order-details" aria-live="polite"></div>
+            <article class="active-order-summary" data-customer-live-order>
+                <p data-live-order-status role="status" aria-live="polite">Loading your active order…</p>
+                <ol data-live-order-progress class="order-progress" aria-label="Order progress"></ol>
+                <p class="active-order-delivery-note" data-live-order-note hidden></p>
+                <section data-live-driver hidden>
+                    <div class="customer-tracking-map" data-tracking-map aria-label="Live Driver route"></div>
+                    <p><span data-route-progress>0%</span> · <span data-route-updated>Waiting for route</span></p>
+                </section>
+                <button type="button" class="primary-action" data-confirm-received hidden></button>
+                <p data-live-order-feedback role="status" aria-live="polite"></p>
+            </article>
         </aside>
     </div>
 </main>
 
 <script src="js/api_client.js"></script>
+<script src="assets/vendor/leaflet/leaflet.js"></script>
+<script src="js/customer_tracking.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     const stateApi = window.SavoraState;
@@ -58,9 +68,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!stateApi || !catalog || !ui) return;
 
     const historyList = document.getElementById('order-history-list');
-    const activeDetails = document.getElementById('active-order-details');
     const resultCount = document.getElementById('order-result-count');
-    const activeStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way']);
+    const finalStatuses = new Set(['completed', 'cancelled', 'refunded']);
     const params = new URLSearchParams(window.location.search);
     const requestedOrderId = params.get('order') || params.get('reorder');
     let selectedFilter = 'all';
@@ -82,8 +91,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const productForLine = line => catalog.products[String(line.id)] || null;
-    const driverForOrder = order => order && order.assignment ? order.assignment : null;
-    const dispatchForOrder = order => order && order.dispatch ? order.dispatch : null;
     const restaurantForOrder = order => {
         const product = order.items.map(productForLine).find(Boolean);
         return product ? product.restaurant : 'Savora order';
@@ -109,7 +116,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function matchesFilter(order) {
         if (selectedFilter === 'all') return true;
-        if (selectedFilter === 'active') return activeStatuses.has(order.status);
         return order.status === selectedFilter;
     }
 
@@ -204,7 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderHistory() {
-        const orders = serverOrders.filter(matchesFilter);
+        const orders = serverOrders.filter(order => finalStatuses.has(order.status)).filter(matchesFilter);
         resultCount.textContent = `${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`;
         if (!orders.length) {
             historyList.replaceChildren(ui.el('li', {}, emptyState(
@@ -223,69 +229,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function renderActiveOrder() {
-        const activeOrder = serverOrders.find(order => activeStatuses.has(order.status)) || null;
-        if (!activeOrder) {
-            activeDetails.replaceChildren(emptyState(
-                'No active orders',
-                'When you place an order, its live status will appear here.'
-            ));
-            return;
-        }
-
-        const steps = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'on_the_way', 'completed'];
-        const currentIndex = steps.indexOf(activeOrder.status);
-        const progress = ui.el('ol', { className: 'order-progress', 'aria-label': 'Order progress' },
-            steps.map((status, index) => {
-                const details = statusDetails[status];
-                const state = index < currentIndex ? 'is-complete' : index === currentIndex ? 'is-current' : 'is-upcoming';
-                return ui.el('li', { className: state }, [
-                    ui.el('span', { 'aria-hidden': 'true' }, icon(index <= currentIndex ? details.icon : 'fa-circle')),
-                    ui.el('strong', {}, details.label),
-                    ui.el('small', {}, index === currentIndex ? 'Current status' : index < currentIndex ? 'Complete' : 'Upcoming')
-                ]);
-            })
-        );
-        const address = activeOrder.address
-            ? ui.el('p', { className: 'active-order-address' }, [icon('fa-location-dot'), activeOrder.address])
-            : null;
-        const deliveryNote = activeOrder.deliveryNote
-            ? ui.el('p', { className: 'active-order-delivery-note' }, [icon('fa-message'), 'Delivery note: ', activeOrder.deliveryNote])
-            : null;
-        const delivery = driverForOrder(activeOrder);
-        const dispatch = dispatchForOrder(activeOrder);
-        const dispatchStatus = activeOrder.status === 'ready_for_pickup' && !delivery
-            ? ui.el('section', { className: 'active-order-driver' }, [
-                icon('fa-satellite-dish'),
-                ui.el('div', {}, [
-                    ui.el('strong', {}, dispatch && dispatch.status === 'offer_sent' ? 'Offer sent to a nearby driver' : 'Searching for a nearby driver'),
-                    ui.el('p', {}, dispatch && dispatch.status === 'offer_sent'
-                        ? 'This offer is exclusive for 30 seconds. Savora will continue the search if it is declined or expires.'
-                        : 'The restaurant is ready and Savora is sending the delivery to eligible drivers.')
-                ])
-            ])
-            : delivery
-                ? ui.el('section', { className: 'active-order-driver' }, [
-                    icon('fa-motorcycle'),
-                    ui.el('div', {}, [
-                        ui.el('strong', {}, 'Driver assigned'),
-                        ui.el('p', {}, `${delivery.driverName || 'Savora driver'} · ${delivery.vehicle || 'Vehicle details unavailable'}`),
-                        ui.el('small', {}, delivery.status === 'picked_up' ? 'Your order is on the way.' : `Delivery status: ${delivery.status.replace(/_/g, ' ')}`)
-                    ])
-                ])
-                : null;
-        activeDetails.replaceChildren(ui.el('article', { className: 'active-order-summary' }, [
-            statusChip(activeOrder.status),
-            ui.el('h3', {}, `Order ${activeOrder.id}`),
-            ui.el('p', {}, `${itemCount(activeOrder)} ${itemCount(activeOrder) === 1 ? 'item' : 'items'} · ${money(activeOrder.total)}`),
-            progress,
-            dispatchStatus,
-            address,
-            deliveryNote,
-            ui.el('a', { className: 'primary-action', href: '#order-history-title' }, [
-                icon('fa-location-arrow'), 'Track order status'
-            ])
-        ].filter(Boolean)));
+    function applyTrackingSnapshot(order) {
+        if (!order || !finalStatuses.has(order.status)) return;
+        const index = serverOrders.findIndex(item => item.id === order.id);
+        if (index >= 0) serverOrders[index] = order;
+        else serverOrders.unshift(order);
+        renderHistory();
     }
 
     document.querySelectorAll('[data-order-filter]').forEach(button => {
@@ -305,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { serverReviews = await SavoraApi.get('api/reviews.php'); }
     catch (_) { serverReviews = []; }
     renderHistory();
-    renderActiveOrder();
+    if (window.SavoraCustomerTracking) window.SavoraCustomerTracking.mount({ onOrderSnapshot: applyTrackingSnapshot });
 });
 </script>
 

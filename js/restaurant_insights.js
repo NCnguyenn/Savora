@@ -8,6 +8,10 @@
   const reviewText = value => text(value).slice(0, 300);
   const money = value => `$${(Number(value) || 0).toFixed(2)}`;
   const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  const countFulfilledOrders = statusCounts => {
+    if (!statusCounts || typeof statusCounts !== 'object') return 0;
+    return ['delivered', 'completed'].reduce((total, status) => total + Math.max(0, Number(statusCounts[status]) || 0), 0);
+  };
   const dateLabel = value => {
     const date = new Date(value);
     return Number.isNaN(date.valueOf()) ? 'No saved date' : new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
@@ -51,7 +55,7 @@
     return dated.filter(entry => entry.key >= cutoffKey && entry.key <= latestKey).map(entry => entry.order);
   }
 
-  if (!root || !root.document) return { verifiedReviews, filterReviews, ordersInDateRange };
+  if (!root || !root.document) return { verifiedReviews, filterReviews, ordersInDateRange, countFulfilledOrders };
 
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
@@ -64,7 +68,7 @@
     if (serverAnalytics && serverAnalytics.kpis) {
       const kpis = serverAnalytics.kpis;
       const statusCounts = Object.fromEntries((Array.isArray(serverAnalytics.status) ? serverAnalytics.status : []).map(row => [text(row.status), Number(row.total) || 0]));
-      const completedOrders = Number(statusCounts.delivered) || 0;
+      const completedOrders = countFulfilledOrders(statusCounts);
       const orders = Number(kpis.orders) || 0;
       return {
         totalOrders: orders,
@@ -81,7 +85,7 @@
       };
     }
     const orders = ordersInDateRange(serverOrders, selectedRange());
-    const completed = orders.filter(order => order && order.status === 'delivered');
+    const completed = orders.filter(order => order && ['delivered', 'completed'].includes(order.status));
     const refunded = orders.filter(order => order && order.status === 'refunded');
     const grossSales = completed.reduce((sum, order) => sum + Math.max(0, Number(order.total) || 0), 0);
     const refundTotal = refunded.reduce((sum, order) => sum - Math.max(0, Number(order.total) || 0), 0);
@@ -99,7 +103,7 @@
       if (customer) customers.set(customer, (customers.get(customer) || 0) + 1);
       const prep = Number(order && order.prepMinutes);
       if (Number.isFinite(prep)) prepTimes.push(Math.max(0, prep));
-      if (order && order.status !== 'delivered') return;
+      if (order && !['delivered', 'completed'].includes(order.status)) return;
       if (date) {
         const day = sales.get(date) || { key: date, orders: 0, revenue: 0 };
         day.orders += 1; day.revenue += Math.max(0, Number(order.total) || 0); sales.set(date, day);
@@ -114,7 +118,7 @@
       });
     });
     const salesByDay = [...sales.values()].sort((a, b) => a.key.localeCompare(b.key));
-    const statusCounts = Object.fromEntries(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered', 'cancelled', 'refunded'].map(status => [status, 0]));
+    const statusCounts = Object.fromEntries(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'refunded'].map(status => [status, 0]));
     orders.forEach(order => { if (Object.hasOwn(statusCounts, order.status)) statusCounts[order.status] += 1; });
     const completedRevenue = grossSales;
     return {
@@ -268,5 +272,5 @@
     catch (error) { say('[data-review-feedback]', error.message || 'Reviews are unavailable.'); }
   }
   initialize();
-  return { verifiedReviews, filterReviews, ordersInDateRange };
+  return { verifiedReviews, filterReviews, ordersInDateRange, countFulfilledOrders };
 }));

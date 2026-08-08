@@ -247,6 +247,21 @@ test('Live Order details retains its labelled heading after safe rerendering', (
   assert.match(controller, /heading\('h2', 'Order details', 'live-order-details-title'\)/);
 });
 
+test('Live Order Center uses simple action labels and visible-only bounded refresh', () => {
+  const page = read('restaurant_orders.php');
+  const controller = read('js/restaurant_orders.js');
+  const orderTransitionService = read('lib/services/order_transition_service.php');
+
+  assert.match(page, /Accept and start preparing/);
+  assert.match(page, /Food is ready/);
+  assert.doesNotMatch(controller, /confirmed:\s*'Accepted'/);
+  assert.match(controller, /Waiting for a Driver/);
+  assert.match(controller, /disabled:\s*!action\.primary/);
+  assert.match(controller, /document\.visibilityState/);
+  assert.doesNotMatch(controller, /setInterval\s*\(/);
+  assert.match(orderTransitionService, /dispatch_offer_next_driver_in_transaction/);
+});
+
 test('Menu Management and Menu Item Editor use the shared shell with accessible customer-preview controls', () => {
   for (const file of ['restaurant_menu.php', 'restaurant_menu_item.php', 'js/restaurant_menu.js']) {
     assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
@@ -383,7 +398,7 @@ test('Analytics and review routes provide accessible local insight and bounded r
   assert.doesNotMatch(controller, /innerHTML\s*=/);
 });
 
-test('Restaurant Live Orders loads server orders and stops at ready for pickup', () => {
+test('Restaurant Live Orders loads server orders and waits for a Driver after pickup readiness', () => {
   const footer = read('components/restaurant_footer.php');
   const controller = read('js/restaurant_orders.js');
 
@@ -392,7 +407,7 @@ test('Restaurant Live Orders loads server orders and stops at ready for pickup',
   assert.match(controller, /order\.assignment/);
   assert.match(controller, /order\.dispatch/);
   assert.match(controller, /Driver dispatch/);
-  assert.match(controller, /Searching for an available driver/);
+  assert.match(controller, /Waiting for a Driver/);
   assert.doesNotMatch(controller, /Hand off order|Complete handoff/);
   assert.doesNotMatch(controller, /dispatch:\s*['"]on_the_way['"]|complete:\s*['"]completed['"]/);
 });

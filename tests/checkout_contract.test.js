@@ -53,3 +53,12 @@ test('quote mutation is not an order idempotency command', () => {
   assert.match(quoteSection, /quote/);
   assert.doesNotMatch(quoteSection, /savora_idempotency_store/);
 });
+
+test('checkout groups stored payment methods by when payment is collected', () => {
+  const checkout = read('customer_checkout.php');
+
+  assert.match(checkout, /data-payment-timing="pay_now"/);
+  assert.match(checkout, /data-payment-timing="pay_on_receipt"/);
+  assert.match(checkout, /value="seapay"/);
+  assert.match(checkout, /value="cash"/);
+});

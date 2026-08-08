@@ -42,6 +42,7 @@ $ownerB = null;
 $restaurantA = null;
 $restaurantB = null;
 $orderDelivered = null;
+$orderCompleted = null;
 $orderPending = null;
 $prefix = 'task8a-profile-review-' . bin2hex(random_bytes(6));
 
@@ -94,6 +95,10 @@ try {
     $deliveredReference = 'SV-' . strtoupper(substr($prefix, -10)) . '-D';
     $order->bind_param('sii', $deliveredReference, $customerA, $restaurantA); $order->execute(); $orderDelivered = $conn->insert_id;
     $order->close();
+    $order = $conn->prepare("INSERT INTO orders(reference_code,customer_user_id,restaurant_id,status,payment_method,subtotal,delivery_fee,total,delivery_address) VALUES(?,?,?,'completed','cash',9.50,2,11.50,'Test address')");
+    $completedReference = 'SV-' . strtoupper(substr($prefix, -10)) . '-C';
+    $order->bind_param('sii', $completedReference, $customerA, $restaurantA); $order->execute(); $orderCompleted = $conn->insert_id;
+    $order->close();
     $order = $conn->prepare("INSERT INTO orders(reference_code,customer_user_id,restaurant_id,status,payment_method,subtotal,delivery_fee,total,delivery_address) VALUES(?,?,?,'pending','cash',9.50,2,11.50,'Test address')");
     $pendingReference = 'SV-' . strtoupper(substr($prefix, -10)) . '-P';
     $order->bind_param('sii', $pendingReference, $customerA, $restaurantA); $order->execute(); $orderPending = $conn->insert_id;
@@ -132,6 +137,8 @@ try {
 
     $review = review_create_for_order($conn, $customerA, $deliveredReference, 5, '<script>alert(1)</script>');
     profile_review_expect(($review['ok'] ?? false) === true, 'A delivered owned order should be reviewable.');
+    $completedReview = review_create_for_order($conn, $customerA, $completedReference, 5, 'Completed order review');
+    profile_review_expect(($completedReview['ok'] ?? false) === true, 'A completed owned order should remain reviewable.');
     $duplicate = review_create_for_order($conn, $customerA, $deliveredReference, 4, 'Second review');
     profile_review_expect(($duplicate['status'] ?? 0) === 409, 'One order may create only one Customer review.');
     $pending = review_create_for_order($conn, $customerA, $pendingReference, 5, 'Too early');
@@ -147,10 +154,10 @@ try {
     $staleReply = review_reply_as_restaurant($conn, $ownerA, $reviewPublicId, 'Stale reply', 1);
     profile_review_expect(($staleReply['status'] ?? 0) === 409, 'A stale Restaurant review reply must be rejected.');
     $reviews = reviews_for_restaurant($conn, $ownerA);
-    profile_review_expect(($reviews['ok'] ?? false) === true && ($reviews['data'][0]['comment'] ?? '') === '<script>alert(1)</script>', 'Review text must remain data for escaped rendering.');
+    profile_review_expect(($reviews['ok'] ?? false) === true && in_array('<script>alert(1)</script>', array_column($reviews['data'] ?? [], 'comment'), true), 'Review text must remain data for escaped rendering.');
 } finally {
     if ($conn instanceof mysqli) {
-        if ($orderDelivered !== null || $orderPending !== null) {
+        if ($orderDelivered !== null || $orderCompleted !== null || $orderPending !== null) {
             $deleteReviews = $conn->prepare('DELETE rr FROM restaurant_reviews rr JOIN orders o ON o.id=rr.order_id WHERE o.reference_code LIKE ?');
             $orderPattern = 'SV-' . strtoupper(substr($prefix, -10)) . '%'; $deleteReviews->bind_param('s', $orderPattern); $deleteReviews->execute(); $deleteReviews->close();
             $deleteItems = $conn->prepare('DELETE oi FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.reference_code LIKE ?');

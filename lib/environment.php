@@ -8,9 +8,15 @@ function savora_environment(): string
     return $environment;
 }
 
-function savora_demo_mode(): bool
+function savora_demo_mode(?string $localPath = null): bool
 {
-    return getenv('SAVORA_DEMO_MODE') === '1' && savora_environment() !== 'production';
+    if (savora_environment() === 'production') return false;
+    $override = getenv('SAVORA_DEMO_MODE');
+    if ($override !== false && trim((string) $override) !== '') return trim((string) $override) === '1';
+    $localPath ??= __DIR__ . '/../config/local.php';
+    if (!is_file($localPath)) return false;
+    $config = require $localPath;
+    return is_array($config) && ($config['SAVORA_DEMO_MODE'] ?? false) === true;
 }
 
 function savora_require_production_database_config(array $config): void

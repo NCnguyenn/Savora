@@ -107,11 +107,12 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
                    o.subtotal,o.discount_amount,o.delivery_fee,o.total,o.delivery_address,o.delivery_note,
                    o.placed_at,o.updated_at,o.version,r.name AS restaurant_name,
                    p.method AS payment_method_confirmed,p.amount AS payment_amount,p.status AS payment_status,p.paid_at,
-                   d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.earning,
+                   d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.earning,d.proof_required,
                    d.accepted_at,d.delivered_at,d.version AS delivery_version,
                    dd.id AS dispatch_id,dd.status AS dispatch_status,dd.version AS dispatch_version,
                    u.full_name AS customer_name,cp.phone AS customer_phone,
-                   ca.latitude AS customer_latitude,ca.longitude AS customer_longitude,
+                   COALESCE(qa.latitude,da.latitude) AS customer_latitude,
+                   COALESCE(qa.longitude,da.longitude) AS customer_longitude,
                    dl.latitude AS driver_latitude,dl.longitude AS driver_longitude,dl.accuracy_meters AS driver_accuracy_meters,dl.recorded_at AS driver_recorded_at,dl.version AS driver_location_version,
                    r.address AS restaurant_address,r.city AS restaurant_city,r.phone AS restaurant_phone
             FROM orders o
@@ -121,7 +122,15 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
             LEFT JOIN payments p ON p.order_id=o.id
             LEFT JOIN deliveries d ON d.order_id=o.id
             LEFT JOIN delivery_dispatches dd ON dd.order_id=o.id
-            LEFT JOIN customer_addresses ca ON ca.customer_user_id=o.customer_user_id AND ca.is_default=1
+            LEFT JOIN checkout_quotes q ON q.id=o.quote_id
+            LEFT JOIN customer_addresses qa ON qa.id=q.address_id AND qa.customer_user_id=o.customer_user_id
+            LEFT JOIN customer_addresses da ON da.id=(
+                SELECT fallback_address.id
+                FROM customer_addresses fallback_address
+                WHERE fallback_address.customer_user_id=o.customer_user_id AND fallback_address.is_default=1
+                ORDER BY fallback_address.updated_at DESC,fallback_address.id DESC
+                LIMIT 1
+            )
             LEFT JOIN driver_locations dl ON dl.driver_user_id=d.driver_user_id
             WHERE ' . $where;
     return order_repository_rows($conn, $sql, $types, $params);
@@ -129,7 +138,7 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
 
 function order_repository_count(mysqli $conn, string $where, string $types = '', array $params = []): int
 {
-    $rows = order_repository_rows($conn, 'SELECT COUNT(*) AS total FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN deliveries d ON d.order_id=o.id WHERE ' . $where, $types, $params);
+    $rows = order_repository_rows($conn, 'SELECT COUNT(*) AS total FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN payments p ON p.order_id=o.id LEFT JOIN deliveries d ON d.order_id=o.id WHERE ' . $where, $types, $params);
     return (int) ($rows[0]['total'] ?? 0);
 }
 
@@ -191,6 +200,7 @@ function order_repository_map_order(mysqli $conn, array $row): array
         'driverUserId' => (int) $row['driver_user_id'],
         'status' => (string) $row['delivery_status'],
         'earning' => (float) $row['earning'],
+        'proofRequired' => (int) $row['proof_required'] === 1,
         'acceptedAt' => $row['accepted_at'] === null ? null : (string) $row['accepted_at'],
         'deliveredAt' => $row['delivered_at'] === null ? null : (string) $row['delivered_at'],
         'version' => (int) $row['delivery_version'],
@@ -259,7 +269,7 @@ function order_repository_scoped(mysqli $conn, string $scope, int $userId, array
     if ($scope === 'customer') {
         $where .= ' AND o.customer_user_id=?'; $types .= 'i'; $params[] = $userId;
     } elseif ($scope === 'restaurant') {
-        $where .= ' AND r.owner_user_id=?'; $types .= 'i'; $params[] = $userId;
+        $where .= " AND r.owner_user_id=? AND (o.payment_method='cash' OR p.status='paid')"; $types .= 'i'; $params[] = $userId;
     } elseif ($scope === 'driver') {
         $where .= ' AND d.driver_user_id=?'; $types .= 'i'; $params[] = $userId;
     }
@@ -302,8 +312,9 @@ function order_repository_admin(mysqli $conn, int $orderId): array
 function order_repository_transition_target(mysqli $conn, string $referenceCode, bool $forUpdate = false): array
 {
     $sql = 'SELECT o.id,o.reference_code,o.customer_user_id,o.restaurant_id,o.status,o.payment_method,o.version,
-                   r.owner_user_id,d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.version AS delivery_version
+                   p.status AS payment_status,r.owner_user_id,d.id AS delivery_id,d.driver_user_id,d.status AS delivery_status,d.version AS delivery_version
             FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+            JOIN payments p ON p.order_id=o.id
             LEFT JOIN deliveries d ON d.order_id=o.id
             WHERE o.reference_code=? LIMIT 1';
     if ($forUpdate) $sql .= ' FOR UPDATE';
@@ -328,10 +339,12 @@ function order_repository_insert_history_event(mysqli $conn, int $orderId, strin
     $statement->close();
 }
 
-function order_repository_create_dispatch(mysqli $conn, int $orderId): void
+function order_repository_create_dispatch(mysqli $conn, int $orderId): int
 {
     $statement = $conn->prepare("INSERT INTO delivery_dispatches(order_id,status,attempt_count) VALUES(?,'searching_driver',0) ON DUPLICATE KEY UPDATE status=IF(assigned_driver_user_id IS NULL,'searching_driver',status),version=version+1");
     $statement->bind_param('i', $orderId);
     $statement->execute();
     $statement->close();
+    $row = order_repository_one($conn, 'SELECT id FROM delivery_dispatches WHERE order_id=? LIMIT 1 FOR UPDATE', 'i', [$orderId]);
+    return (int) ($row['id'] ?? 0);
 }

@@ -286,6 +286,13 @@ test('checkout delegates acceptance and placement to the server safely', () => {
   assert.doesNotMatch(checkout, /\balert\s*\(/);
 });
 
+test('SeaPay checkout exposes only the safe local demo control and no committed bank identity', () => {
+  const seapay = read('seapay_checkout.php');
+
+  assert.match(seapay, /data-demo-seapay-confirm/);
+  assert.doesNotMatch(seapay, /0366564953|NGUYEN CHI NGUYEN/);
+});
+
 test('checkout submits delivery notes and order views render them as text context', () => {
   const state = read('js/customer_state.js');
   const checkout = read('customer_checkout.php');
@@ -374,7 +381,7 @@ test('orders render server-hydrated status-aware history and exact configuration
   const css = read('css/customer_style.css');
 
   assert.match(history, /data-order-filter="all"[^>]*aria-pressed="true"/);
-  assert.match(history, /data-order-filter="active"/);
+  assert.doesNotMatch(history, /data-order-filter="active"/);
   assert.match(history, /data-order-filter="completed"/);
   assert.match(history, /data-order-filter="cancelled"/);
   assert.match(history, /api\/orders\.php/);
@@ -560,10 +567,11 @@ test('Customer discovery uses the menu image fallback and server-backed restaura
   assert.doesNotMatch(dashboard, /deliveryRadius|deliveryEnabled|pickupEnabled|acceptingOrders/);
 });
 
-test('Customer tracking loads server order state and renders dispatch visibility safely', () => {
+test('Customer history leaves active delivery ownership to the tracking controller and preserves final-order actions', () => {
   const footer = read('components/customer_footer.php');
   const dashboard = read('customer_dashboard.php');
   const history = read('customer_history.php');
+  const tracking = read('js/customer_tracking.js');
 
   assert.match(dashboard, /api\/orders\.php/);
   assert.match(dashboard, /serverOrders/);
@@ -573,9 +581,38 @@ test('Customer tracking loads server order state and renders dispatch visibility
   assert.match(dashboard, /if \(driverLocation\) \{/);
   assert.match(history, /api\/orders\.php/);
   assert.match(history, /serverOrders/);
-  assert.match(history, /order\.assignment/);
-  assert.match(history, /order\.dispatch/);
-  assert.match(history, /Searching for a nearby driver/);
-  assert.match(history, /Driver assigned/);
-  assert.doesNotMatch(`${dashboard}\n${history}`, /innerHTML\s*=/);
+  assert.match(history, /serverOrders\.filter\(order => finalStatuses\.has\(order\.status\)\)/);
+  assert.match(history, /function reviewForm/);
+  assert.match(history, /function reorder/);
+  assert.match(tracking, /api\/tracking\.php/);
+  assert.match(tracking, /order\.assignment/);
+  assert.match(tracking, /order\.dispatch/);
+  assert.match(tracking, /Searching for a nearby driver/);
+  assert.match(tracking, /Driver assigned/);
+  assert.doesNotMatch(`${dashboard}\n${history}\n${tracking}`, /innerHTML\s*=/);
+});
+
+test('Customer history provides one semantic live-tracking card with local Leaflet assets', () => {
+  const history = read('customer_history.php');
+  const css = read('css/customer_style.css');
+
+  assert.match(history, /data-customer-live-order/);
+  assert.match(history, /data-live-order-status/);
+  assert.match(history, /data-live-order-progress/);
+  assert.match(history, /data-live-driver/);
+  assert.match(history, /data-tracking-map/);
+  assert.match(history, /data-confirm-received/);
+  assert.match(history, /data-live-order-feedback/);
+  assert.match(history, /assets\/vendor\/leaflet\/leaflet\.css/);
+  assert.match(history, /assets\/vendor\/leaflet\/leaflet\.js/);
+  assert.match(history, /js\/customer_tracking\.js/);
+  assert.match(history, /SavoraCustomerTracking\.mount/);
+  assert.doesNotMatch(history, /function renderActiveOrder/);
+  assert.match(css, /\.customer-tracking-map\s*\{[^}]*min-height:/);
+  assert.match(css, /\.is-map-fallback/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.active-order-summary \[data-live-driver\] > p\s*\{[^}]*flex-direction:\s*column;/);
+  assert.match(css, /\.order-progress\s*\{[^}]*grid-template-columns:\s*repeat\(7,/);
+  assert.doesNotMatch(css, /\.order-progress\s*\{[^}]*grid-template-columns:\s*repeat\(4,/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.order-progress\s*\{[^}]*overflow-x:\s*auto;/);
+  assert.match(css, /\.order-progress li:not\(:last-child\)::after\s*\{[^}]*border-top:/);
 });

@@ -57,7 +57,7 @@ function dispatch_repository_offer_for_driver(mysqli $conn, string $offerReferen
 
 function dispatch_repository_driver_profile(mysqli $conn, int $driverUserId, bool $forUpdate = false): array
 {
-    $sql = 'SELECT dp.user_id,dp.eligibility_status,dp.availability_status,dp.rating,dp.version,u.status AS user_status
+    $sql = 'SELECT dp.user_id,dp.eligibility_status,dp.availability_status,dp.rating,dp.latitude,dp.longitude,dp.version,u.status AS user_status
             FROM driver_profiles dp JOIN users u ON u.id=dp.user_id WHERE dp.user_id=? LIMIT 1';
     if ($forUpdate) $sql .= ' FOR UPDATE';
     return dispatch_repository_one($conn, $sql, 'i', [$driverUserId]);

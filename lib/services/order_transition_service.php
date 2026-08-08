@@ -6,6 +6,7 @@ require_once __DIR__ . '/../idempotency.php';
 require_once __DIR__ . '/audit_service.php';
 require_once __DIR__ . '/notification_service.php';
 require_once __DIR__ . '/../repositories/order_repository.php';
+require_once __DIR__ . '/dispatch_service.php';
 
 function order_transition_result(bool $ok, int $status, string $message, array $data = []): array
 {
@@ -42,6 +43,9 @@ function order_transition(mysqli $conn, array $actor, string $referenceCode, str
         if ($role === 'restaurant' && (int) $order['owner_user_id'] !== $actorId) {
             return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 403, 'This Restaurant cannot change the order.'));
         }
+        if ($role === 'restaurant' && (string) $order['payment_method'] !== 'cash' && (string) ($order['payment_status'] ?? 'pending') !== 'paid') {
+            return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 409, 'Online payment must be confirmed before the Restaurant can process this order.'));
+        }
         if ($role === 'driver' && ((int) ($order['driver_user_id'] ?? 0) !== $actorId || $order['delivery_id'] === null)) {
             return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 403, 'This Driver is not assigned to the order.'));
         }
@@ -55,12 +59,25 @@ function order_transition(mysqli $conn, array $actor, string $referenceCode, str
             return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(false, 409, 'Order changed. Refresh before retrying.'));
         }
         order_repository_insert_history_event($conn, (int) $order['id'], $nextStatus, $role, $actorId, $reason);
-        if ($nextStatus === 'ready_for_pickup') order_repository_create_dispatch($conn, (int) $order['id']);
+        $dispatch = null;
+        if ($nextStatus === 'ready_for_pickup') {
+            $dispatchId = order_repository_create_dispatch($conn, (int) $order['id']);
+            if ($dispatchId <= 0) throw new RuntimeException('Dispatch was not created.');
+            $offerResult = dispatch_offer_next_driver_in_transaction($conn, $dispatchId, $actorId);
+            if (!$offerResult['ok']) throw new RuntimeException('Dispatch offer could not be created.');
+            $offer = $offerResult['data']['offer'] ?? null;
+            $dispatch = [
+                'dispatchId' => $dispatchId,
+                'status' => $offer === null ? 'searching_driver' : 'offered',
+                'version' => (int) ($offerResult['data']['dispatchVersion'] ?? $offer['dispatchVersion'] ?? 0),
+                'offerExpiresAt' => $offer['expiresAt'] ?? null,
+            ];
+        }
         notification_queue($conn, (int) $order['customer_user_id'], 'order_status_changed', 'Order status updated', 'Your order ' . $referenceCode . ' is now ' . str_replace('_', ' ', $nextStatus) . '.', 'order', (int) $order['id']);
         $auditReference = 'ORD-' . strtoupper(bin2hex(random_bytes(5)));
         audit_append($conn, $actorId, 'order_transition', 'order', (int) $order['id'], ['status' => (string) $order['status'], 'version' => $expectedVersion], ['status' => $nextStatus, 'version' => $expectedVersion + 1], $reason, $auditReference);
         return order_transition_finish($conn, $actorId, $idempotencyKey, $requestHash, order_transition_result(true, 200, 'Order status updated.', [
-            'referenceCode' => $referenceCode, 'status' => $nextStatus, 'version' => $expectedVersion + 1,
+            'referenceCode' => $referenceCode, 'status' => $nextStatus, 'version' => $expectedVersion + 1, 'dispatch' => $dispatch,
         ]));
     } catch (SavoraIdempotencyConflict) {
         $conn->rollback();
