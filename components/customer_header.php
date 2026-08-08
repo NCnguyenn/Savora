@@ -66,8 +66,6 @@ $initial = strtoupper(substr($username, 0, 1));
         <div id="customer-mobile-menu" class="customer-nav" data-open="false">
             <?php foreach ([
                 'customer_dashboard.php' => ['Discover', 'fa-compass'],
-                'customer_history.php' => ['Orders', 'fa-bag-shopping'],
-                'customer_favorites.php' => ['Favorites', 'fa-heart'],
                 'customer_wallet.php' => ['Wallet', 'fa-wallet'],
                 'customer_profile.php' => ['Profile', 'fa-user']
             ] as $route => [$label, $icon]): ?>
@@ -76,6 +74,14 @@ $initial = strtoupper(substr($username, 0, 1));
             <?php if ($customer_is_authenticated): ?><a href="logout.php" class="logout-link mobile-logout"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>Log out</span></a><?php endif; ?>
         </div>
         <div class="customer-actions">
+            <?php if ($customer_is_authenticated): ?>
+                <a href="<?php echo htmlspecialchars($customer_link('customer_history.php'), ENT_QUOTES, 'UTF-8'); ?>" class="icon-button" aria-label="Your orders" title="Orders">
+                    <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+                </a>
+                <a href="<?php echo htmlspecialchars($customer_link('customer_favorites.php'), ENT_QUOTES, 'UTF-8'); ?>" class="icon-button" aria-label="Favorites" title="Favorites">
+                    <i class="fa-solid fa-heart" aria-hidden="true"></i>
+                </a>
+            <?php endif; ?>
             <button id="open-cart-btn" class="cart-btn" type="button" aria-label="Open cart" aria-controls="cart-overlay">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span id="cart-count" class="cart-badge" hidden>0</span>
             </button>

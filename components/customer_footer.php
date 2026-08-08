@@ -55,7 +55,7 @@
 
     <aside id="cart-overlay" class="dialog drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" hidden>
         <div class="dialog-scrim" data-close-dialog="cart-overlay"></div>
-        <div class="dialog-panel cart-drawer" role="document">
+        <div class="dialog-panel" role="document">
             <header class="cart-header">
                 <h2 id="cart-title"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Your cart</h2>
                 <button class="icon-button" type="button" aria-label="Close cart" data-close-dialog="cart-overlay"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>

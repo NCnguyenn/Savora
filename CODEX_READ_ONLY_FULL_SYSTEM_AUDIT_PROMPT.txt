@@ -1,0 +1,339 @@
+PROMPT FOR CODEX — SAVORA FULL-SYSTEM READ-ONLY AUDIT
+
+You are Codex acting as a Senior QA Engineer, System Analyst, PHP/MySQL Reviewer,
+API Reviewer, Security Reviewer, and UI/UX Consistency Auditor for the Savora
+food-delivery system.
+
+WORKSPACE
+---------
+Repository root (absolute path):
+D:\Xampp\htdocs\Savora
+
+Reference instructions that MUST be read completely, in this exact order:
+1. D:\Xampp\htdocs\Savora\ANTIGRAVITY_READ_ONLY_AUDIT_PROMPT.txt
+2. D:\Xampp\htdocs\Savora\docs\ANTIGRAVITY_READ_ONLY_AUDIT_CHECKLIST.md
+
+Where either reference document says “Antigravity”, interpret it as “Codex”.
+The two reference documents define the detailed scope and checklist. This prompt
+adds Codex-specific execution and safety rules. If instructions conflict, follow
+the stricter read-only rule.
+
+PRIMARY OBJECTIVE
+-----------------
+Perform a complete, evidence-based, READ-ONLY audit of the existing Savora
+project and report whether the four roles are complete, logically consistent,
+and ready to work together:
+
+- Customer: 8 pages
+- Restaurant Owner: 11 pages
+- Delivery Driver: 5 pages
+- Admin: 11 pages
+- Total expected role pages/routes: 35
+
+Audit the UI, workflows, shared data, PHP backend, API behavior, MySQL schema,
+authorization, security, payments, GPS tracking, and cross-role state
+transitions. Identify missing features, broken or contradictory flows, unsafe
+behavior, inconsistent data contracts, and readiness gaps.
+
+THIS IS AN AUDIT ONLY — NOT AN IMPLEMENTATION TASK
+-------------------------------------------------
+This request does NOT authorize Codex to fix, refactor, improve, format,
+generate, migrate, seed, or otherwise modify the project.
+
+ABSOLUTE READ-ONLY RESTRICTIONS
+-------------------------------
+Codex MUST NOT:
+
+1. Use apply_patch or any file-editing tool.
+2. Create, overwrite, rename, move, delete, format, or touch any file.
+3. Create a Markdown, text, JSON, CSV, HTML, screenshot, log, cache, coverage,
+   build, test-result, or report file.
+4. Run commands that may write generated files, lockfiles, caches, sessions,
+   compiled output, test databases, coverage data, or temporary project data.
+5. Run package installation, dependency update, migration, seeding, fixture,
+   reset, cleanup, formatter, linter auto-fix, or code-generation commands.
+6. Mutate Git state: no add, commit, push, pull, merge, rebase, checkout,
+   switch, branch creation/deletion, stash, reset, clean, restore, tag, or
+   configuration changes.
+7. Send POST, PUT, PATCH, DELETE, or any other state-changing API request.
+8. Click or submit UI controls that create, update, approve, reject, cancel,
+   assign, pay, refund, dispatch, deliver, suspend, or delete data.
+9. Execute SQL DDL or DML, including INSERT, UPDATE, DELETE, REPLACE, MERGE,
+   ALTER, DROP, TRUNCATE, CREATE, GRANT, REVOKE, CALL, or write-capable scripts.
+10. Run application or integration tests unless Codex has first proved from the
+    test code and configuration that they cannot write to files, sessions,
+    services, APIs, or any database.
+11. Log in through an application flow when doing so can create or update a
+    session, token, last-login timestamp, audit entry, or database row.
+12. Start or stop services, background workers, queues, schedulers, or servers.
+13. Change permissions, environment variables, local configuration, or secrets.
+14. Delegate the audit to subagents or other tools that could violate these
+    restrictions. Codex is solely responsible for preserving read-only state.
+
+Allowed operations are limited to proven non-mutating inspection, for example:
+
+- Listing directories and files.
+- Reading source code, configuration, SQL schema/dumps, documentation, and logs.
+- Searching source text with read-only search commands.
+- Reading Git status, diff, log, branch, and tracked-file metadata.
+- Running syntax/static analysis only when it is proven not to write files.
+- Executing SELECT, SHOW, DESCRIBE, or EXPLAIN only if a safe read-only database
+  connection is already available and the command cannot trigger writes.
+- Inspecting already-running pages with GET only when GET is proven not to
+  mutate sessions, analytics, counters, tokens, or database state.
+
+When safety cannot be proven, DO NOT execute the check. Mark it exactly:
+NOT EXECUTED — READ-ONLY RESTRICTION
+
+PRE-FLIGHT — REQUIRED BEFORE AUDITING
+-------------------------------------
+1. Confirm the current working directory.
+2. Verify that the repository root and both reference files above exist.
+3. If either reference file is missing, STOP. Report:
+   - actual current working directory;
+   - exact missing absolute path;
+   - which checks could not begin.
+   Do not search other drives and do not create replacement files.
+4. Read both reference files completely, from start to end, in the stated order.
+5. Read any repository-level AGENTS.md or equivalent instructions that apply,
+   while preserving this prompt's stricter read-only restrictions.
+6. Capture the initial read-only baseline:
+   - git status --short
+   - current branch
+   - current HEAD commit
+   - existing tracked/untracked/modified files
+7. Do not treat pre-existing working-tree changes as audit findings unless their
+   contents reveal a product defect. Never modify or clean them.
+
+MANDATORY AUDIT SCOPE
+---------------------
+Follow every relevant item in the two reference documents. At minimum, inspect:
+
+A. INVENTORY AND ARCHITECTURE
+- Map all 35 expected pages/routes to actual PHP files, route definitions,
+  controllers, services, repositories/models, JavaScript, CSS, API endpoints,
+  tables, and role permissions.
+- Distinguish implemented, partial, placeholder/mock-only, duplicated,
+  unreachable, missing, and undocumented functionality.
+- Identify the real architecture and data flow; do not infer implementation
+  solely from filenames or UI labels.
+
+B. CUSTOMER — 8 PAGES
+- Restaurant discovery and filtering.
+- Restaurant details and menu availability.
+- Item variants/add-ons/customization and price calculation.
+- Cart consistency, quantities, fees, taxes, discounts, and totals.
+- Address selection, delivery eligibility, checkout, and idempotent ordering.
+- Online payment methods, status handling, retry/failure/cancel behavior.
+- Order history/detail and order lifecycle visibility.
+- Real-time or simulated GPS delivery tracking.
+
+C. RESTAURANT OWNER — 11 PAGES
+- Registration/application and mandatory Admin approval before activation.
+- Restaurant profile, opening state, service area, operating hours.
+- Menu/category/item/customization availability and price management.
+- Incoming-order visibility, accept/reject/preparation/ready handoffs.
+- Prevention of illegal order transitions and edits after ordering.
+- Revenue/statistics accuracy, time filters, fees, cancellations, and refunds.
+- Tenant isolation: an owner must not access another restaurant's records.
+
+D. DELIVERY DRIVER — 5 PAGES
+- Registration/application and mandatory Admin approval before activation.
+- Availability/online state and delivery assignment visibility.
+- Accept/reject/pickup/delivery workflow and permitted status transitions.
+- GPS real-time or simulated location updates and Customer visibility.
+- Earnings/history consistency and driver-only data isolation.
+- Proof-of-delivery, cancellation, reassignment, and failure edge cases where
+  represented by product requirements or implementation.
+
+E. ADMIN — 11 PAGES
+- Single full-access Admin authentication and authorization.
+- Dashboard and operational metrics.
+- Account management for Customer, Restaurant Owner, and Delivery Driver.
+- Approval/rejection for Restaurant Owner and Delivery Driver accounts before
+  they can operate, including reason/history/auditability where expected.
+- Restaurant oversight, menu/order oversight, driver oversight, and controlled
+  intervention in orders/deliveries.
+- Payment/refund/dispute oversight where implemented.
+- Reports/analytics and system settings where implemented.
+- Audit trail, confirmation, validation, and safeguards for high-impact actions.
+- Ensure Admin intervention does not silently violate Customer, Restaurant, or
+  Driver state and data views.
+
+F. CROSS-ROLE WORKFLOW CONSISTENCY
+Trace each flow end-to-end through UI -> request -> PHP/backend -> database ->
+response/event/polling -> all affected role UIs:
+
+1. Restaurant Owner registration -> Admin review -> approval/rejection -> login
+   and operational eligibility.
+2. Driver registration -> Admin review -> approval/rejection -> online and
+   assignment eligibility.
+3. Customer builds cart -> checkout -> payment -> order creation.
+4. Restaurant receives -> accepts/rejects -> prepares -> marks ready.
+5. Driver assignment -> accepts -> pickup -> GPS updates -> delivered.
+6. Customer sees consistent order and location state throughout.
+7. Admin observes and, where authorized, intervenes with controlled, auditable
+   state transitions.
+8. Cancellation, payment failure, refund, reassignment, unavailable items,
+   restaurant closure, and delivery failure.
+
+For every transition, compare:
+- state/status vocabulary and enum values;
+- allowed previous and next states;
+- actor authorized to trigger it;
+- validation and transaction boundaries;
+- affected tables and foreign keys;
+- timestamps and audit history;
+- API request/response fields and error handling;
+- what each of the four roles sees afterward;
+- concurrency, duplicate submission, stale state, and idempotency risks.
+
+G. BACKEND, API, AND PHP
+- Route/controller/service/model separation and actual call graph.
+- Authentication, session/token handling, role checks, and object-level access.
+- Server-side validation; never accept client price, owner ID, driver ID, role,
+  payment result, order total, or status transition without verification.
+- Prepared statements/parameter binding and SQL injection exposure.
+- Output escaping, XSS, CSRF, mass assignment, IDOR, file upload, path traversal,
+  secret leakage, verbose errors, and insecure direct endpoint access.
+- HTTP method semantics and whether any GET endpoint mutates state.
+- Consistent status codes, response schema, pagination, validation errors, and
+  transactional behavior.
+- Payment verification/webhook authenticity, replay protection, idempotency,
+  amount/currency/order matching, and secret storage.
+- GPS authorization, spoofing/precision/privacy risks, stale coordinates,
+  polling/update cadence, and order-driver association.
+
+H. MYSQL DATABASE
+- Tables, columns, data types, nullability, defaults, indexes, unique keys,
+  primary/foreign keys, cascades, and naming consistency.
+- Role/account/approval model and whether approval is enforceable server-side.
+- Restaurant/menu/customization/cart/order/order-item/payment/delivery/location/
+  audit entities and relationships.
+- Monetary precision; never rely on floating-point storage for money.
+- Snapshotting ordered item names/prices/customizations so later menu edits do
+  not rewrite historical orders.
+- Transaction/locking needs for order creation, payment, assignment, status
+  transitions, cancellation, refund, and revenue aggregation.
+- Orphan, duplicate, race-condition, referential-integrity, and tenant-isolation
+  risks.
+- Schema-code mismatch between SQL files, migrations, queries, and PHP models.
+
+I. UI/UX AND DESIGN CONSISTENCY
+- English-only UI text for the Admin implementation requirement.
+- Navigation, page titles, breadcrumbs, empty/loading/error/success states,
+  tables, filters, pagination, forms, validation, confirmations, and feedback.
+- Responsive layout, keyboard access, focus visibility, labels, contrast, and
+  disabled/busy states.
+- Visual consistency with the approved palette:
+  #073B2B primary forest green
+  #04291E dark forest green
+  #EF634B coral CTA/accent
+  #FBF9F3 ivory background
+  #E8EDDF sage secondary background
+  #1C2923 primary text
+  #657169 secondary text
+  #DFE4DA border
+  #1B75D0 accessibility focus
+- Confirm destructive or high-impact Admin actions require appropriate warning,
+  reason, confirmation, authorization, and observable result.
+
+J. REQUIRED PRODUCT CAPABILITIES
+Determine whether the implementation is actually ready for all of these:
+- Food ordering: browse restaurants, browse menus, customize food, add to cart,
+  and place orders.
+- Delivery tracking: real-time GPS or clearly identified simulated GPS.
+- Secure online payment with multiple methods.
+- Restaurant dashboard: menu updates, order management, and revenue statistics.
+
+EVIDENCE STANDARD
+-----------------
+- Every defect or material conclusion must cite concrete evidence.
+- Prefer repository-relative file path plus exact line number(s), symbol, route,
+  SQL table/column, or configuration key.
+- Separate confirmed facts from reasoned risks and from unexecuted checks.
+- Do not claim runtime behavior was verified if only static code was inspected.
+- Do not claim a page exists merely because a navigation label exists.
+- Do not claim an API is secure merely because the UI hides an action.
+- Do not expose secrets or personal data in the report; redact values while
+  citing the location/type of exposure.
+- Avoid speculative findings. If evidence is incomplete, state what is known,
+  what is uncertain, and why.
+
+SEVERITY
+--------
+- BLOCKER: core workflow cannot complete, destructive integrity flaw, or release
+  cannot safely proceed.
+- CRITICAL: exploitable security/payment/authorization/data-integrity issue with
+  severe impact.
+- HIGH: major feature failure, cross-role inconsistency, approval bypass,
+  incorrect money/order state, or serious access-control risk.
+- MEDIUM: partial feature, important validation/UX/API/schema gap, or meaningful
+  edge-case failure.
+- LOW: minor consistency, accessibility, maintainability, or polish issue.
+
+For each finding include:
+- ID
+- Severity
+- Area and affected role(s)
+- Short title
+- Expected behavior
+- Observed evidence
+- User/business/data/security impact
+- Reproduction or static trace steps that do not mutate state
+- Related files/routes/endpoints/tables
+- Recommended remediation direction (description only; do not implement)
+- Confidence: Confirmed / High confidence / Needs safe runtime verification
+
+FINAL REPORT — CHAT ONLY
+------------------------
+Do not save the report in the repository or anywhere on disk. Return one final
+response in Vietnamese; keep code symbols, table names, routes, API fields, and
+technical terms in English where useful.
+
+Use this structure:
+
+1. Executive summary
+2. Audit scope and methodology
+3. Read-only limitations and checks not executed
+4. Repository/system architecture map
+5. Page inventory table for all 35 expected pages
+6. Core-feature readiness matrix
+7. End-to-end cross-role workflow matrix
+8. Status-transition and data-consistency analysis
+9. Findings sorted by severity
+10. Backend/API/PHP review
+11. MySQL/schema/data-integrity review
+12. Security and authorization review
+13. UI/UX/accessibility/design-consistency review
+14. Test coverage and observability gaps
+15. Release readiness verdict:
+    - READY
+    - READY WITH CONDITIONS
+    - NOT READY
+16. Prioritized remediation roadmap (recommendations only)
+17. Evidence appendix
+18. Final integrity statement
+
+The final integrity statement must explicitly say:
+- whether any project file was modified;
+- whether any Git state was changed;
+- whether any API write request was sent;
+- whether any database write was executed;
+- whether any report file was created.
+
+POST-FLIGHT INTEGRITY CHECK — REQUIRED
+--------------------------------------
+Immediately before answering:
+1. Re-run the same read-only Git status/branch/HEAD checks used in the baseline.
+2. Compare the before/after state.
+3. If any state changed because of an audit command, stop further execution,
+   disclose the exact change, and do not attempt cleanup or restoration.
+4. Ensure every unsafe or mutation-dependent test is labeled:
+   NOT EXECUTED — READ-ONLY RESTRICTION
+5. Deliver the report only in the final chat response.
+
+BEGIN NOW
+---------
+Start with PRE-FLIGHT. Do not ask for permission to fix anything. Do not make
+changes even if defects are obvious. Inspect, verify safely, and report only.
