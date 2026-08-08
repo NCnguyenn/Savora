@@ -242,7 +242,11 @@ $checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer
             document.getElementById('cart-promo-form').addEventListener('submit', applyCartPromo);
             renderFullCart();
             if (window.SavoraCatalog && typeof window.SavoraCatalog.hydrate === 'function') {
-                window.SavoraCatalog.hydrate().then(renderFullCart).catch(() => {});
+                window.SavoraCatalog.hydrate().then(() => {
+                    stateApi().persist(stateApi().reconcileCart(stateApi().load(), window.SavoraCatalog.products));
+                    renderFullCart();
+                    uiApi().refreshChrome();
+                }).catch(() => {});
             }
         });
 

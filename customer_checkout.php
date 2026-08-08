@@ -80,6 +80,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         refreshAfterLocationChange().catch(error => { feedback.textContent = error.message || 'Delivery quote was not refreshed.'; submit.disabled = true; });
     });
     try {
+        await catalog.hydrate();
+        stateApi.persist(stateApi.reconcileCart(stateApi.load(), catalog.products));
         snapshot = await SavoraApi.get('api/profile.php');
         renderSelectedAddress();
         setText('checkout-wallet-balance', `Balance: ${money(snapshot.wallet && snapshot.wallet.balance)}`);

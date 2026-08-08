@@ -44,6 +44,14 @@ test('migrates a legacy portion-prefixed cart option to its choice public id', (
   assert.equal(state.cart[0].options[0].id, 'choice-regular');
 });
 
+test('removes stale cart options that do not belong to the hydrated menu item', () => {
+  const state = State.reconcileCart(
+    State.normalize({ version: 4, cart: [{ id: 'egg-coffee', options: [{ id: 'regular', label: 'Regular' }] }] }),
+    { 'egg-coffee': { portions: [], addOns: [] } }
+  );
+  assert.deepEqual(state.cart[0].options, []);
+});
+
 test('rejects a cart line without a usable product identifier', () => {
   assert.throws(() => State.addCartLine(State.defaultState(), { name: 'Pasta', price: 12.5 }, 1), /product id/i);
 });

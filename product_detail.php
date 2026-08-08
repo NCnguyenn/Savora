@@ -189,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('portion-options').append(optionLabel(input, portion.label, portion.price));
         return { ...portion, input };
     });
+    if (!portions.length) document.getElementById('portion-fieldset').hidden = true;
 
     const addOns = item.addOns.filter(option => option.productId === item.id).map(option => {
         const id = `addon-${item.id}-${option.id}`;
@@ -204,10 +205,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function selectedOptions() {
         const portion = selectedPortion();
-        return [
-            { id: portion.id, label: portion.label, price: portion.price },
-            ...addOns.filter(option => option.input.checked).map(({ id, label, price }) => ({ id, label, price }))
-        ];
+        const selected = [];
+        if (portion) selected.push({ id: portion.id, label: portion.label, price: portion.price });
+        return selected.concat(addOns.filter(option => option.input.checked).map(({ id, label, price }) => ({ id, label, price })));
     }
 
     function unitPrice() {

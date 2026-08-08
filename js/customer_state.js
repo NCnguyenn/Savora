@@ -67,6 +67,21 @@
     return next;
   }
 
+  function reconcileCart(state, products) {
+    const next = normalize(state);
+    const catalog = products && typeof products === 'object' ? products : {};
+    next.cart = next.cart.map(line => {
+      const product = catalog[String(line.id)];
+      if (!product) return line;
+      const validOptionIds = new Set([
+        ...(Array.isArray(product.portions) ? product.portions : []),
+        ...(Array.isArray(product.addOns) ? product.addOns : [])
+      ].map(option => text(option && option.id)).filter(Boolean));
+      return { ...line, options: line.options.filter(option => validOptionIds.has(option.id)) };
+    });
+    return next;
+  }
+
   function addCartLine(state, product, quantity, options = [], note = '') {
     const next = normalize(state);
     const qty = Math.max(1, Math.min(20, Math.floor(number(quantity))));
@@ -103,5 +118,5 @@
     return line.quantity > 0 ? next : removeCartLine(next, lineId);
   }
 
-  return { KEY, defaultState, normalize, load, persist, addCartLine, removeCartLine, updateCartQuantity };
+  return { KEY, defaultState, normalize, load, persist, reconcileCart, addCartLine, removeCartLine, updateCartQuantity };
 }));

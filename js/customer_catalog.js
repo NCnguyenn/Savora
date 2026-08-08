@@ -42,7 +42,7 @@
       prepTimeMinutes: Number.isFinite(Number(source.prepTimeMinutes)) ? Number(source.prepTimeMinutes) : null,
       calories: Number.isFinite(Number(source.calories)) ? Number(source.calories) : 0,
       dietaryTags: list(source.dietaryTags), allergens: list(source.allergens), ingredients: list(source.ingredients),
-      portions: portions.length ? portions : [{ id: 'regular', label: 'Regular', price: 0 }], addOns, version: Number(source.version || 0)
+      portions, addOns, version: Number(source.version || 0)
     };
   }
 
