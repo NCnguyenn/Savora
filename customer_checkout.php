@@ -55,6 +55,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         setText('checkout-subtotal', money(data.subtotal)); setText('checkout-discount', data.discount ? `-${money(data.discount)}` : money(0)); setText('checkout-delivery', money(data.deliveryFee)); setText('checkout-total', money(data.total));
         submit.disabled = submitting; submit.querySelector('span').textContent = 'Place order';
     }
+    function renderDraftCart() {
+        const lines = stateApi.load().cart;
+        const items = lines.map(line => {
+            const product = catalog.products[String(line.id)] || {};
+            const quantity = Number(line.quantity || 0);
+            const unitPrice = Number(line.unitPrice || product.price || 0);
+            return { name: line.name || product.name || line.id, quantity, lineTotal: unitPrice * quantity };
+        });
+        const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
+        const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+        setText('checkout-item-count', `${quantity} items`);
+        itemList.replaceChildren(...items.map(item => ui.el('article', { className: 'checkout-item' }, [ui.el('div', {}, [ui.el('h3', {}, item.name), ui.el('p', {}, `Quantity ${item.quantity}`)]), ui.el('strong', {}, money(item.lineTotal))])));
+        setText('checkout-subtotal', money(subtotal)); setText('checkout-discount', '—'); setText('checkout-delivery', '—'); setText('checkout-total', '—');
+        submit.disabled = false; submit.setAttribute('aria-busy', 'false'); submit.querySelector('span').textContent = 'Add more items';
+    }
+    function showQuoteError(error) {
+        renderDraftCart();
+        const message = error && error.message ? error.message : 'Quote was not refreshed.';
+        feedback.textContent = /service area minimum/i.test(message) ? `${message} Add more items to continue.` : message;
+    }
     async function requestQuote() {
         quote = null; submit.disabled = true; submit.querySelector('span').textContent = 'Requesting quote…'; SavoraApi.clearIntentKey('customer-place-order');
         if (!snapshot || !snapshot.addresses || !snapshot.addresses.length) throw new Error('Save a delivery address in Profile before checkout.');
@@ -78,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await requestQuote();
     }
     document.addEventListener('savora:customer-location-changed', () => {
-        refreshAfterLocationChange().catch(error => { feedback.textContent = error.message || 'Delivery quote was not refreshed.'; submit.disabled = true; });
+        refreshAfterLocationChange().catch(showQuoteError);
     });
     try {
         await catalog.hydrate();
@@ -88,12 +108,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         setText('checkout-wallet-balance', `Balance: ${money(snapshot.wallet && snapshot.wallet.balance)}`);
         if (!stateApi.load().cart.length) { ui.showToast('Your cart is empty.'); window.location.replace('customer_cart.php'); return; }
         await requestQuote();
-    } catch (error) { feedback.textContent = error.message || 'Checkout is unavailable.'; submit.disabled = true; }
+    } catch (error) { showQuoteError(error); }
     promo.addEventListener('input', () => { quote = null; submit.disabled = true; });
-    document.getElementById('checkout-apply-promo').addEventListener('click', async () => { try { await requestQuote(); } catch (error) { feedback.textContent = error.message || 'Quote was not refreshed.'; } });
+    document.getElementById('checkout-apply-promo').addEventListener('click', async () => { try { await requestQuote(); } catch (error) { showQuoteError(error); } });
     note.addEventListener('input', event => { resetPlaceOrderIntent(); noteState = window.SavoraCustomerCheckoutNote.edit(noteState, event.target.value); setText('checkout-note-count', `${event.target.value.length}/300`); });
     form.addEventListener('submit', async event => {
-        event.preventDefault(); if (submitting || !quote) return; setBusy(true);
+        event.preventDefault();
+        if (!quote) { window.location.assign('customer_cart.php'); return; }
+        if (submitting) return;
+        setBusy(true);
         try {
             const payment = document.querySelector('input[name="payment"]:checked');
             const result = await SavoraApi.post('api/checkout.php', { action: 'place_order', payload: { quoteId: quote.quoteId, paymentMethod: payment ? payment.value : 'cash', deliveryNote: note.value.trim() } }, SavoraApi.intentKey('customer-place-order'));

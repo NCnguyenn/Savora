@@ -43,3 +43,10 @@ test('shared customer scripts use file-versioned URLs so browser cannot mix JS r
     assert.match(footer, new RegExp(`${escaped}\\?v=<\\?php echo \\$customer_asset_version\\('${escaped}'\\); \\?>`));
   }
 });
+
+test('quote errors preserve the draft cart instead of leaving a fake empty loading state', () => {
+  const checkout = read('customer_checkout.php');
+  assert.match(checkout, /function renderDraftCart\(\)/);
+  assert.match(checkout, /renderDraftCart\(\);[\s\S]*feedback\.textContent/);
+  assert.match(checkout, /Add more items/);
+});
