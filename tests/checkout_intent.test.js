@@ -68,3 +68,11 @@ test('checkout offers a cancellable path that clears server-command intents befo
   assert.match(checkoutPage, /SavoraApi\.clearIntentKey\('customer-place-order'\)/);
   assert.match(checkoutPage, /window\.location\.assign\('customer_cart\.php'\)/);
 });
+
+test('checkout rotates the place-order intent when its payload changes', () => {
+  const checkout = fs.readFileSync('customer_checkout.php', 'utf8');
+  assert.match(checkout, /const resetPlaceOrderIntent = \(\) => SavoraApi\.clearIntentKey\('customer-place-order'\)/);
+  assert.match(checkout, /input\[name="payment"\][\s\S]*resetPlaceOrderIntent/);
+  assert.match(checkout, /note\.addEventListener\('input',[\s\S]*resetPlaceOrderIntent/);
+  assert.match(checkout, /error\.status[\s\S]*resetPlaceOrderIntent/);
+});

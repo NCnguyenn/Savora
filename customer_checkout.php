@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const promo = document.getElementById('checkout-promo'); const promoStatus = document.getElementById('checkout-promo-status'); const feedback = document.getElementById('checkout-feedback');
     const submit = document.getElementById('place-order-button'); const cancel = document.getElementById('cancel-checkout-button'); const itemList = document.getElementById('checkout-items-list');
     let snapshot = null; let quote = null; let submitting = false; let noteState = window.SavoraCustomerCheckoutNote.create();
+    const resetPlaceOrderIntent = () => SavoraApi.clearIntentKey('customer-place-order');
     const money = value => `$${Number(value || 0).toFixed(2)}`;
     const cartPayload = () => stateApi.load().cart.map(line => ({ itemPublicId: String(line.id), quantity: Number(line.quantity || 0), optionPublicIds: (line.options || []).map(option => String(option.id)) }));
     const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
@@ -90,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) { feedback.textContent = error.message || 'Checkout is unavailable.'; submit.disabled = true; }
     promo.addEventListener('input', () => { quote = null; submit.disabled = true; });
     document.getElementById('checkout-apply-promo').addEventListener('click', async () => { try { await requestQuote(); } catch (error) { feedback.textContent = error.message || 'Quote was not refreshed.'; } });
-    note.addEventListener('input', event => { noteState = window.SavoraCustomerCheckoutNote.edit(noteState, event.target.value); setText('checkout-note-count', `${event.target.value.length}/300`); });
+    note.addEventListener('input', event => { resetPlaceOrderIntent(); noteState = window.SavoraCustomerCheckoutNote.edit(noteState, event.target.value); setText('checkout-note-count', `${event.target.value.length}/300`); });
     form.addEventListener('submit', async event => {
         event.preventDefault(); if (submitting || !quote) return; setBusy(true);
         try {
@@ -104,9 +105,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 ui.showToast(`Order ${result.referenceCode} placed.`); window.setTimeout(() => window.location.assign('customer_history.php'), 850);
             }
-        } catch (error) { setBusy(false); feedback.textContent = error.message || 'Order was not placed.'; }
+        } catch (error) {
+            setBusy(false);
+            if (Number(error && error.status) === 409 && /idempotency key/i.test(String(error.message || ''))) {
+                resetPlaceOrderIntent();
+                feedback.textContent = 'Checkout request changed. Please click Place order again.';
+                return;
+            }
+            feedback.textContent = error.message || 'Order was not placed.';
+        }
     });
-    cancel.addEventListener('click', () => { if (submitting) return; SavoraApi.clearIntentKey('customer-checkout-quote'); SavoraApi.clearIntentKey('customer-place-order'); window.location.assign('customer_cart.php'); });
+    document.querySelectorAll('input[name="payment"]').forEach(input => input.addEventListener('change', resetPlaceOrderIntent));
+    cancel.addEventListener('click', () => { if (submitting) return; SavoraApi.clearIntentKey('customer-checkout-quote'); resetPlaceOrderIntent(); window.location.assign('customer_cart.php'); });
 });
 </script>
 <?php include 'components/customer_footer.php'; ?>
