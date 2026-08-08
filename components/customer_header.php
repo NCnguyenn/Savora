@@ -32,6 +32,7 @@ $page_titles = [
     'product_detail.php' => 'Dish details | Savora',
     'customer_cart.php' => 'Your cart | Savora',
     'customer_checkout.php' => 'Checkout | Savora',
+    'seapay_checkout.php' => 'Pay with SePay | Savora',
     'customer_history.php' => 'Your orders | Savora',
     'customer_favorites.php' => 'Favorites | Savora',
     'customer_profile.php' => 'Your profile | Savora',

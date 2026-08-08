@@ -583,6 +583,63 @@ h3 { font-size: 1rem; line-height: 1.35; }
   .favorite-card-grid { grid-template-columns: 1fr; }
 }
 
+/* SePay checkout */
+.seapay-page { width: min(100% - 2rem, 1180px); padding-block: clamp(2rem, 5vw, 4rem); }
+.seapay-title-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; margin-bottom: 1.5rem; }
+.seapay-title-row .page-title-block { margin-bottom: 0; }
+.seapay-title-row h1 { margin-bottom: .45rem; font-family: Georgia, "Times New Roman", serif; color: var(--savora-forest); }
+.seapay-shell { display: grid; justify-items: center; }
+.seapay-payment-card, .seapay-receipt, .seapay-not-found { width: min(100%, 62rem); padding: clamp(1.25rem, 4vw, 2.25rem); }
+.seapay-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--savora-line); }
+.seapay-card-heading h2 { margin: .2rem 0 0; font-family: Georgia, "Times New Roman", serif; color: var(--savora-ink); }
+.seapay-payment-layout { display: grid; grid-template-columns: minmax(17rem, .8fr) minmax(0, 1.2fr); gap: clamp(1.25rem, 4vw, 2.5rem); padding-top: 1.5rem; }
+.seapay-qr-column { min-width: 0; }
+.seapay-qr-frame { display: grid; place-items: center; padding: 1rem; border: 1px solid var(--savora-line); border-radius: 1rem; background: #fff; }
+.seapay-qr-frame img { display: block; width: min(100%, 22rem); height: auto; border-radius: .75rem; }
+.seapay-qr-help { display: flex; align-items: flex-start; gap: .55rem; margin: .8rem 0 0; color: var(--savora-muted); font-size: .78rem; line-height: 1.5; }
+.seapay-qr-help i { margin-top: .15rem; color: var(--savora-forest); }
+.seapay-transfer-details { min-width: 0; }
+.seapay-transfer-details h3 { margin-bottom: 1rem; font-family: Georgia, "Times New Roman", serif; }
+.seapay-transfer-details dl, .seapay-receipt-list { margin: 0; }
+.seapay-copy-row, .seapay-receipt-list > div { display: grid; grid-template-columns: minmax(8rem, .65fr) minmax(0, 1.35fr); gap: 1rem; padding: .85rem 0; border-top: 1px solid var(--savora-line); }
+.seapay-copy-row dt, .seapay-receipt-list dt { color: var(--savora-muted); }
+.seapay-copy-row dd, .seapay-receipt-list dd { margin: 0; color: var(--savora-ink); font-weight: 900; overflow-wrap: anywhere; text-align: right; }
+.seapay-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.seapay-actions .primary-action, .seapay-actions .secondary-action { justify-content: center; }
+.seapay-waiting-state { display: flex; align-items: center; gap: .65rem; margin: 1rem 0 0; color: var(--savora-muted); font-size: .8rem; line-height: 1.5; }
+.seapay-waiting-state > span { width: .65rem; height: .65rem; flex: 0 0 auto; border-radius: 50%; background: var(--savora-coral); box-shadow: 0 0 0 .3rem rgba(244, 98, 75, .14); }
+.seapay-waiting-state.is-error { color: #a23d2d; }
+.seapay-configuration-error { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .8rem; padding: 1rem; border: 1px solid #e9b8aa; border-radius: .9rem; color: #7f3025; background: #fff2ed; }
+.seapay-configuration-error > i { margin-top: .2rem; }
+.seapay-configuration-error p { margin: .3rem 0 0; color: #8b5149; font-size: .82rem; line-height: 1.5; }
+.seapay-receipt { justify-items: center; text-align: center; }
+.seapay-receipt:not([hidden]) { display: grid; }
+.seapay-receipt > p:not(.eyebrow) { max-width: 35rem; color: var(--savora-muted); }
+.seapay-receipt h2 { margin: .4rem 0 .55rem; font-family: Georgia, "Times New Roman", serif; color: var(--savora-forest); }
+.seapay-receipt-mark, .seapay-state-icon { display: grid; place-items: center; width: 4.5rem; height: 4.5rem; margin-bottom: 1rem; border-radius: 50%; color: #fff; background: var(--savora-forest); font-size: 1.7rem; }
+.seapay-receipt-list { width: min(100%, 38rem); margin-top: 1rem; text-align: left; }
+.seapay-receipt-action { width: min(100%, 24rem); justify-content: center; margin-top: 1.5rem; }
+.seapay-not-found { display: grid; justify-items: center; gap: .7rem; margin-inline: auto; text-align: center; }
+.seapay-not-found h2, .seapay-not-found p { margin: 0; }
+.seapay-not-found p { max-width: 34rem; color: var(--savora-muted); }
+.seapay-not-found .primary-action { margin-top: .5rem; }
+
+@media (max-width: 768px) {
+  .seapay-title-row { align-items: flex-start; flex-direction: column; }
+  .seapay-title-row .checkout-steps { width: 100%; }
+  .seapay-payment-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .seapay-page { width: min(100% - 1rem, 1180px); }
+  .seapay-payment-card, .seapay-receipt, .seapay-not-found { padding: 1rem; }
+  .seapay-card-heading { flex-direction: column; }
+  .seapay-copy-row, .seapay-receipt-list > div { grid-template-columns: 1fr; gap: .3rem; }
+  .seapay-copy-row dd, .seapay-receipt-list dd { text-align: left; }
+  .seapay-actions { align-items: stretch; flex-direction: column; }
+  .seapay-actions .primary-action, .seapay-actions .secondary-action { width: 100%; }
+}
+
 /* Profile */
 .profile-page, .wallet-page { padding-block: clamp(2rem, 5vw, 4rem); }
 .profile-title-block, .wallet-title-row { margin-bottom: 1.5rem; }
