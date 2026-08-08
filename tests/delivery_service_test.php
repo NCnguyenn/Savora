@@ -58,6 +58,16 @@ try {
     delivery_test_expect((float) ($shiftLocation['latitude'] ?? 0) === 13.7 && (float) ($shiftLocation['longitude'] ?? 0) === 100.6, 'Demo shift must copy saved profile coordinates.');
     $shiftRecordedAt = new DateTimeImmutable((string) ($shiftLocation['recorded_at'] ?? ''));
     delivery_test_expect($shiftRecordedAt >= $shiftBefore && $shiftRecordedAt <= $shiftAfter, 'Demo shift freshness must use MySQL NOW().');
+    $shiftAuditRows = $conn->query("SELECT action,before_summary,after_summary FROM audit_logs WHERE actor_user_id={$driver} AND action='driver_availability_updated' ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
+    delivery_test_expect(count($shiftAuditRows) === 1, 'Successful demo shift must create exactly one availability audit entry.');
+    $shiftBeforeAudit = json_decode((string) ($shiftAuditRows[0]['before_summary'] ?? ''), true, 512, JSON_THROW_ON_ERROR);
+    $shiftAfterAudit = json_decode((string) ($shiftAuditRows[0]['after_summary'] ?? ''), true, 512, JSON_THROW_ON_ERROR);
+    delivery_test_expect(($shiftBeforeAudit['availabilityStatus'] ?? '') === 'online' && (float) ($shiftBeforeAudit['location']['latitude'] ?? -1) === 0.0, 'Availability audit before context must preserve the stale location.');
+    delivery_test_expect(($shiftAfterAudit['availabilityStatus'] ?? '') === 'online' && (float) ($shiftAfterAudit['location']['latitude'] ?? 0) === 13.7 && (float) ($shiftAfterAudit['location']['longitude'] ?? 0) === 100.6, 'Availability audit after context must preserve the refreshed saved location.');
+    $demoShiftReplay = driver_start_demo_shift($conn, $driver, $prefix . '-shift-start');
+    delivery_test_expect($demoShiftReplay === $demoShift, 'Exact demo shift replay must return the stored response.');
+    $shiftAuditCountAfterReplay = (int) ($conn->query("SELECT COUNT(*) AS total FROM audit_logs WHERE actor_user_id={$driver} AND action='driver_availability_updated'")->fetch_assoc()['total'] ?? 0);
+    delivery_test_expect($shiftAuditCountAfterReplay === 1, 'Exact demo shift replay must not duplicate its audit entry.');
 
     $address = $conn->prepare("INSERT INTO customer_addresses(customer_user_id,public_id,label,recipient_name,phone,address_line1,city,latitude,longitude,is_default) VALUES(?,?,'Demo','Delivery Customer','0800000000','Delivery address','Test City',13.7600000,100.6100000,1)");
     $addressPublicId = strtolower($prefix) . '-address'; $address->bind_param('is', $customer, $addressPublicId); $address->execute(); $address->close();
@@ -146,6 +156,7 @@ try {
         $conn->query("DROP TRIGGER IF EXISTS {$finishFailureTrigger}");
         $pattern = $prefix . '%';
         $queries = [
+            'DELETE FROM audit_logs WHERE actor_user_id IN (SELECT id FROM users WHERE username LIKE ?)',
             'DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE username LIKE ?)',
             'DELETE FROM idempotency_keys WHERE actor_user_id IN (SELECT id FROM users WHERE username LIKE ?)',
             'DELETE FROM order_status_history WHERE order_id IN (SELECT id FROM orders WHERE reference_code LIKE ?)',

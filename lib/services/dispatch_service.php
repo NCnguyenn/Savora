@@ -109,6 +109,18 @@ function driver_set_availability(
         } elseif ((string) $profile['eligibility_status'] !== 'eligible') {
             $result = dispatch_result(false, 403, 'Driver is not eligible for dispatch.');
         } else {
+            $locationBefore = dispatch_repository_driver_location($conn, $driverUserId);
+            $before = [
+                'availabilityStatus' => (string) $profile['availability_status'],
+                'profileVersion' => (int) $profile['version'],
+                'location' => $locationBefore === [] ? null : [
+                    'latitude' => (float) $locationBefore['latitude'],
+                    'longitude' => (float) $locationBefore['longitude'],
+                    'accuracyMeters' => $locationBefore['accuracy_meters'] === null ? null : (float) $locationBefore['accuracy_meters'],
+                    'recordedAt' => (string) $locationBefore['recorded_at'],
+                    'version' => (int) $locationBefore['version'],
+                ],
+            ];
             $profileUpdate = $conn->prepare('UPDATE driver_profiles SET availability_status=?,version=version+1 WHERE user_id=? AND version=?');
             $version = (int) $profile['version']; $profileUpdate->bind_param('sii', $availabilityStatus, $driverUserId, $version); $profileUpdate->execute(); $profileUpdate->close();
             if ($availabilityStatus === 'online') {
@@ -120,6 +132,19 @@ function driver_set_availability(
                 $location->bind_param('iddds', $driverUserId, $latitude, $longitude, $accuracyMeters, $recordedAt); $location->execute(); $location->close();
             }
             $result = dispatch_result(true, 200, 'Driver availability updated.', ['driverUserId' => $driverUserId, 'availabilityStatus' => $availabilityStatus, 'version' => $version + 1]);
+            $locationAfter = dispatch_repository_driver_location($conn, $driverUserId);
+            $after = [
+                'availabilityStatus' => $availabilityStatus,
+                'profileVersion' => $version + 1,
+                'location' => $locationAfter === [] ? null : [
+                    'latitude' => (float) $locationAfter['latitude'],
+                    'longitude' => (float) $locationAfter['longitude'],
+                    'accuracyMeters' => $locationAfter['accuracy_meters'] === null ? null : (float) $locationAfter['accuracy_meters'],
+                    'recordedAt' => (string) $locationAfter['recorded_at'],
+                    'version' => (int) $locationAfter['version'],
+                ],
+            ];
+            audit_append($conn, $driverUserId, 'driver_availability_updated', 'driver_profile', $driverUserId, $before, $after, 'Driver availability and location updated.', 'DRV-AVL-' . strtoupper(bin2hex(random_bytes(5))));
         }
         if ($idempotencyKey !== '') savora_idempotency_store($conn, $driverUserId, $idempotencyKey, 'driver_set_availability', $hash, $result);
         $conn->commit();

@@ -7,7 +7,12 @@ function primaryAction(delivery, demoMode) {
   return null;
 }
 
-if (typeof module === 'object' && module.exports) module.exports = { primaryAction };
+function resetProofState(input, status) {
+  if (input) input.value = '';
+  if (status) status.textContent = '';
+}
+
+if (typeof module === 'object' && module.exports) module.exports = { primaryAction, resetProofState };
 
 (function attachDriverDelivery(root) {
   'use strict';
@@ -116,7 +121,11 @@ if (typeof module === 'object' && module.exports) module.exports = { primaryActi
   function renderDelivery(delivery) {
     const empty = doc.querySelector('[data-delivery-empty]');
     const content = doc.querySelector('[data-delivery-content]');
-    if (!delivery) { activeDelivery = null; empty.hidden = false; content.hidden = true; setText('[data-active-order-id]', 'No active order'); setText('[data-active-delivery-status]', 'Waiting'); return; }
+    const previousDeliveryId = activeDelivery?.deliveryId ?? null;
+    const proofInput = doc.getElementById('driver-delivery-proof');
+    const proofStatus = doc.querySelector('[data-delivery-proof-status]');
+    if (!delivery) { resetProofState(proofInput, proofStatus); activeDelivery = null; empty.hidden = false; content.hidden = true; setText('[data-active-order-id]', 'No active order'); setText('[data-active-delivery-status]', 'Waiting'); return; }
+    if (previousDeliveryId !== null && previousDeliveryId !== delivery.deliveryId) resetProofState(proofInput, proofStatus);
     activeDelivery = delivery; empty.hidden = true; content.hidden = false;
     setText('[data-active-order-id]', `Order #${delivery.orderId}`); setText('[data-active-delivery-status]', ui.titleCase(delivery.status));
     setText('[data-pickup-name]', delivery.restaurantName); setText('[data-pickup-address]', delivery.pickupAddress); setText('[data-customer-name]', delivery.customerName);

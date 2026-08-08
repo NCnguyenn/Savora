@@ -19,6 +19,15 @@ test('Driver primary action selects demo and real delivery commands', () => {
   assert.equal(actions.primaryAction?.(null, true), null);
 });
 
+test('Driver proof state reset clears a selected file and stale status', () => {
+  const input = { value: 'C:\\fakepath\\proof.png' };
+  const status = { textContent: 'Proof verified by the server.' };
+  assert.equal(typeof actions.resetProofState, 'function');
+  actions.resetProofState(input, status);
+  assert.equal(input.value, '');
+  assert.equal(status.textContent, '');
+});
+
 test('Driver demo delivery polls authoritative tracking and gates completion on arrival', () => {
   const controller = read('js/driver_delivery.js');
   assert.match(controller, /api\/tracking\.php\?order=/);
