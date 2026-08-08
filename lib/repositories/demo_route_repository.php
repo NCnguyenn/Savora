@@ -25,7 +25,13 @@ function demo_route_repository_start_target(mysqli $conn, int $deliveryId): arra
          JOIN restaurants r ON r.id=o.restaurant_id
          LEFT JOIN checkout_quotes q ON q.id=o.quote_id
          LEFT JOIN customer_addresses qa ON qa.id=q.address_id AND qa.customer_user_id=o.customer_user_id
-         LEFT JOIN customer_addresses da ON da.customer_user_id=o.customer_user_id AND da.is_default=1
+         LEFT JOIN customer_addresses da ON da.id=(
+             SELECT fallback_address.id
+             FROM customer_addresses fallback_address
+             WHERE fallback_address.customer_user_id=o.customer_user_id AND fallback_address.is_default=1
+             ORDER BY fallback_address.updated_at DESC,fallback_address.id DESC
+             LIMIT 1
+         )
          WHERE d.id=? LIMIT 1 FOR UPDATE',
         'i',
         [$deliveryId]

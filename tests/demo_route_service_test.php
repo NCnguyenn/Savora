@@ -149,13 +149,23 @@ try {
     $restaurant->close();
 
     $defaultAddressId = route_insert_address($conn, $customerId, 'default-' . $suffix, true, 11.0, 107.0);
+    $newerDefaultAddressId = route_insert_address($conn, $customerId, 'default-newer-' . $suffix, true, 12.0, 108.0);
     $quotedAddressId = route_insert_address($conn, $customerId, 'quoted-' . $suffix, false, 10.01, 106.02);
-    $addressIds = [$defaultAddressId, $quotedAddressId];
+    $addressIds = [$defaultAddressId, $newerDefaultAddressId, $quotedAddressId];
+    $conn->query("UPDATE customer_addresses SET updated_at='2026-08-07 10:00:00' WHERE id=" . $defaultAddressId);
+    $conn->query("UPDATE customer_addresses SET updated_at='2026-08-08 10:00:00' WHERE id=" . $newerDefaultAddressId);
     $quoteId = route_insert_quote($conn, 'quote-' . $suffix, $customerId, $restaurantId, $quotedAddressId);
     $quoteIds = [$quoteId];
     $primary = route_insert_order_delivery($conn, $reference, $customerId, $restaurantId, $driverId, $quoteId);
     $real = route_insert_order_delivery($conn, $realReference, $customerId, $restaurantId, $driverId, null);
     $orderIds = [(int) $primary['orderId'], (int) $real['orderId']];
+
+    $fallbackTarget = demo_route_repository_start_target($conn, (int) $real['deliveryId']);
+    route_expect((float) ($fallbackTarget['end_latitude'] ?? 0) === 12.0 && (float) ($fallbackTarget['end_longitude'] ?? 0) === 108.0, 'Route fallback must select the most recently updated default address.');
+    $fallbackRows = order_repository_order_base($conn, 'o.id=?', 'i', [(int) $real['orderId']]);
+    route_expect(count($fallbackRows) === 1, 'Multiple default addresses must not duplicate an order read row.');
+    $fallbackOrder = order_repository_map_order($conn, $fallbackRows[0]);
+    route_expect(($fallbackOrder['deliveryLocation'] ?? null) === ['latitude' => 12.0, 'longitude' => 108.0], 'Order fallback must select the most recently updated default address.');
 
     putenv('SAVORA_ENV=production');
     $production = demo_route_start($conn, $driverId, (int) $primary['deliveryId'], 1, 'route-production-' . $suffix);

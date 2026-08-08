@@ -44,6 +44,8 @@ test('demo route service exposes deterministic server-timed operations', () => {
   assert.match(repository, /LIMIT 1 FOR UPDATE/);
   assert.match(repository, /LEFT JOIN checkout_quotes q ON q\.id=o\.quote_id/);
   assert.match(repository, /LEFT JOIN customer_addresses qa ON qa\.id=q\.address_id AND qa\.customer_user_id=o\.customer_user_id/);
+  assert.match(repository, /LEFT JOIN customer_addresses da ON da\.id=\(/);
+  assert.match(repository, /ORDER BY fallback_address\.updated_at DESC,fallback_address\.id DESC/);
   assert.match(repository, /COALESCE\(qa\.latitude,da\.latitude\) AS end_latitude/);
   assert.match(repository, /COALESCE\(qa\.longitude,da\.longitude\) AS end_longitude/);
 });
@@ -53,7 +55,8 @@ test('order reads use the immutable quoted address before the mutable default', 
 
   assert.match(repository, /LEFT JOIN checkout_quotes q ON q\.id=o\.quote_id/);
   assert.match(repository, /LEFT JOIN customer_addresses qa ON qa\.id=q\.address_id AND qa\.customer_user_id=o\.customer_user_id/);
-  assert.match(repository, /LEFT JOIN customer_addresses da ON da\.customer_user_id=o\.customer_user_id AND da\.is_default=1/);
+  assert.match(repository, /LEFT JOIN customer_addresses da ON da\.id=\(/);
+  assert.match(repository, /ORDER BY fallback_address\.updated_at DESC,fallback_address\.id DESC/);
   assert.match(repository, /COALESCE\(qa\.latitude,da\.latitude\) AS customer_latitude/);
   assert.match(repository, /COALESCE\(qa\.longitude,da\.longitude\) AS customer_longitude/);
 });
