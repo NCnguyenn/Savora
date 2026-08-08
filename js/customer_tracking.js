@@ -72,6 +72,7 @@
     let routeLayers = null;
     let generation = 0;
     let lifecycleGeneration = 0;
+    let confirmationInFlight = false;
 
     const setText = (element, value) => { if (element) element.textContent = value; };
     const create = (name, text) => {
@@ -136,6 +137,7 @@
       const delivered = order.status === 'delivered';
       mapElement.hidden = !['picked_up', 'delivered'].includes(order.status);
       receiptButton.hidden = !delivered;
+      receiptButton.disabled = delivered && confirmationInFlight;
       if (delivered) receiptButton.textContent = order.paymentMethod === 'cash' ? 'Received and paid' : 'I received my order';
     }
 
@@ -237,10 +239,11 @@
     }
 
     async function confirmReceived() {
-      if (!currentOrder || currentOrder.status !== 'delivered') return;
+      if (confirmationInFlight || !currentOrder || currentOrder.status !== 'delivered') return;
       const request = receiptRequest(currentOrder);
       const confirmationLifecycle = lifecycleGeneration;
       const canApplyConfirmation = () => !stopped && shouldPoll(documentRef.visibilityState) && confirmationLifecycle === lifecycleGeneration;
+      confirmationInFlight = true;
       receiptButton.disabled = true;
       setText(feedback, 'Confirming receipt…');
       try {
@@ -248,12 +251,12 @@
         api.clearIntentKey(request.scope);
         if (!canApplyConfirmation()) return;
         setText(feedback, 'Receipt confirmed. Thank you.');
-        receiptButton.disabled = false;
         await refresh();
       } catch (error) {
         if (!canApplyConfirmation()) return;
         setText(feedback, error?.message || 'Receipt could not be confirmed. Please try again.');
       } finally {
+        confirmationInFlight = false;
         if (canApplyConfirmation()) receiptButton.disabled = false;
       }
     }

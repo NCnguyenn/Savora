@@ -283,6 +283,50 @@ test('receipt confirmation retains its stable key and re-enables the button on f
   controller.stop();
 });
 
+test('hidden receipt failure rehydrates an enabled retry without clearing the stable key', async () => {
+  const postGate = deferred();
+  const order = { id: 'D-6', referenceCode: 'D-6', status: 'delivered', paymentMethod: 'cash', version: 4, assignment: {} };
+  const harness = trackingHarness(order, { route: {} });
+  let postedKey = '';
+  harness.api.post = async (_url, _body, key) => { postedKey = key; return postGate.promise; };
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+
+  const confirming = harness.elements['[data-confirm-received]'].listeners.click();
+  harness.document.visibilityState = 'hidden';
+  harness.document.listeners.visibilitychange();
+  postGate.reject(new Error('Confirmation failed.'));
+  await confirming;
+  const hiddenFeedback = harness.elements['[data-live-order-feedback]'].textContent;
+
+  harness.document.visibilityState = 'visible';
+  harness.document.listeners.visibilitychange();
+  for (let step = 0; step < 5; step += 1) await Promise.resolve();
+
+  assert.equal(harness.elements['[data-confirm-received]'].disabled, false);
+  assert.equal(hiddenFeedback, 'Confirming receipt…');
+  assert.equal(postedKey, 'intent-customer-confirm-received-D-6');
+  assert.deepEqual(harness.cleared, []);
+  controller.stop();
+});
+
+test('receipt confirmation ignores a second click while its POST is in flight', async () => {
+  const postGate = deferred();
+  const order = { id: 'D-7', referenceCode: 'D-7', status: 'delivered', paymentMethod: 'cash', version: 5, assignment: {} };
+  const harness = trackingHarness(order, { route: {} });
+  let postCount = 0;
+  harness.api.post = async () => { postCount += 1; return postGate.promise; };
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+
+  const first = harness.elements['[data-confirm-received]'].listeners.click();
+  const second = harness.elements['[data-confirm-received]'].listeners.click();
+  assert.equal(postCount, 1);
+  postGate.resolve({});
+  await Promise.all([first, second]);
+  controller.stop();
+});
+
 test('the browser controller uses recursive visible polling, map fallback, and safe DOM rendering', () => {
   assert.match(source, /setTimeout\(refresh, delay\)/);
   assert.doesNotMatch(source, /setInterval\s*\(/);
