@@ -8,6 +8,13 @@ const path = require('node:path');
 const tracking = require('../js/customer_tracking.js');
 const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'customer_tracking.js'), 'utf8');
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => { resolve = nextResolve; reject = nextReject; });
+  return { promise, resolve, reject };
+}
+
 function trackingHarness(order, trackingResponse) {
   const elements = {};
   const element = () => ({
@@ -23,12 +30,13 @@ function trackingHarness(order, trackingResponse) {
   card.querySelector = selector => elements[selector] || null;
   const document = {
     visibilityState: 'visible',
+    listeners: {},
     querySelector: selector => selector === '[data-customer-live-order]' ? card : null,
     createElement: element,
-    addEventListener() {}
+    addEventListener(type, listener) { this.listeners[type] = listener; }
   };
   const schedules = [];
-  const window = { clearTimeout() {}, setTimeout(_fn, delay) { schedules.push(delay); return schedules.length; }, addEventListener() {} };
+  const window = { listeners: {}, clearTimeout() {}, setTimeout(_fn, delay) { schedules.push(delay); return schedules.length; }, addEventListener(type, listener) { this.listeners[type] = listener; } };
   const calls = [];
   const posts = [];
   const cleared = [];
@@ -121,6 +129,116 @@ test('mount posts delivered receipt confirmation with the stable key then clears
     key: 'intent-customer-confirm-received-D-1'
   }]);
   assert.deepEqual(harness.cleared, ['customer-confirm-received-D-1']);
+  controller.stop();
+});
+
+test('mount ignores an orders response that settles after the tab becomes hidden', async () => {
+  const gate = deferred();
+  const harness = trackingHarness({ id: 'P-1', referenceCode: 'P-1', status: 'picked_up' });
+  harness.api.get = async url => { harness.calls.push(url); return gate.promise; };
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  const pending = controller.refresh();
+  await Promise.resolve();
+
+  harness.document.visibilityState = 'hidden';
+  harness.document.listeners.visibilitychange();
+  gate.resolve({ orders: [{ id: 'P-1', referenceCode: 'P-1', status: 'picked_up' }] });
+  await pending;
+
+  assert.deepEqual(harness.calls, ['api/orders.php?pageSize=50']);
+  assert.equal(harness.elements['[data-live-order-status]'].textContent, '');
+  controller.stop();
+});
+
+test('mount ignores a route response that settles after pagehide', async () => {
+  const routeGate = deferred();
+  const order = { id: 'P-2', referenceCode: 'P-2', status: 'picked_up', assignment: {} };
+  const harness = trackingHarness(order);
+  harness.api.get = async url => {
+    harness.calls.push(url);
+    return url.startsWith('api/orders.php') ? { orders: [order] } : routeGate.promise;
+  };
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  const pending = controller.refresh();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  harness.window.listeners.pagehide();
+  routeGate.resolve({ route: { progress: 1, start: { latitude: 1, longitude: 1 }, current: { latitude: 2, longitude: 2 }, end: { latitude: 3, longitude: 3 } } });
+  await pending;
+
+  assert.equal(harness.elements['[data-route-updated]'].textContent, '');
+  assert.equal(harness.elements['[data-tracking-map]'].classList.values.size, 0);
+});
+
+test('mount starts a fresh request when a hidden tab becomes visible', async () => {
+  const harness = trackingHarness({ id: 'P-3', referenceCode: 'P-3', status: 'preparing' });
+  harness.document.visibilityState = 'hidden';
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+  assert.equal(harness.calls.length, 0);
+
+  harness.document.visibilityState = 'visible';
+  harness.document.listeners.visibilitychange();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(harness.calls, ['api/orders.php?pageSize=50']);
+  controller.stop();
+});
+
+test('delivered route stays visible and retains its vector state through a tracking error', async () => {
+  const removed = [];
+  const map = { removeLayer(layer) { removed.push(layer); }, fitBounds() {} };
+  const savedLeaflet = globalThis.L;
+  globalThis.L = {
+    map: () => map,
+    tileLayer: () => ({ on() { return this; }, addTo() { return this; } }),
+    polyline: () => ({ addTo() { return {}; } }),
+    circleMarker: () => ({ addTo() { return {}; } }),
+    latLngBounds: points => points
+  };
+  const order = { id: 'D-2', referenceCode: 'D-2', status: 'delivered', assignment: {} };
+  const harness = trackingHarness(order);
+  let routeReads = 0;
+  harness.api.get = async url => {
+    harness.calls.push(url);
+    if (url.startsWith('api/orders.php')) return { orders: [order] };
+    routeReads += 1;
+    if (routeReads === 1) return { route: { progress: 1, arrived: true, start: { latitude: 1, longitude: 1 }, current: { latitude: 2, longitude: 2 }, end: { latitude: 3, longitude: 3 } } };
+    throw new Error('Tracking is temporarily unavailable.');
+  };
+  try {
+    const controller = tracking.mount({ ...harness, autoStart: false });
+    await controller.refresh();
+    const arrived = harness.elements['[data-route-updated]'].textContent;
+    await controller.refresh();
+
+    assert.equal(harness.elements['[data-live-driver]'].hidden, false);
+    assert.equal(harness.elements['[data-tracking-map]'].hidden, false);
+    assert.equal(harness.elements['[data-route-updated]'].textContent, arrived);
+    assert.equal(removed.length, 0);
+    controller.stop();
+  } finally {
+    if (savedLeaflet === undefined) delete globalThis.L;
+    else globalThis.L = savedLeaflet;
+  }
+});
+
+test('receipt confirmation does not render a stale success message after pagehide', async () => {
+  const postGate = deferred();
+  const order = { id: 'D-3', referenceCode: 'D-3', status: 'delivered', paymentMethod: 'cash', version: 1, assignment: {} };
+  const harness = trackingHarness(order, { route: {} });
+  harness.api.post = async () => postGate.promise;
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+
+  const confirming = harness.elements['[data-confirm-received]'].listeners.click();
+  harness.window.listeners.pagehide();
+  postGate.resolve({});
+  await confirming;
+
+  assert.notEqual(harness.elements['[data-live-order-feedback]'].textContent, 'Receipt confirmed. Thank you.');
+  assert.deepEqual(harness.cleared, ['customer-confirm-received-D-3']);
   controller.stop();
 });
 

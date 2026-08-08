@@ -70,6 +70,7 @@
     let failures = 0;
     let map = null;
     let routeLayers = null;
+    let generation = 0;
 
     const setText = (element, value) => { if (element) element.textContent = value; };
     const create = (name, text) => {
@@ -124,11 +125,12 @@
         : assignment.driverName || assignment.name
           ? `Driver assigned: ${assignment.driverName || assignment.name}${assignment.vehicle ? ` · ${assignment.vehicle}` : ''}`
           : order.status === 'assigned' ? 'A driver has been assigned to your order.' : '';
+      const routeStage = ['assigned', 'picked_up', 'delivered'].includes(order.status);
       if (driverText) {
         driver.hidden = false;
         setText(routeUpdated, driverText);
       } else {
-        driver.hidden = true;
+        driver.hidden = !routeStage;
       }
       const delivered = order.status === 'delivered';
       mapElement.hidden = !['picked_up', 'delivered'].includes(order.status);
@@ -203,47 +205,64 @@
         schedule(2000);
         return;
       }
+      const requestGeneration = ++generation;
+      const canApply = () => !stopped && shouldPoll(documentRef.visibilityState) && requestGeneration === generation;
       try {
         const snapshot = await api.get('api/orders.php?pageSize=50');
+        if (!canApply()) return;
         const active = selectActiveOrder(snapshot?.orders);
         renderOrder(active);
         if (shouldLoadRoute(active)) {
           try {
             const route = await api.get(`api/tracking.php?order=${encodeURIComponent(active.referenceCode || active.id)}`);
+            if (!canApply()) return;
             renderRoute(active, route);
           } catch (error) {
+            if (!canApply()) return;
             if (active.status !== 'assigned' || Number(error?.status) !== 404) throw error;
           }
         }
+        if (!canApply()) return;
         failures = 0;
         setText(feedback, '');
       } catch (error) {
+        if (!canApply()) return;
         failures += 1;
         renderFailure(error);
       }
+      if (!canApply()) return;
       schedule(nextDelay(failures));
     }
 
     async function confirmReceived() {
       if (!currentOrder || currentOrder.status !== 'delivered') return;
       const request = receiptRequest(currentOrder);
+      const confirmationGeneration = generation;
+      const canApplyConfirmation = () => !stopped && shouldPoll(documentRef.visibilityState) && confirmationGeneration === generation;
       receiptButton.disabled = true;
       setText(feedback, 'Confirming receipt…');
       try {
         await api.post('api/orders.php', request.body, api.intentKey(request.scope));
         api.clearIntentKey(request.scope);
+        if (!canApplyConfirmation()) return;
         setText(feedback, 'Receipt confirmed. Thank you.');
+        receiptButton.disabled = false;
         await refresh();
       } catch (error) {
+        if (!canApplyConfirmation()) return;
         setText(feedback, error?.message || 'Receipt could not be confirmed. Please try again.');
       } finally {
-        receiptButton.disabled = false;
+        if (canApplyConfirmation()) receiptButton.disabled = false;
       }
     }
 
     receiptButton.addEventListener('click', confirmReceived);
-    const onVisibility = () => { if (shouldPoll(documentRef.visibilityState)) { windowRef.clearTimeout(timer); refresh(); } };
-    const stop = () => { stopped = true; windowRef.clearTimeout(timer); };
+    const onVisibility = () => {
+      generation += 1;
+      windowRef.clearTimeout(timer);
+      if (shouldPoll(documentRef.visibilityState)) refresh();
+    };
+    const stop = () => { stopped = true; generation += 1; windowRef.clearTimeout(timer); };
     documentRef.addEventListener('visibilitychange', onVisibility);
     windowRef.addEventListener('pagehide', stop, { once: true });
     if (options.autoStart !== false) refresh();

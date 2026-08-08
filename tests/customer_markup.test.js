@@ -611,4 +611,7 @@ test('Customer history provides one semantic live-tracking card with local Leafl
   assert.match(css, /\.customer-tracking-map\s*\{[^}]*min-height:/);
   assert.match(css, /\.is-map-fallback/);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.active-order-summary \[data-live-driver\] > p\s*\{[^}]*flex-direction:\s*column;/);
+  assert.match(css, /\.order-progress\s*\{[^}]*grid-template-columns:\s*repeat\(7,/);
+  assert.doesNotMatch(css, /\.order-progress\s*\{[^}]*grid-template-columns:\s*repeat\(4,/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.order-progress\s*\{[^}]*overflow-x:\s*auto;/);
 });

@@ -448,8 +448,8 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .active-order-address i { margin-top: .15rem; color: var(--savora-forest); }
 .order-delivery-note, .active-order-delivery-note, .tracking-delivery-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .55rem !important; color: var(--savora-forest); font-size: .8rem; line-height: 1.45; overflow-wrap: anywhere; }
 .active-order-delivery-note, .tracking-delivery-note { padding: .7rem; border-radius: .7rem; background: #f2f6ed; }
-.order-progress { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); margin: 1.25rem 0; padding: 0; list-style: none; }
-.order-progress::before { content: ""; position: absolute; z-index: 0; top: .9rem; right: 12.5%; left: 12.5%; border-top: 2px solid var(--savora-line); }
+.order-progress { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 1.25rem 0; padding: 0; list-style: none; }
+.order-progress::before { content: ""; position: absolute; z-index: 0; top: .9rem; right: 7.15%; left: 7.15%; border-top: 2px solid var(--savora-line); }
 .order-progress li { position: relative; z-index: 1; min-width: 0; display: grid; justify-items: center; gap: .2rem; color: var(--savora-muted); text-align: center; }
 .order-progress li > span { position: relative; z-index: 1; display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; color: var(--savora-muted); background: var(--savora-line); }
 .order-progress .is-complete > span, .order-progress .is-current > span { color: #fff; background: var(--savora-forest); }
@@ -512,6 +512,7 @@ h3 { font-size: 1rem; line-height: 1.35; }
   .active-order-panel { position: static; grid-row: 1; }
   .customer-tracking-map { min-height: 12rem; }
   .active-order-summary [data-live-driver] > p { align-items: flex-start; flex-direction: column; }
+  .order-progress { grid-template-columns: repeat(7, minmax(4.5rem, 1fr)); overflow-x: auto; overscroll-behavior-inline: contain; padding-bottom: .5rem; }
   .favorite-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
