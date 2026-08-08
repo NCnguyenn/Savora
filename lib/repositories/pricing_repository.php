@@ -77,7 +77,7 @@ function pricing_repository_promotion_usage(mysqli $conn, int $promotionId): int
 
 function pricing_repository_customer_has_delivered_order(mysqli $conn, int $customerUserId): bool
 {
-    return pricing_repository_one($conn, "SELECT id FROM orders WHERE customer_user_id=? AND status='delivered' LIMIT 1", 'i', [$customerUserId]) !== [];
+    return pricing_repository_one($conn, "SELECT id FROM orders WHERE customer_user_id=? AND status IN ('delivered','completed') LIMIT 1", 'i', [$customerUserId]) !== [];
 }
 
 function pricing_repository_insert_quote(

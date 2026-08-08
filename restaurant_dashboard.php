@@ -36,9 +36,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     const profile = catalog.restaurant || {};
     const operations = profile.operations || {};
-    const completed = orders.filter(order => order.status === 'delivered');
+    const completed = orders.filter(order => ['delivered', 'completed'].includes(order.status));
     const revenue = completed.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const accepted = orders.filter(order => ['confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered'].includes(order.status)).length;
+    const accepted = orders.filter(order => ['confirmed', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'delivered', 'completed'].includes(order.status)).length;
     const set = (selector, value) => { const node = document.querySelector(selector); if (node) node.textContent = value; };
     set('[data-kpi="revenue"]', ui.formatMoney(revenue));
     set('[data-kpi="orders"]', String(orders.length));
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     const queue = document.querySelector('[data-queue-list]');
     queue.replaceChildren();
-    const active = orders.filter(order => !['delivered', 'cancelled', 'refunded'].includes(order.status)).slice(0, 3);
+    const active = orders.filter(order => !['delivered', 'completed', 'cancelled', 'refunded'].includes(order.status)).slice(0, 3);
     if (!active.length) queue.append(SavoraRestaurantUI.el('li', { className: 'restaurant-empty' }, 'No server orders are currently active.'));
     active.forEach(order => queue.append(SavoraRestaurantUI.el('li', {}, [ui.statusChip(order.status), SavoraRestaurantUI.el('div', {}, [SavoraRestaurantUI.el('strong', {}, order.id), SavoraRestaurantUI.el('div', { className: 'restaurant-queue-meta' }, `${(order.items || []).length} item${(order.items || []).length === 1 ? '' : 's'} · ${order.address ? 'Delivery' : 'Pickup'}`)]), SavoraRestaurantUI.el('a', { href: 'restaurant_orders.php', 'aria-label': `Open ${order.id}` }, '›')])));
 

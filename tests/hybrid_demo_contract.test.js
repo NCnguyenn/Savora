@@ -16,4 +16,7 @@ test('hybrid payment and GPS demo entry points remain wired into every role', ()
   assert.match(read('js/driver_delivery.js'), /demo_start_delivery/);
   assert.match(read('js/driver_dashboard.js'), /demo_start_shift/);
   assert.match(read('js/restaurant_orders.js'), /Food is ready/);
+  const runbook = read('docs/HYBRID_PAYMENT_GPS_DEMO.md');
+  assert.match(runbook, /SePay Gateway/);
+  assert.match(runbook, /Cash on delivery/);
 });

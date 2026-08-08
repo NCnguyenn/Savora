@@ -8,6 +8,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const actions = require('../js/driver_delivery.js');
+const earnings = require('../js/driver_earnings.js');
 
 test('Driver primary action selects demo and real delivery commands', () => {
   assert.deepEqual(actions.primaryAction?.({ status: 'assigned' }, true), ['demo_start_delivery', 'Picked up - start delivery']);
@@ -38,6 +39,21 @@ test('Driver demo delivery polls authoritative tracking and gates completion on 
   assert.match(controller, /proofRequired\s*===\s*true/);
   assert.match(controller, /if \(!delivery\) \{[^}]*activeDelivery\s*=\s*null;/s);
   assert.doesNotMatch(controller, /watchPosition/);
+});
+
+test('Driver route polling backs off failures and caps retries at fifteen seconds', () => {
+  assert.equal(actions.routeRefreshDelay(0), 2000);
+  assert.equal(actions.routeRefreshDelay(1), 4000);
+  assert.equal(actions.routeRefreshDelay(4), 15000);
+  assert.equal(actions.routeRefreshDelay(99), 15000);
+});
+
+test('Driver earnings retain completed orders backed by delivered assignments', () => {
+  const record = earnings.fromServerOrder({ id: 'DONE-1', status: 'completed', paymentMethod: 'cash', total: 42, assignment: { status: 'delivered', deliveredAt: '2026-08-08 10:00:00', earning: 7 } });
+  assert.equal(record.orderId, 'DONE-1');
+  assert.equal(record.earnings, 7);
+  const source = read('js/driver_earnings.js');
+  assert.match(source, /status=completed/);
 });
 
 test('Driver dashboard uses recursive visible polling with bounded backoff', () => {

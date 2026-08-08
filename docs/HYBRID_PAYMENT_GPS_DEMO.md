@@ -14,7 +14,7 @@ Use this runbook against `http://localhost/Savora/` to demonstrate an online Sea
 
 ### SeaPay demo order
 
-1. Customer places an order and chooses **Pay now**.
+1. Customer places an order, chooses **Pay now**, and selects **SePay Gateway**.
 2. Customer selects **Simulate successful payment**. The payment is paid before Restaurant processing.
 3. Restaurant selects **Accept and start preparing**, then **Food is ready**.
 4. Driver accepts the automatically created offer, then selects **Picked up - start delivery**.
@@ -25,7 +25,7 @@ Use this runbook against `http://localhost/Savora/` to demonstrate an online Sea
 
 ### COD demo order
 
-Repeat the same preparation, Restaurant, Driver, Customer, and Admin sequence, but Customer chooses **Pay on receipt**.
+Repeat the same preparation, Restaurant, Driver, Customer, and Admin sequence, but Customer chooses **Pay on receipt** and selects **Cash on delivery**.
 
 1. Restaurant selects **Accept and start preparing**, then **Food is ready**.
 2. Driver accepts the automatically created offer and selects **Picked up - start delivery**.

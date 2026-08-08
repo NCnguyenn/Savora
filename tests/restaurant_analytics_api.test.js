@@ -18,3 +18,12 @@ test('Restaurant Insights consumes server KPI definitions instead of discarding 
   assert.match(insights, /serverAnalytics\.kpis/);
   assert.match(insights, /report\.kpis/);
 });
+
+test('Restaurant dashboard and local insights classify completed orders as fulfilled, not live', () => {
+  const dashboard = fs.readFileSync('restaurant_dashboard.php', 'utf8');
+  const insights = fs.readFileSync('js/restaurant_insights.js', 'utf8');
+  assert.match(dashboard, /\['delivered',\s*'completed'\]\.includes\(order\.status\)/);
+  assert.match(dashboard, /!\['delivered',\s*'completed',\s*'cancelled',\s*'refunded'\]\.includes\(order\.status\)/);
+  assert.match(insights, /\['delivered',\s*'completed'\]\.includes\(order\.status\)/);
+  assert.match(insights, /statusCounts[^\n]*'completed'/);
+});

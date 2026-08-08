@@ -51,6 +51,7 @@
     const documentRef = options.document || root.document;
     const windowRef = options.window || root;
     const api = options.api || root.SavoraApi;
+    const onOrderSnapshot = typeof options.onOrderSnapshot === 'function' ? options.onOrderSnapshot : () => {};
     if (!documentRef || !api) return { refresh() {}, stop() {} };
 
     const card = documentRef.querySelector('[data-customer-live-order]');
@@ -247,9 +248,18 @@
       receiptButton.disabled = true;
       setText(feedback, 'Confirming receipt…');
       try {
-        await api.post('api/orders.php', request.body, api.intentKey(request.scope));
+        const result = await api.post('api/orders.php', request.body, api.intentKey(request.scope));
         api.clearIntentKey(request.scope);
         if (!canApplyConfirmation()) return;
+        const completedSnapshot = {
+          ...currentOrder,
+          status: result?.status || 'completed',
+          version: Number(result?.version || (Number(currentOrder.version) + 1)),
+          payment: { ...(currentOrder.payment || {}), status: result?.paymentStatus || 'paid' }
+        };
+        currentOrder = completedSnapshot;
+        onOrderSnapshot(completedSnapshot);
+        renderOrder(null);
         setText(feedback, 'Receipt confirmed. Thank you.');
         await refresh();
       } catch (error) {

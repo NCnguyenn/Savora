@@ -13,7 +13,7 @@ function analytics_normalize_filters(array $filters): array
     if ($from > $to) [$from, $to] = [$to, $from];
 
     $paymentMethod = in_array((string) ($filters['orderType'] ?? ''), ['cash', 'card', 'wallet'], true) ? (string) $filters['orderType'] : '';
-    $status = in_array((string) ($filters['status'] ?? ''), ['pending', 'accepted', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled', 'refunded'], true) ? (string) $filters['status'] : '';
+    $status = in_array((string) ($filters['status'] ?? ''), ['pending', 'accepted', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'in_transit', 'delivered', 'completed', 'cancelled', 'refunded'], true) ? (string) $filters['status'] : '';
     return [
         'from' => $from->format('Y-m-d'),
         'to' => $to->format('Y-m-d'),
@@ -43,9 +43,9 @@ function analytics_repository_report(mysqli $conn, array $rawFilters): array
     $join = ' LEFT JOIN deliveries d ON d.order_id = o.id AND d.superseded_at IS NULL';
     $kpis = admin_one($conn, "SELECT COUNT(*) AS orders,
         COALESCE(SUM(CASE WHEN o.status NOT IN ('cancelled','refunded') THEN o.total ELSE 0 END), 0) AS gmv,
-        COALESCE(SUM(CASE WHEN o.status = 'delivered' THEN o.total ELSE 0 END), 0) AS netRevenue,
+        COALESCE(SUM(CASE WHEN o.status IN ('delivered','completed') THEN o.total ELSE 0 END), 0) AS netRevenue,
         COALESCE(SUM(CASE WHEN o.status = 'cancelled' THEN o.total ELSE 0 END), 0) AS cancelledValue,
-        ROUND(100 * SUM(o.status = 'delivered') / NULLIF(COUNT(*), 0), 1) AS completionRate
+        ROUND(100 * SUM(o.status IN ('delivered','completed')) / NULLIF(COUNT(*), 0), 1) AS completionRate
         FROM orders o{$join} WHERE {$where['sql']}", $where['types'], $where['params']);
 
     $statusRows = admin_rows($conn, "SELECT o.status, COUNT(*) AS total FROM orders o{$join} WHERE {$where['sql']} GROUP BY o.status ORDER BY total DESC", $where['types'], $where['params']);
@@ -53,7 +53,7 @@ function analytics_repository_report(mysqli $conn, array $rawFilters): array
         COALESCE(SUM(CASE WHEN o.status NOT IN ('cancelled','refunded') THEN o.total ELSE 0 END), 0) AS gmv
         FROM orders o{$join} WHERE {$where['sql']} GROUP BY DATE(o.placed_at) ORDER BY day", $where['types'], $where['params']);
     $duration = admin_one($conn, "SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, COALESCE(d.accepted_at, o.placed_at), d.delivered_at)), 0) AS minutes
-        FROM orders o{$join} WHERE {$where['sql']} AND o.status='delivered' AND d.delivered_at IS NOT NULL", $where['types'], $where['params']);
+        FROM orders o{$join} WHERE {$where['sql']} AND o.status IN ('delivered','completed') AND d.delivered_at IS NOT NULL", $where['types'], $where['params']);
     $rows = admin_rows($conn, "SELECT o.id, o.reference_code, o.status, o.payment_method, o.total, o.placed_at,
         r.name AS restaurant_name, u.full_name AS customer_name
         FROM orders o JOIN restaurants r ON r.id=o.restaurant_id JOIN users u ON u.id=o.customer_user_id{$join}

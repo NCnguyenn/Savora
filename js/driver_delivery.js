@@ -12,7 +12,11 @@ function resetProofState(input, status) {
   if (status) status.textContent = '';
 }
 
-if (typeof module === 'object' && module.exports) module.exports = { primaryAction, resetProofState };
+function routeRefreshDelay(failures) {
+  return Math.min(15000, 2000 * (2 ** Math.max(0, Number(failures) || 0)));
+}
+
+if (typeof module === 'object' && module.exports) module.exports = { primaryAction, resetProofState, routeRefreshDelay };
 
 (function attachDriverDelivery(root) {
   'use strict';
@@ -31,6 +35,7 @@ if (typeof module === 'object' && module.exports) module.exports = { primaryActi
   let activeDelivery = null;
   let activeRoute = null;
   let routeTimer = null;
+  let routeFailures = 0;
   const setText = (selector, value) => { const node = doc.querySelector(selector); if (node) node.textContent = String(value); };
   const key = scope => Api.intentKey(`driver-delivery-${scope}`);
   const safeTel = value => { const phone = String(value || '').replace(/[^\d+]/g, ''); return phone ? `tel:${phone}` : 'driver_delivery.php'; };
@@ -89,11 +94,11 @@ if (typeof module === 'object' && module.exports) module.exports = { primaryActi
     routeTimer = root.setTimeout(async () => {
       routeTimer = null;
       if (doc.visibilityState === 'visible') {
-        try { await refreshRoute(); }
-        catch (_) { activeRoute = null; renderRoute(null); renderAction(activeDelivery); }
+        try { await refreshRoute(); routeFailures = 0; }
+        catch (_) { routeFailures += 1; activeRoute = null; renderRoute(null); renderAction(activeDelivery); }
       }
       scheduleRouteRefresh();
-    }, 2000);
+    }, routeRefreshDelay(routeFailures));
   }
 
   async function uploadEvidence(delivery) {

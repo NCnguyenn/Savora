@@ -1,3 +1,11 @@
+function driverEarningFromServerOrder(order) {
+  const assignment = order && order.assignment;
+  if (!assignment || assignment.status !== 'delivered' || !['delivered', 'completed'].includes(order.status)) return null;
+  return { orderId: order.id, deliveredAt: assignment.deliveredAt, earnings: Number(assignment.earning || 0), bonus: 0, distanceKm: 0, paymentMethod: order.paymentMethod, orderTotal: Number(order.total || 0) };
+}
+
+if (typeof module === 'object' && module.exports) module.exports = { fromServerOrder: driverEarningFromServerOrder };
+
 (function attachDriverEarnings(root) {
   'use strict';
 
@@ -13,11 +21,6 @@
   const startOfWeek = date => { const current = new Date(date); current.setHours(0, 0, 0, 0); const day = current.getDay() || 7; current.setDate(current.getDate() - day + 1); return current; };
   const isoWeekValue = date => { const current = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())); const day = current.getUTCDay() || 7; current.setUTCDate(current.getUTCDate() + 4 - day); const yearStart = new Date(Date.UTC(current.getUTCFullYear(), 0, 1)); const week = Math.ceil((((current - yearStart) / dayMs) + 1) / 7); return `${current.getUTCFullYear()}-W${String(week).padStart(2, '0')}`; };
   const weekStartFromValue = value => { const match = /^(\d{4})-W(\d{2})$/.exec(String(value || '')); if (!match) return startOfWeek(new Date()); return startOfWeek(new Date(Number(match[1]), 0, 1 + (Number(match[2]) - 1) * 7)); };
-  const fromServerOrder = order => {
-    const assignment = order && order.assignment;
-    if (!assignment || assignment.status !== 'delivered') return null;
-    return { orderId: order.id, deliveredAt: assignment.deliveredAt, earnings: Number(assignment.earning || 0), bonus: 0, distanceKm: 0, paymentMethod: order.paymentMethod, orderTotal: Number(order.total || 0) };
-  };
   const recordsForWeek = weekStart => { const end = new Date(weekStart.getTime() + (7 * dayMs)); return records.filter(delivery => { const date = new Date(delivery.deliveredAt); return !Number.isNaN(date.getTime()) && date >= weekStart && date < end; }); };
 
   function renderChart(currentRecords, weekStart) {
@@ -57,7 +60,11 @@
   }
 
   async function initialize() {
-    try { const [snapshot] = await Promise.all([Api.get('api/orders.php?status=delivered&pageSize=50'), Api.get('api/dispatch.php')]); records = (Array.isArray(snapshot && snapshot.orders) ? snapshot.orders : []).map(fromServerOrder).filter(Boolean); }
+    try {
+      const [delivered, completed] = await Promise.all([Api.get('api/orders.php?status=delivered&pageSize=50'), Api.get('api/orders.php?status=completed&pageSize=50'), Api.get('api/dispatch.php')]);
+      const orders = [...(delivered?.orders || []), ...(completed?.orders || [])];
+      records = Array.from(new Map(orders.map(order => [order.id, order])).values()).map(driverEarningFromServerOrder).filter(Boolean);
+    }
     catch (error) { ui.showToast(error.message || 'Server earnings are unavailable.', 'error'); }
     render();
   }

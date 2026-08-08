@@ -229,6 +229,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    function applyTrackingSnapshot(order) {
+        if (!order || !finalStatuses.has(order.status)) return;
+        const index = serverOrders.findIndex(item => item.id === order.id);
+        if (index >= 0) serverOrders[index] = order;
+        else serverOrders.unshift(order);
+        renderHistory();
+    }
+
     document.querySelectorAll('[data-order-filter]').forEach(button => {
         button.addEventListener('click', () => {
             selectedFilter = button.dataset.orderFilter;
@@ -246,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { serverReviews = await SavoraApi.get('api/reviews.php'); }
     catch (_) { serverReviews = []; }
     renderHistory();
-    if (window.SavoraCustomerTracking) window.SavoraCustomerTracking.mount();
+    if (window.SavoraCustomerTracking) window.SavoraCustomerTracking.mount({ onOrderSnapshot: applyTrackingSnapshot });
 });
 </script>
 

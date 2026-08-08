@@ -133,6 +133,29 @@ test('mount posts delivered receipt confirmation with the stable key then clears
   controller.stop();
 });
 
+test('receipt success publishes a completed snapshot for immediate Customer history rendering', async () => {
+  const order = { id: 'D-HISTORY', referenceCode: 'D-HISTORY', status: 'delivered', paymentMethod: 'cash', version: 6, assignment: {}, items: [{ name: 'Bowl' }] };
+  const harness = trackingHarness(order, { route: { progress: 1 } });
+  harness.api.post = async () => ({ referenceCode: 'D-HISTORY', status: 'completed', paymentStatus: 'paid', version: 7 });
+  const snapshots = [];
+  const controller = tracking.mount({ ...harness, autoStart: false, onOrderSnapshot: snapshot => snapshots.push(snapshot) });
+  await controller.refresh();
+  await harness.elements['[data-confirm-received]'].listeners.click();
+
+  assert.equal(snapshots.at(-1).status, 'completed');
+  assert.equal(snapshots.at(-1).version, 7);
+  assert.equal(snapshots.at(-1).payment.status, 'paid');
+  assert.deepEqual(snapshots.at(-1).items, [{ name: 'Bowl' }]);
+  controller.stop();
+});
+
+test('Customer history bridges tracking snapshots into its server order list', () => {
+  const history = fs.readFileSync(path.join(__dirname, '..', 'customer_history.php'), 'utf8');
+  assert.match(history, /onOrderSnapshot/);
+  assert.match(history, /serverOrders\.(?:findIndex|some)/);
+  assert.match(history, /renderHistory\(\)/);
+});
+
 test('mount ignores an orders response that settles after the tab becomes hidden', async () => {
   const gate = deferred();
   const harness = trackingHarness({ id: 'P-1', referenceCode: 'P-1', status: 'picked_up' });

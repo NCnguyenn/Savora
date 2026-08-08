@@ -29,7 +29,7 @@ function review_create_for_order_mutation(mysqli $conn, int $customerUserId, str
     }
     $order = review_repository_customer_order($conn, $customerUserId, $orderReference, true);
     if ($order === []) return review_error(403, 'This order does not belong to the Customer.');
-    if ((string) $order['status'] !== 'delivered') return review_error(409, 'Only a delivered order can be reviewed.');
+    if (!in_array((string) $order['status'], ['delivered', 'completed'], true)) return review_error(409, 'Only a fulfilled order can be reviewed.');
     if (review_repository_by_order($conn, (int) $order['id'], true) !== []) return review_error(409, 'This order already has a review.');
     $publicId = 'review-' . bin2hex(random_bytes(12));
     $insert = $conn->prepare("INSERT INTO restaurant_reviews(public_id,order_id,customer_user_id,restaurant_id,rating,comment,reply_status,version) VALUES(?,?,?,?,?,?,'none',1)");
