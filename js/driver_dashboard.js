@@ -5,11 +5,15 @@
   const doc = root.document;
   const Api = root.SavoraApi;
   const ui = root.SavoraDriverUI;
+  const demoMode = root.SavoraDemoMode === true;
   const page = doc.querySelector('[data-driver-page="overview"]');
   if (!page || !Api || !ui) return;
 
   let serverOrders = [];
   let dispatch = { offers: [], availabilityStatus: 'offline', eligibilityStatus: 'pending', location: null };
+  let demoShiftStarted = false;
+  let refreshDelayMs = 2000;
+  let refreshTimer = null;
   const setText = (selector, value) => { const node = doc.querySelector(selector); if (node) node.textContent = String(value); };
   const key = scope => Api.intentKey(`driver-${scope}`);
 
@@ -92,6 +96,53 @@
       await refreshServer(); renderAll();
     } catch (error) { ui.showToast(error.message || 'The server could not process the offer.', 'error'); }
   }
+
+  async function keepDemoShiftFresh() {
+    if (!demoShiftStarted) return;
+    const scope = 'demo-start-shift-refresh';
+    await Api.post('api/dispatch.php', { command: 'demo_start_shift', payload: {} }, key(scope));
+    Api.clearIntentKey(`driver-${scope}`);
+  }
+
+  function scheduleRefresh() {
+    if (!demoShiftStarted || refreshTimer !== null) return;
+    refreshTimer = root.setTimeout(async () => {
+      refreshTimer = null;
+      if (doc.visibilityState !== 'visible') { refreshDelayMs = 2000; scheduleRefresh(); return; }
+      try {
+        await keepDemoShiftFresh();
+        await refreshServer();
+        renderAll();
+        refreshDelayMs = 2000;
+      } catch (_) {
+        refreshDelayMs = Math.min(refreshDelayMs * 2, 15000);
+      }
+      scheduleRefresh();
+    }, refreshDelayMs);
+  }
+
+  doc.querySelector('[data-demo-start-shift]')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const scope = 'demo-start-shift';
+      await Api.post('api/dispatch.php', { command: 'demo_start_shift', payload: {} }, key(scope));
+      Api.clearIntentKey(`driver-${scope}`);
+      demoShiftStarted = demoMode;
+      button.textContent = 'Demo shift active';
+      await refreshServer();
+      renderAll();
+      scheduleRefresh();
+      ui.showToast('Demo shift started from your saved Driver location.');
+    } catch (error) {
+      button.disabled = false;
+      ui.showToast(error.message || 'The demo shift could not be started.', 'error');
+    }
+  });
+
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.visibilityState === 'visible' && demoShiftStarted && refreshTimer === null) scheduleRefresh();
+  });
 
   function renderAll() { refreshIdentity(); renderLocation(); renderSummary(); renderOrders(); renderOffers(); }
 

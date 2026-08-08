@@ -1,4 +1,5 @@
 <?php require_once __DIR__ . '/components/driver_header.php'; ?>
+<script>window.SavoraDemoMode = <?php echo savora_demo_mode() ? 'true' : 'false'; ?>;</script>
 <main id="driver-main" class="driver-main" data-driver-page="overview" data-order-source="api/orders.php">
     <header class="driver-page-heading">
         <div>
@@ -6,7 +7,12 @@
             <h1>Good afternoon, <span data-driver-first-name>Driver</span></h1>
             <p>Availability, offers, location, and delivery assignments are read from Savora's server model.</p>
         </div>
-        <div class="driver-card" data-driver-dispatch-status role="status">Checking server dispatch status…</div>
+        <div>
+            <div class="driver-card" data-driver-dispatch-status role="status">Checking server dispatch status…</div>
+            <?php if (savora_demo_mode()): ?>
+                <button class="driver-primary-action" type="button" data-demo-start-shift>Start demo shift</button>
+            <?php endif; ?>
+        </div>
     </header>
 
     <section class="driver-overview-grid" aria-label="Driver location and assigned deliveries">

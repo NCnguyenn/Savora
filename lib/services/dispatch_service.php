@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../idempotency.php';
+require_once __DIR__ . '/../environment.php';
 require_once __DIR__ . '/audit_service.php';
 require_once __DIR__ . '/notification_service.php';
 require_once __DIR__ . '/../repositories/order_repository.php';
@@ -128,6 +129,16 @@ function driver_set_availability(
         if ($exception instanceof SavoraIdempotencyConflict) throw $exception;
         throw $exception;
     }
+}
+
+function driver_start_demo_shift(mysqli $conn, int $driverUserId, string $idempotencyKey): array
+{
+    if (!savora_demo_mode()) return dispatch_result(false, 404, 'Demo shift is unavailable.');
+    $profile = dispatch_repository_driver_profile($conn, $driverUserId);
+    $latitude = isset($profile['latitude']) ? (float) $profile['latitude'] : null;
+    $longitude = isset($profile['longitude']) ? (float) $profile['longitude'] : null;
+    if ($latitude === null || $longitude === null) return dispatch_result(false, 409, 'Save a Driver profile location before starting the demo shift.');
+    return driver_set_availability($conn, $driverUserId, 'online', $latitude, $longitude, null, null, $idempotencyKey);
 }
 
 function dispatch_offer_next_driver(mysqli $conn, int $dispatchId, ?int $actorId = null): array

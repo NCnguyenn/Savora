@@ -7,6 +7,7 @@ require_once __DIR__ . '/notification_service.php';
 require_once __DIR__ . '/../repositories/order_repository.php';
 require_once __DIR__ . '/../repositories/delivery_repository.php';
 require_once __DIR__ . '/dispatch_service.php';
+require_once __DIR__ . '/demo_route_service.php';
 require_once __DIR__ . '/media_service.php';
 
 const SAVORA_DELIVERY_EVIDENCE_MAX_BYTES = 20 * 1024 * 1024;
@@ -161,6 +162,7 @@ function delivery_transition(mysqli $conn, int $driverUserId, int $deliveryId, i
         elseif ((string) $delivery['status'] !== $fromStatus) $result = delivery_result(false, 409, 'Delivery milestone is out of order.');
         elseif ((int) $delivery['version'] !== $expectedVersion) $result = delivery_result(false, 409, 'Delivery changed. Refresh before retrying.');
         elseif (in_array((string) $delivery['order_status'], ['cancelled','refunded','delivered'], true)) $result = delivery_result(false, 409, 'Order no longer accepts delivery updates.');
+        elseif ($nextStatus === 'delivered' && demo_route_is_arrived($conn, $deliveryId) === false) $result = delivery_result(false, 409, 'Demo route has not arrived.');
         elseif ($nextStatus === 'delivered' && (int) $delivery['proof_required'] === 1 && $evidence === []) $result = delivery_result(false, 422, 'Proof of delivery is required.');
         else {
             $validEvidence = [];
@@ -176,6 +178,7 @@ function delivery_transition(mysqli $conn, int $driverUserId, int $deliveryId, i
                         $orderUpdate = $conn->prepare('UPDATE orders SET status=?,version=version+1 WHERE id=? AND version=?'); $orderId = (int) $delivery['order_id']; $orderUpdate->bind_param('sii', $orderStatus, $orderId, $nextOrderVersion); $orderUpdate->execute(); $orderUpdate->close();
                         order_repository_insert_history_event($conn, $orderId, $orderStatus, 'driver', $driverUserId, 'Delivery milestone recorded.'); $nextOrderVersion++;
                     }
+                    if ($nextStatus === 'delivered') demo_route_finish($conn, $deliveryId);
                     if ($nextStatus === 'delivered') { $profile = $conn->prepare("UPDATE driver_profiles SET availability_status='online',version=version+1 WHERE user_id=?"); $profile->bind_param('i', $driverUserId); $profile->execute(); $profile->close(); }
                     notification_queue($conn, (int) $delivery['customer_user_id'], 'delivery_' . $nextStatus, 'Delivery updated', 'Your order ' . (string) $delivery['reference_code'] . ' is now ' . str_replace('_', ' ', $nextStatus) . '.', 'order', (int) $delivery['order_id']);
                     audit_append($conn, $driverUserId, 'delivery_' . $nextStatus, 'delivery', $deliveryId, ['status' => $fromStatus, 'version' => $expectedVersion], ['status' => $nextStatus, 'version' => $expectedVersion + 1], $reason, 'DLV-' . strtoupper(bin2hex(random_bytes(5))));

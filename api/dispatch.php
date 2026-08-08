@@ -54,6 +54,9 @@ try {
         'set_availability', 'driver_set_availability' => $role === 'driver'
             ? driver_set_availability($conn, $actorId, (string) ($payload['availabilityStatus'] ?? $payload['status'] ?? ''), isset($payload['latitude']) ? (float) $payload['latitude'] : null, isset($payload['longitude']) ? (float) $payload['longitude'] : null, isset($payload['accuracyMeters']) ? (float) $payload['accuracyMeters'] : null, isset($payload['recordedAt']) ? (string) $payload['recordedAt'] : null, $idempotencyKey)
             : dispatch_result(false, 403, 'Only a Driver can change availability.'),
+        'demo_start_shift' => $role === 'driver'
+            ? driver_start_demo_shift($conn, $actorId, $idempotencyKey)
+            : dispatch_result(false, 403, 'Only a Driver can start a demo shift.'),
         'accept_offer', 'dispatch_accept_offer' => $role === 'driver'
             ? dispatch_accept_offer($conn, $actorId, (string) ($payload['offerReference'] ?? $payload['offer_reference'] ?? ''), $idempotencyKey)
             : dispatch_result(false, 403, 'Only a Driver can accept an offer.'),
@@ -69,6 +72,9 @@ try {
         'record_pickup', 'delivery_record_pickup' => $role === 'driver'
             ? delivery_record_pickup($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey)
             : dispatch_result(false, 403, 'Only a Driver can record pickup.'),
+        'demo_start_delivery' => $role === 'driver'
+            ? demo_route_start($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? 0), $idempotencyKey)
+            : dispatch_result(false, 403, 'Only a Driver can start demo delivery.'),
         'record_completion', 'delivery_record_completion' => $role === 'driver'
             ? delivery_record_completion($conn, $actorId, (int) ($payload['deliveryId'] ?? 0), (int) ($payload['expectedVersion'] ?? $payload['version'] ?? 0), $idempotencyKey, is_array($payload['evidenceIds'] ?? null) ? $payload['evidenceIds'] : [])
             : dispatch_result(false, 403, 'Only a Driver can record completion.'),

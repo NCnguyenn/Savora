@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('dispatch API is an authenticated server-authoritative command boundary', () => {
   const api = read('api/dispatch.php');
+  const demoRoute = read('lib/services/demo_route_service.php');
   assert.match(api, /savora_request_actor\(\$conn, \['driver', 'admin'\]\)/);
   assert.match(api, /savora_require_csrf/);
   assert.match(api, /savora_require_idempotency_key/);
@@ -15,6 +16,15 @@ test('dispatch API is an authenticated server-authoritative command boundary', (
   assert.match(api, /dispatch_accept_offer/);
   assert.match(api, /dispatch_decline_offer/);
   assert.match(api, /dispatch_expire_offers/);
+  assert.match(api, /'demo_start_delivery'/);
+  assert.match(api, /'demo_start_shift'/);
+  const lockIndex = api.indexOf('savora_idempotency_lock');
+  const commandMatchIndex = api.indexOf('match ($command)');
+  const demoDeliveryIndex = api.indexOf("'demo_start_delivery'");
+  const demoShiftIndex = api.indexOf("'demo_start_shift'");
+  assert.ok(lockIndex >= 0 && lockIndex < commandMatchIndex, 'The API lock must be acquired before command matching.');
+  assert.ok(commandMatchIndex < demoDeliveryIndex && commandMatchIndex < demoShiftIndex, 'Demo commands must execute inside the locked command match.');
+  assert.doesNotMatch(demoRoute, /savora_idempotency_lock/);
   assert.doesNotMatch(api, /localStorage|SavoraState|customerState/);
 });
 test('dispatch service exposes exclusive offer lifecycle and safe offer fields', () => {
@@ -50,4 +60,6 @@ test('proof of delivery is uploaded as verified multipart bytes before completio
   assert.match(controller, /FormData/);
   assert.match(controller, /api\/delivery_evidence\.php/);
   assert.match(controller, /evidenceIds/);
+  assert.match(controller, /proofRequired\s*===\s*true/);
+  assert.match(read('lib/repositories/order_repository.php'), /proofRequired/);
 });

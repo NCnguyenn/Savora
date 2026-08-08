@@ -1,4 +1,5 @@
 <?php require_once __DIR__ . '/components/driver_header.php'; ?>
+<script>window.SavoraDemoMode = <?php echo savora_demo_mode() ? 'true' : 'false'; ?>;</script>
 <main id="driver-main" class="driver-main" data-driver-page="delivery">
     <header class="driver-page-heading">
         <div>
@@ -22,6 +23,11 @@
                 <div class="driver-ready-banner driver-card" data-delivery-banner>
                     <span><i class="fa-solid fa-store" aria-hidden="true"></i></span>
                     <div><strong data-banner-title>Restaurant pickup</strong><p data-banner-copy>Follow the route to the pickup address.</p></div>
+                </div>
+                <div class="driver-card" data-demo-route-progress hidden>
+                    <strong data-demo-route-status>Waiting for server route status</strong>
+                    <progress data-demo-route-meter max="100" value="0">0%</progress>
+                    <span data-demo-route-percent>0%</span>
                 </div>
                 <div class="driver-map driver-route-map" data-delivery-map role="img" aria-label="Map showing pickup and drop-off route">
                     <span class="driver-map-road is-one" aria-hidden="true"></span>
