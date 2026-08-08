@@ -111,7 +111,8 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
                    d.accepted_at,d.delivered_at,d.version AS delivery_version,
                    dd.id AS dispatch_id,dd.status AS dispatch_status,dd.version AS dispatch_version,
                    u.full_name AS customer_name,cp.phone AS customer_phone,
-                   ca.latitude AS customer_latitude,ca.longitude AS customer_longitude,
+                   COALESCE(qa.latitude,da.latitude) AS customer_latitude,
+                   COALESCE(qa.longitude,da.longitude) AS customer_longitude,
                    dl.latitude AS driver_latitude,dl.longitude AS driver_longitude,dl.accuracy_meters AS driver_accuracy_meters,dl.recorded_at AS driver_recorded_at,dl.version AS driver_location_version,
                    r.address AS restaurant_address,r.city AS restaurant_city,r.phone AS restaurant_phone
             FROM orders o
@@ -121,7 +122,9 @@ function order_repository_order_base(mysqli $conn, string $where, string $types 
             LEFT JOIN payments p ON p.order_id=o.id
             LEFT JOIN deliveries d ON d.order_id=o.id
             LEFT JOIN delivery_dispatches dd ON dd.order_id=o.id
-            LEFT JOIN customer_addresses ca ON ca.customer_user_id=o.customer_user_id AND ca.is_default=1
+            LEFT JOIN checkout_quotes q ON q.id=o.quote_id
+            LEFT JOIN customer_addresses qa ON qa.id=q.address_id AND qa.customer_user_id=o.customer_user_id
+            LEFT JOIN customer_addresses da ON da.customer_user_id=o.customer_user_id AND da.is_default=1
             LEFT JOIN driver_locations dl ON dl.driver_user_id=d.driver_user_id
             WHERE ' . $where;
     return order_repository_rows($conn, $sql, $types, $params);
