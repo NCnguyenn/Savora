@@ -437,6 +437,13 @@ h3 { font-size: 1rem; line-height: 1.35; }
 .active-order-summary > h3 { margin: .9rem 0 .35rem; overflow-wrap: anywhere; }
 .active-order-summary > p { color: var(--savora-muted); }
 .active-order-summary .primary-action { width: 100%; margin-top: 1rem; }
+.active-order-summary [data-live-order-status] { margin: .7rem 0 0; color: var(--savora-forest); font-weight: 800; }
+.active-order-summary [data-live-driver] { margin-top: 1rem; }
+.active-order-summary [data-live-driver] > p { display: flex; flex-wrap: wrap; gap: .3rem; margin: .65rem 0 0; color: var(--savora-muted); font-size: .82rem; }
+.customer-tracking-map { min-height: 14rem; overflow: hidden; border: 1px solid var(--savora-line); border-radius: .8rem; background: var(--savora-sage); }
+.customer-tracking-map.is-map-fallback { background-color: #eef4e8; background-image: linear-gradient(rgba(11, 93, 70, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(11, 93, 70, .12) 1px, transparent 1px); background-size: 1rem 1rem; }
+.active-order-summary [data-live-order-feedback] { min-height: 1.25rem; margin: .65rem 0 0; color: var(--savora-muted); font-size: .84rem; }
+.active-order-summary [data-confirm-received]:focus-visible, .customer-tracking-map:focus-visible { outline: 3px solid var(--savora-coral); outline-offset: 3px; }
 .active-order-address { display: flex; align-items: flex-start; gap: .5rem; margin-top: 1rem; padding: .8rem; border-radius: .75rem; background: var(--savora-sage); font-size: .82rem; }
 .active-order-address i { margin-top: .15rem; color: var(--savora-forest); }
 .order-delivery-note, .active-order-delivery-note, .tracking-delivery-note { display: flex; align-items: flex-start; gap: .4rem; margin-top: .55rem !important; color: var(--savora-forest); font-size: .8rem; line-height: 1.45; overflow-wrap: anywhere; }
@@ -503,6 +510,8 @@ h3 { font-size: 1rem; line-height: 1.35; }
   .product-customization { padding-top: .5rem; }
   .orders-layout { grid-template-columns: 1fr; }
   .active-order-panel { position: static; grid-row: 1; }
+  .customer-tracking-map { min-height: 12rem; }
+  .active-order-summary [data-live-driver] > p { align-items: flex-start; flex-direction: column; }
   .favorite-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
