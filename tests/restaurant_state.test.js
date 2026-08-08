@@ -6,6 +6,7 @@ const Catalog = require('../js/customer_catalog.js');
 const Menu = require('../js/restaurant_menu.js');
 const Storefront = require('../js/restaurant_storefront.js');
 const Insights = require('../js/restaurant_insights.js');
+const RestaurantOrders = require('../js/restaurant_orders.js');
 
 test('Restaurant state keeps only preferences and unsubmitted menu drafts', () => {
   const normalized = RestaurantState.normalize({ orders: [{ id: 'legacy-order' }], profile: {}, operations: {} });
@@ -65,4 +66,16 @@ test('analytics helper filters malformed dates without owning order state', () =
   ], 7);
   assert.deepEqual(ranged.map(order => order.id), ['valid']);
   assert.equal(Insights.verifiedReviews([{ publicId: 'rv-1', orderReference: 'server-1', customerName: 'Customer', rating: 5, comment: 'Great', createdAt: '2026-07-24T08:00:00.000Z', replyStatus: 'none', items: [] }]).length, 1);
+});
+
+test('live restaurant actions follow the simple accept then ready flow', () => {
+  assert.equal(RestaurantOrders.actionsFor({ status: 'pending' }).primary, 'accept');
+  assert.equal(RestaurantOrders.actionsFor({ status: 'confirmed' }).primary, 'ready');
+  assert.equal(RestaurantOrders.actionsFor({ status: 'preparing' }).primary, 'ready');
+  assert.equal(RestaurantOrders.actionsFor({ status: 'ready_for_pickup' }).primary, null);
+});
+
+test('live restaurant refresh delay is bounded exponential backoff', () => {
+  assert.equal(RestaurantOrders.nextRestaurantDelay(0), 2000);
+  assert.equal(RestaurantOrders.nextRestaurantDelay(4), 15000);
 });

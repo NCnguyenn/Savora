@@ -339,10 +339,12 @@ function order_repository_insert_history_event(mysqli $conn, int $orderId, strin
     $statement->close();
 }
 
-function order_repository_create_dispatch(mysqli $conn, int $orderId): void
+function order_repository_create_dispatch(mysqli $conn, int $orderId): int
 {
     $statement = $conn->prepare("INSERT INTO delivery_dispatches(order_id,status,attempt_count) VALUES(?,'searching_driver',0) ON DUPLICATE KEY UPDATE status=IF(assigned_driver_user_id IS NULL,'searching_driver',status),version=version+1");
     $statement->bind_param('i', $orderId);
     $statement->execute();
     $statement->close();
+    $row = order_repository_one($conn, 'SELECT id FROM delivery_dispatches WHERE order_id=? LIMIT 1 FOR UPDATE', 'i', [$orderId]);
+    return (int) ($row['id'] ?? 0);
 }
