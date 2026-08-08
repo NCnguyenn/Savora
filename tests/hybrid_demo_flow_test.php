@@ -88,20 +88,24 @@ function hybrid_assert_history(mysqli $conn, int $orderId): void
     ], 'Order history must record each status with its authoritative actor role.');
 }
 
-function hybrid_assert_notifications(mysqli $conn, int $orderId, bool $isSeaPay): void
+function hybrid_assert_notifications(mysqli $conn, int $orderId, array $actors, bool $isSeaPay): void
 {
-    $statement = $conn->prepare('SELECT event_type,COUNT(*) AS total FROM notifications WHERE entity_id=? GROUP BY event_type');
+    $statement = $conn->prepare("SELECT event_type,user_id,COUNT(*) AS total FROM notifications WHERE entity_type='order' AND entity_id=? GROUP BY event_type,user_id");
     $statement->bind_param('i', $orderId);
     $statement->execute();
     $rows = $statement->get_result()->fetch_all(MYSQLI_ASSOC);
     $statement->close();
     $counts = [];
-    foreach ($rows as $row) $counts[(string) $row['event_type']] = (int) $row['total'];
+    foreach ($rows as $row) $counts[(string) $row['event_type'] . ':' . (int) $row['user_id']] = (int) $row['total'];
+    $customerId = (int) $actors['customer'];
+    $ownerId = (int) $actors['owner'];
+    $driverId = (int) $actors['driver'];
     foreach (['order_status_changed', 'delivery_assigned', 'delivery_picked_up', 'delivery_delivered'] as $event) {
-        hybrid_expect(($counts[$event] ?? 0) >= 1, "Notification {$event} must exist.");
+        hybrid_expect(($counts[$event . ':' . $customerId] ?? 0) >= 1, "Notification {$event} must exist for the Customer order recipient.");
     }
-    hybrid_expect(($counts['order_completed'] ?? 0) === 2, 'Customer completion must notify both Restaurant and Driver exactly once.');
-    hybrid_expect(($counts['payment_confirmed'] ?? 0) === ($isSeaPay ? 1 : 0), 'Only SeaPay simulation must create the payment confirmation notification.');
+    hybrid_expect(($counts['order_completed:' . $ownerId] ?? 0) === 1, 'Customer completion must notify the Restaurant exactly once.');
+    hybrid_expect(($counts['order_completed:' . $driverId] ?? 0) === 1, 'Customer completion must notify the Driver exactly once.');
+    hybrid_expect(($counts['payment_confirmed:' . $customerId] ?? 0) === ($isSeaPay ? 1 : 0), 'Only SeaPay simulation must create the Customer payment confirmation notification.');
 }
 
 function hybrid_run_order_flow(mysqli $conn, array $actors, int $orderId, string $reference, bool $isSeaPay, string $keyPrefix): void
@@ -111,14 +115,15 @@ function hybrid_run_order_flow(mysqli $conn, array $actors, int $orderId, string
     $driverId = (int) $actors['driver'];
 
     $initial = hybrid_order_state($conn, $orderId);
-    hybrid_expect(($initial['status'] ?? '') === 'pending' && ($initial['payment_status'] ?? '') === 'pending' && (int) ($initial['version'] ?? 0) === 1, 'New hybrid order must begin pending with a pending payment and version one.');
+    hybrid_expect(($initial['status'] ?? '') === 'pending' && ($initial['payment_status'] ?? '') === 'pending' && (int) ($initial['payment_version'] ?? 0) === 1 && (int) ($initial['version'] ?? 0) === 1, 'New hybrid order must begin pending with payment version one and order version one.');
 
     if ($isSeaPay) {
         $paid = payment_simulate_customer_success($conn, $customerId, $reference, $keyPrefix . '-payment');
         hybrid_expect(($paid['ok'] ?? false) === true && ($paid['data']['paymentStatus'] ?? '') === 'paid', 'SeaPay demo payment must settle before Restaurant processing.');
         $paidReplay = payment_simulate_customer_success($conn, $customerId, $reference, $keyPrefix . '-payment');
         hybrid_expect($paidReplay === $paid, 'SeaPay payment replay must return the stored response exactly.');
-        hybrid_expect((hybrid_order_state($conn, $orderId)['payment_version'] ?? 0) === 2, 'SeaPay simulation must increment payment version once.');
+        $paidState = hybrid_order_state($conn, $orderId);
+        hybrid_expect(($paidState['payment_status'] ?? '') === 'paid' && (int) ($paidState['payment_version'] ?? 0) === 2, 'SeaPay simulation must set paid at payment version two.');
     }
 
     $confirmed = order_transition($conn, ['userId' => $ownerId, 'role' => 'restaurant'], $reference, 'confirmed', 1, $keyPrefix . '-confirm');
@@ -159,16 +164,16 @@ function hybrid_run_order_flow(mysqli $conn, array $actors, int $orderId, string
     hybrid_expect($deliveredReplay === $delivered, 'Driver delivery replay must return the stored response exactly.');
 
     $deliveredState = hybrid_order_state($conn, $orderId);
-    hybrid_expect(($deliveredState['status'] ?? '') === 'delivered' && (int) ($deliveredState['version'] ?? 0) === 6 && ($deliveredState['payment_status'] ?? '') === ($isSeaPay ? 'paid' : 'pending'), 'Driver delivery must preserve the correct payment state and order version six.');
+    hybrid_expect(($deliveredState['status'] ?? '') === 'delivered' && (int) ($deliveredState['version'] ?? 0) === 6 && ($deliveredState['payment_status'] ?? '') === ($isSeaPay ? 'paid' : 'pending') && (int) ($deliveredState['payment_version'] ?? 0) === ($isSeaPay ? 2 : 1), 'Driver delivery must preserve the exact payment state and version with order version six.');
     $receipt = customer_confirm_receipt($conn, $customerId, $reference, 6, $keyPrefix . '-receipt');
     hybrid_expect(($receipt['ok'] ?? false) === true && ($receipt['data']['status'] ?? '') === 'completed' && ($receipt['data']['paymentStatus'] ?? '') === 'paid' && ($receipt['data']['version'] ?? 0) === 7, 'Customer receipt confirmation must complete version six order and report paid.');
     $receiptReplay = customer_confirm_receipt($conn, $customerId, $reference, 6, $keyPrefix . '-receipt');
     hybrid_expect($receiptReplay === $receipt, 'Customer receipt replay must return the stored response exactly.');
 
     $completed = hybrid_order_state($conn, $orderId);
-    hybrid_expect(($completed['status'] ?? '') === 'completed' && (int) ($completed['version'] ?? 0) === 7 && ($completed['payment_status'] ?? '') === 'paid' && (int) ($completed['delivery_version'] ?? 0) === 3, 'Completed hybrid order must retain all current state versions.');
+    hybrid_expect(($completed['status'] ?? '') === 'completed' && (int) ($completed['version'] ?? 0) === 7 && ($completed['payment_status'] ?? '') === 'paid' && (int) ($completed['payment_version'] ?? 0) === 2 && (int) ($completed['delivery_version'] ?? 0) === 3, 'Completed hybrid order must retain exact order, payment, and delivery versions.');
     hybrid_assert_history($conn, $orderId);
-    hybrid_assert_notifications($conn, $orderId, $isSeaPay);
+    hybrid_assert_notifications($conn, $orderId, $actors, $isSeaPay);
 }
 
 $conn = null;
