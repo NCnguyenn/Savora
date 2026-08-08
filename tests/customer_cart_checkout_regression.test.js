@@ -35,3 +35,11 @@ test('the full cart refreshes from the catalog and reports the one-restaurant ch
   assert.match(product, /A cart can contain items from one restaurant only/);
   assert.match(product, /catch \(error\)/);
 });
+
+test('shared customer scripts use file-versioned URLs so browser cannot mix JS revisions', () => {
+  const footer = read('components/customer_footer.php');
+  for (const script of ['js/customer_catalog.js', 'js/customer_state.js', 'js/customer_ui.js']) {
+    const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(footer, new RegExp(`${escaped}\\?v=<\\?php echo \\$customer_asset_version\\('${escaped}'\\); \\?>`));
+  }
+});

@@ -105,18 +105,24 @@
         </div>
     </section>
 
-    <script src="js/customer_catalog.js"></script>
-    <script src="js/restaurant_state.js"></script>
-    <script src="js/customer_state.js"></script>
-    <script src="js/driver_state.js"></script>
-    <script src="js/api_client.js"></script>
-    <script src="js/location_client.js"></script>
-    <script src="js/customer_location_state.js"></script>
-    <script src="js/customer_checkout_note.js"></script>
-    <script src="js/customer_location.js"></script>
-    <script src="js/customer_ui.js"></script>
-    <script src="js/notifications.js"></script>
-    <script src="assets/vendor/leaflet/leaflet.js"></script>
+    <?php
+    $customer_asset_version = static function (string $path): string {
+        $mtime = @filemtime(__DIR__ . '/../' . $path);
+        return $mtime === false ? (string) time() : (string) $mtime;
+    };
+    ?>
+    <script src="js/customer_catalog.js?v=<?php echo $customer_asset_version('js/customer_catalog.js'); ?>"></script>
+    <script src="js/restaurant_state.js?v=<?php echo $customer_asset_version('js/restaurant_state.js'); ?>"></script>
+    <script src="js/customer_state.js?v=<?php echo $customer_asset_version('js/customer_state.js'); ?>"></script>
+    <script src="js/driver_state.js?v=<?php echo $customer_asset_version('js/driver_state.js'); ?>"></script>
+    <script src="js/api_client.js?v=<?php echo $customer_asset_version('js/api_client.js'); ?>"></script>
+    <script src="js/location_client.js?v=<?php echo $customer_asset_version('js/location_client.js'); ?>"></script>
+    <script src="js/customer_location_state.js?v=<?php echo $customer_asset_version('js/customer_location_state.js'); ?>"></script>
+    <script src="js/customer_checkout_note.js?v=<?php echo $customer_asset_version('js/customer_checkout_note.js'); ?>"></script>
+    <script src="js/customer_location.js?v=<?php echo $customer_asset_version('js/customer_location.js'); ?>"></script>
+    <script src="js/customer_ui.js?v=<?php echo $customer_asset_version('js/customer_ui.js'); ?>"></script>
+    <script src="js/notifications.js?v=<?php echo $customer_asset_version('js/notifications.js'); ?>"></script>
+    <script src="assets/vendor/leaflet/leaflet.js?v=<?php echo $customer_asset_version('assets/vendor/leaflet/leaflet.js'); ?>"></script>
     <?php foreach (($customer_page_scripts ?? []) as $script): ?>
         <script src="<?php echo htmlspecialchars((string) $script, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo time(); ?>"></script>
     <?php endforeach; ?>
