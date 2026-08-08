@@ -18,13 +18,17 @@
     return { id, name };
   };
 
-  const defaultState = () => ({ version: 3, cart: [] });
-  const normalizeOption = option => ({
-    id: text(option && option.id),
-    label: text(option && option.label),
-    price: Math.max(0, number(option && option.price))
-  });
-  const normalizeCartLine = (line, index = 0) => {
+  const defaultState = () => ({ version: 4, cart: [] });
+  const normalizeOption = (option, migrateLegacyPortionId = false) => {
+    let id = text(option && option.id);
+    if (migrateLegacyPortionId && id.startsWith('portion-')) id = id.slice('portion-'.length);
+    return {
+      id,
+      label: text(option && option.label),
+      price: Math.max(0, number(option && option.price))
+    };
+  };
+  const normalizeCartLine = (line, index = 0, migrateLegacyPortionId = false) => {
     const id = text(line && line.id);
     const restaurant = restaurantIdentity(line);
     return {
@@ -36,19 +40,19 @@
       image: text(line && line.image),
       unitPrice: Math.max(0, number(line && line.unitPrice)),
       quantity: Math.max(1, Math.min(20, Math.floor(number(line && line.quantity)))),
-      options: Array.isArray(line && line.options) ? line.options.map(normalizeOption).filter(option => option.id) : [],
+      options: Array.isArray(line && line.options) ? line.options.map(option => normalizeOption(option, migrateLegacyPortionId)).filter(option => option.id) : [],
       note: text(line && line.note).trim().slice(0, 120)
     };
   };
-  const normalizeOwnedLines = rawLines => {
-    const lines = Array.isArray(rawLines) ? rawLines.map(normalizeCartLine).filter(line => line.lineId && line.id) : [];
+  const normalizeOwnedLines = (rawLines, migrateLegacyPortionId = false) => {
+    const lines = Array.isArray(rawLines) ? rawLines.map((line, index) => normalizeCartLine(line, index, migrateLegacyPortionId)).filter(line => line.lineId && line.id) : [];
     const owner = restaurantIdentity(lines[0]);
     return lines.filter(line => line.restaurantId === owner.id).map(line => ({ ...line, restaurantId: owner.id, restaurantName: owner.name }));
   };
 
   function normalize(raw) {
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    return { version: 3, cart: normalizeOwnedLines(source.cart) };
+    return { version: 4, cart: normalizeOwnedLines(source.cart, number(source.version) < 4) };
   }
 
   function load() {
@@ -71,7 +75,7 @@
     const restaurant = restaurantIdentity(product);
     const cartRestaurantId = next.cart[0] ? next.cart[0].restaurantId : '';
     if (restaurant.id && cartRestaurantId && restaurant.id !== cartRestaurantId) throw new Error('A cart can contain items from one restaurant only');
-    const normalizedOptions = Array.isArray(options) ? options.map(normalizeOption).filter(option => option.id) : [];
+    const normalizedOptions = Array.isArray(options) ? options.map(option => normalizeOption(option)).filter(option => option.id) : [];
     const unitPrice = Math.max(0, number(product && product.price)) + normalizedOptions.reduce((sum, option) => sum + option.price, 0);
     const normalizedNote = text(note).trim().slice(0, 120);
     const key = JSON.stringify([productId, normalizedOptions.map(option => option.id).sort(), normalizedNote]);

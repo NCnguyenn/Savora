@@ -104,7 +104,7 @@ $checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer
             const name = line.name || 'Item';
             const lineTotal = Number(line.unitPrice || 0) * Number(line.quantity || 0);
             const catalogProduct = window.SavoraCatalog.products[String(line.id)] || null;
-            const image = el('img', { className: 'full-cart-line-image', src: window.SavoraCatalog.imageFor(catalogProduct), alt: '' });
+            const image = el('img', { className: 'full-cart-line-image', src: window.SavoraCatalog.imageFor(catalogProduct || line), alt: '' });
             const quantityControl = el('div', { className: 'qty-control full-cart-quantity' }, [
                 el('button', {
                     className: 'qty-btn',
@@ -241,6 +241,9 @@ $checkout_base = $customer_is_authenticated ? 'customer_checkout.php' : customer
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('cart-promo-form').addEventListener('submit', applyCartPromo);
             renderFullCart();
+            if (window.SavoraCatalog && typeof window.SavoraCatalog.hydrate === 'function') {
+                window.SavoraCatalog.hydrate().then(renderFullCart).catch(() => {});
+            }
         });
 
         window.renderFullCart = renderFullCart;

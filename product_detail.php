@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function selectedOptions() {
         const portion = selectedPortion();
         return [
-            { id: `portion-${portion.id}`, label: portion.label, price: portion.price },
+            { id: portion.id, label: portion.label, price: portion.price },
             ...addOns.filter(option => option.input.checked).map(({ id, label, price }) => ({ id, label, price }))
         ];
     }
@@ -297,6 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('product-customization-form').addEventListener('submit', event => {
         event.preventDefault();
+        try {
         const next = SavoraState.addCartLine(
             SavoraState.load(),
             item,
@@ -307,6 +308,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         SavoraState.persist(next);
         SavoraUI.refreshChrome();
         SavoraUI.announce(`Added ${quantity} × ${item.name} to cart.`);
+        } catch (error) {
+            SavoraUI.announce(error.message === 'A cart can contain items from one restaurant only'
+                ? 'A cart can contain items from one restaurant only. Complete or clear this cart before ordering from another restaurant.'
+                : error.message || 'This item could not be added to your cart.');
+        }
     });
 
     loading.hidden = true;

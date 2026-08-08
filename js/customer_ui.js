@@ -56,7 +56,7 @@
       name: line.name,
       price: Number(line.unitPrice || 0),
       qty: Number(line.quantity || 0),
-      img: productImage(catalogProduct)
+      img: productImage(catalogProduct || line)
     };
   }
 
@@ -139,7 +139,7 @@
         const lineTotal = Number(line.unitPrice || 0) * Number(line.quantity || 0);
         subtotal += lineTotal;
         const catalogProduct = catalog().products[String(line.id)] || null;
-        const image = el('img', { className: 'cart-item-img', src: productImage(catalogProduct), alt: '' });
+        const image = el('img', { className: 'cart-item-img', src: productImage(catalogProduct || line), alt: '' });
         const decrease = el('button', { className: 'qty-btn', type: 'button', 'aria-label': `Decrease ${line.name || 'item'} quantity`, onclick: () => changeLineQuantity(line.lineId, -1) }, '−');
         const increase = el('button', { className: 'qty-btn', type: 'button', 'aria-label': `Increase ${line.name || 'item'} quantity`, onclick: () => changeLineQuantity(line.lineId, 1) }, '+');
         fragment.append(el('article', { className: 'cart-item' }, [
@@ -189,11 +189,17 @@
       announce(`${product.name || 'This item'} is currently unavailable.`);
       return;
     }
-    const state = api.addCartLine(load(), product, quantity, []);
-    persist(state);
-    refreshChrome();
-    if (typeof root.renderFullCart === 'function') root.renderFullCart();
-    announce(`Added ${product.name || 'item'} to cart.`);
+    try {
+      const state = api.addCartLine(load(), product, quantity, []);
+      persist(state);
+      refreshChrome();
+      if (typeof root.renderFullCart === 'function') root.renderFullCart();
+      announce(`Added ${product.name || 'item'} to cart.`);
+    } catch (error) {
+      announce(error.message === 'A cart can contain items from one restaurant only'
+        ? 'A cart can contain items from one restaurant only. Complete or clear this cart before ordering from another restaurant.'
+        : error.message || 'This item could not be added to your cart.');
+    }
   }
 
   function openProductDetailModal(id) {

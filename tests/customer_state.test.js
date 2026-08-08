@@ -37,6 +37,13 @@ test('legacy cart lines receive deterministic restaurant identity and distinct l
   assert.notEqual(state.cart[0].lineId, state.cart[1].lineId);
 });
 
+test('migrates a legacy portion-prefixed cart option to its choice public id', () => {
+  const state = State.normalize({
+    cart: [{ id: 'dish', options: [{ id: 'portion-choice-regular', label: 'Regular' }] }]
+  });
+  assert.equal(state.cart[0].options[0].id, 'choice-regular');
+});
+
 test('rejects a cart line without a usable product identifier', () => {
   assert.throws(() => State.addCartLine(State.defaultState(), { name: 'Pasta', price: 12.5 }, 1), /product id/i);
 });
