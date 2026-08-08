@@ -10,4 +10,5 @@ test('role shells load server-backed notifications', () => {
     assert.match(source, /js\/api_client\.js/);
   }
   assert.match(fs.readFileSync('js/notifications.js', 'utf8'), /api\/notifications\.php/);
+  assert.match(fs.readFileSync('js/notifications.js', 'utf8'), /sessionStorage|announcement/);
 });
