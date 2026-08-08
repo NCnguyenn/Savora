@@ -56,6 +56,23 @@ function payment_test_status(mysqli $conn, string $reference): string
     return $status;
 }
 
+function payment_test_order_and_payment_state(mysqli $conn, string $reference): array
+{
+    $statement = $conn->prepare(
+        'SELECT o.status AS order_status,p.status AS payment_status
+         FROM orders o JOIN payments p ON p.order_id=o.id
+         WHERE o.reference_code=? LIMIT 1'
+    );
+    $statement->bind_param('s', $reference);
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc() ?: [];
+    $statement->close();
+    return [
+        'orderStatus' => (string) ($row['order_status'] ?? ''),
+        'paymentStatus' => (string) ($row['payment_status'] ?? ''),
+    ];
+}
+
 $previousDemoMode = getenv('SAVORA_DEMO_MODE');
 $conn = null;
 $userIds = [];
@@ -66,6 +83,7 @@ $reference = 'SVR-' . $suffix . '-EXACT';
 $wrongReference = 'SVR-' . $suffix . '-WRONG';
 $secondReference = 'SVR-' . $suffix . '-DEMO';
 $thirdReference = 'SVR-' . $suffix . '-OWNED';
+$cancelledReference = 'SVR-' . $suffix . '-CANCELLED';
 
 try {
     putenv('SAVORA_DEMO_MODE=1');
@@ -82,20 +100,26 @@ try {
     $restaurant->execute();
     $restaurantId = (int) $restaurant->insert_id;
     $restaurant->close();
-    foreach ([$reference, $wrongReference, $secondReference, $thirdReference] as $fixtureReference) {
+    foreach ([$reference, $wrongReference, $secondReference, $thirdReference, $cancelledReference] as $fixtureReference) {
         $orderIds[] = payment_test_insert_order($conn, $fixtureReference, $customerId, $restaurantId);
     }
+    $cancelledOrderId = (int) end($orderIds);
+    $conn->query("UPDATE orders SET status='cancelled' WHERE id=" . $cancelledOrderId);
     $conn->commit();
 
     $event = [
         'state' => 'process',
         'transactionId' => 'SEPAY-TEST-' . bin2hex(random_bytes(4)),
         'referenceCode' => $reference,
-        'amountCents' => 12550,
+        'amountVnd' => 126,
     ];
     $confirmed = payment_confirm_incoming($conn, $event, 'seapay');
     payment_test_expect(($confirmed['ok'] ?? false) === true, 'Exact incoming payment must succeed.');
     payment_test_expect(($confirmed['data']['paymentStatus'] ?? '') === 'paid', 'Payment must become paid.');
+    payment_test_expect(
+        payment_test_order_and_payment_state($conn, $reference) === ['orderStatus' => 'pending', 'paymentStatus' => 'paid'],
+        'Webhook confirmation must leave Restaurant order acceptance pending.'
+    );
 
     $duplicate = payment_confirm_incoming($conn, $event, 'seapay');
     payment_test_expect(($duplicate['ok'] ?? false) === true, 'Provider retry must be idempotent.');
@@ -108,7 +132,7 @@ try {
     $wrongEvent = $event;
     $wrongEvent['transactionId'] = $event['transactionId'] . '-WRONG';
     $wrongEvent['referenceCode'] = $wrongReference;
-    $wrongEvent['amountCents'] = 12549;
+    $wrongEvent['amountVnd'] = 125;
     $wrong = payment_confirm_incoming($conn, $wrongEvent, 'seapay');
     payment_test_expect(($wrong['status'] ?? 0) === 409, 'Wrong amount must remain pending/rejected.');
     payment_test_expect(($wrong['data']['paymentStatus'] ?? '') === 'pending', 'Wrong amount response must report the pending payment.');
@@ -116,6 +140,10 @@ try {
 
     $demo = payment_simulate_customer_success($conn, $customerId, $secondReference, 'demo-pay-key-1');
     payment_test_expect(($demo['data']['paymentStatus'] ?? '') === 'paid', 'Owned demo payment must use the same confirmation path.');
+    payment_test_expect(
+        payment_test_order_and_payment_state($conn, $secondReference) === ['orderStatus' => 'pending', 'paymentStatus' => 'paid'],
+        'Demo confirmation must leave Restaurant order acceptance pending.'
+    );
     $demoRetry = payment_simulate_customer_success($conn, $customerId, $secondReference, 'demo-pay-key-1');
     payment_test_expect($demoRetry === $demo, 'Demo retry must replay the stored response exactly.');
 
@@ -126,6 +154,15 @@ try {
     $conflict = payment_simulate_customer_success($conn, $customerId, $thirdReference, 'demo-pay-key-1');
     payment_test_expect(($conflict['status'] ?? 0) === 409, 'A demo idempotency key reused for another order must conflict.');
     payment_test_expect(payment_test_status($conn, $thirdReference) === 'pending', 'Idempotency conflict must not change another payment.');
+
+    $cancelled = payment_confirm_incoming($conn, [
+        'state' => 'process',
+        'transactionId' => 'SEPAY-CANCELLED-' . bin2hex(random_bytes(4)),
+        'referenceCode' => $cancelledReference,
+        'amountVnd' => 126,
+    ], 'seapay');
+    payment_test_expect(($cancelled['status'] ?? 0) === 409, 'A cancelled order must not accept a later payment.');
+    payment_test_expect(payment_test_status($conn, $cancelledReference) === 'pending', 'Cancelled order payment must remain pending.');
 } finally {
     putenv($previousDemoMode === false ? 'SAVORA_DEMO_MODE' : 'SAVORA_DEMO_MODE=' . $previousDemoMode);
     if ($conn instanceof mysqli) {

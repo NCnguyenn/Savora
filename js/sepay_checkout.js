@@ -52,6 +52,7 @@
     const demoScope = `customer-seapay-payment-${referenceCode}`;
     let timerId = null;
     let inFlight = null;
+    let requestVersion = 0;
     let stopped = false;
     let destroyed = false;
 
@@ -83,25 +84,33 @@
       }
       if (snapshot.paymentStatus !== 'pending') throw new TypeError('Unsupported payment status.');
       renderPending(snapshot);
+      renderStatus('Đang chờ SePay xác nhận giao dịch…', false);
       return snapshot;
     }
 
-    async function refresh() {
+    async function refresh(forceFresh = false) {
       if (destroyed || stopped) return null;
-      if (inFlight) return inFlight;
-      inFlight = (async () => {
+      if (inFlight && !forceFresh) return inFlight;
+      const requestId = ++requestVersion;
+      const request = (async () => {
         try {
           const snapshot = await api.get(statusUrl);
+          if (requestId !== requestVersion || destroyed || stopped) return null;
           return applySnapshot(snapshot);
         } catch (error) {
-          renderStatus(error && error.message ? error.message : 'Không thể kiểm tra thanh toán. Hệ thống sẽ thử lại.', true);
+          if (requestId === requestVersion && !destroyed && !stopped) {
+            renderStatus(error && error.message ? error.message : 'Không thể kiểm tra thanh toán. Hệ thống sẽ thử lại.', true);
+          }
           return null;
         } finally {
-          inFlight = null;
-          schedule();
+          if (inFlight === request) {
+            inFlight = null;
+            schedule();
+          }
         }
       })();
-      return inFlight;
+      inFlight = request;
+      return request;
     }
 
     async function start() {
@@ -123,7 +132,7 @@
           api.intentKey(demoScope)
         );
         api.clearIntentKey(demoScope);
-        await refresh();
+        await refresh(true);
         return result;
       } catch (error) {
         renderStatus(error && error.message ? error.message : 'Không thể xác nhận thanh toán giả lập.', true);

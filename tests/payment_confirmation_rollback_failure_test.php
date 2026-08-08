@@ -43,7 +43,7 @@ try {
         'state' => 'process',
         'transactionId' => 'SEPAY-ROLLBACK-FAILURE',
         'referenceCode' => 'SVR-ROLLBACK-FAILURE',
-        'amountCents' => 12550,
+        'amountVnd' => 126,
     ], 'seapay');
 } catch (Throwable $exception) {
     $escaped = $exception;

@@ -65,9 +65,9 @@ function payment_confirm_transaction(
             return payment_confirmation_result(false, 404, 'SeaPay order was not found.');
         }
 
-        $amountCents = $source === 'demo'
-            ? (int) round(((float) $target['amount']) * 100)
-            : (int) ($event['amountCents'] ?? 0);
+        $amountVnd = $source === 'demo'
+            ? sepay_webhook_amount_vnd($target['amount'])
+            : (int) ($event['amountVnd'] ?? 0);
         $seen = payment_repository_by_provider_reference($conn, $provider, true);
         if ($seen !== []) {
             $same = (int) $seen['order_id'] === (int) $target['order_id'];
@@ -80,7 +80,11 @@ function payment_confirm_transaction(
             );
         }
 
-        if ((string) $target['status'] !== 'pending' || !sepay_webhook_amount_matches($amountCents, $target['amount'])) {
+        if (
+            (string) $target['status'] !== 'pending'
+            || (string) ($target['order_status'] ?? '') !== 'pending'
+            || !sepay_webhook_amount_matches($amountVnd, $target['amount'])
+        ) {
             $conn->commit();
             return payment_confirmation_result(
                 false,

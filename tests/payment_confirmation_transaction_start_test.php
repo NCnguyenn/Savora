@@ -18,7 +18,7 @@ try {
         'state' => 'process',
         'transactionId' => 'SEPAY-START-FAILURE',
         'referenceCode' => 'SVR-START-FAILURE',
-        'amountCents' => 12550,
+        'amountVnd' => 126,
     ], 'seapay');
 } catch (Throwable $exception) {
     $escaped = $exception;

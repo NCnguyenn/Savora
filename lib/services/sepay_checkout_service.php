@@ -72,6 +72,7 @@ function sepay_checkout_snapshot(mysqli $conn, int $customerUserId, string $refe
         $row === []
         || (string) ($row['payment_method'] ?? '') !== 'seapay'
         || !in_array((string) ($row['payment_status'] ?? ''), ['pending', 'paid'], true)
+        || ((string) ($row['payment_status'] ?? '') === 'pending' && (string) ($row['order_status'] ?? '') !== 'pending')
     ) {
         return [];
     }

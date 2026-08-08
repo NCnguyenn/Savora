@@ -45,7 +45,7 @@ function payment_repository_target_by_reference(
     bool $forUpdate = false
 ): array {
     $sql = "SELECT p.id AS payment_id,p.order_id,p.method,p.amount,p.status,p.provider_reference,p.version,
-                   o.reference_code,o.customer_user_id
+                   o.reference_code,o.customer_user_id,o.status AS order_status
             FROM payments p JOIN orders o ON o.id=p.order_id
             WHERE o.reference_code=?";
     if ($customerUserId !== null) $sql .= ' AND o.customer_user_id=?';

@@ -62,3 +62,17 @@ test('checkout groups stored payment methods by when payment is collected', () =
   assert.match(checkout, /value="seapay"/);
   assert.match(checkout, /value="cash"/);
 });
+
+test('SePay checkout handoff carries only the server order reference after placement', () => {
+  const checkout = read('customer_checkout.php');
+  const placement = checkout.slice(checkout.indexOf("form.addEventListener('submit'"));
+  assert.match(placement, /await SavoraApi\.post\('api\/checkout\.php'[\s\S]*action:\s*'place_order'/);
+  assert.match(placement, /stateApi\.persist\(\{\s*cart:\s*\[\]\s*\}\)/);
+  assert.ok(
+    placement.indexOf('stateApi.persist({ cart: [] })') > placement.indexOf("const result = await SavoraApi.post('api/checkout.php'"),
+    'Cart clearing must occur only after the server placement request resolves.'
+  );
+  assert.match(placement, /payment\.value === 'seapay'[\s\S]*seapay_checkout\.php\?order=' \+ result\.referenceCode/);
+  const redirect = placement.match(/seapay_checkout\.php\?order=[^;]+/)?.[0] || '';
+  assert.doesNotMatch(redirect, /amount|total|paid/i);
+});

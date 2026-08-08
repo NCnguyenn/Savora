@@ -38,17 +38,17 @@ function sepay_webhook_is_authorized(array $server, string $expectedKey): bool
     return hash_equals($expectedKey, trim((string) $matches[1]));
 }
 
-function sepay_webhook_amount_cents(mixed $value): int
+function sepay_webhook_amount_vnd(mixed $value): int
 {
     $amount = trim((string) $value);
     if (!preg_match('/^\d+(?:\.\d{1,2})?$/', $amount)) {
         throw new InvalidArgumentException('Transfer amount is invalid.');
     }
-    [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
-    if ((int) $whole > intdiv(PHP_INT_MAX, 100)) {
+    $numeric = (float) $amount;
+    if (!is_finite($numeric) || $numeric > PHP_INT_MAX) {
         throw new InvalidArgumentException('Transfer amount is too large.');
     }
-    return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
+    return (int) round($numeric);
 }
 
 function sepay_webhook_parse_payload(array $payload): array
@@ -63,8 +63,8 @@ function sepay_webhook_parse_payload(array $payload): array
         return ['state' => 'ignored', 'transactionId' => $transactionId];
     }
 
-    $amountCents = sepay_webhook_amount_cents($payload['transferAmount'] ?? null);
-    if ($amountCents <= 0) {
+    $amountVnd = sepay_webhook_amount_vnd($payload['transferAmount'] ?? null);
+    if ($amountVnd <= 0) {
         throw new InvalidArgumentException('Transfer amount must be positive.');
     }
 
@@ -77,15 +77,15 @@ function sepay_webhook_parse_payload(array $payload): array
         'state' => 'process',
         'transactionId' => $transactionId,
         'referenceCode' => strtoupper((string) $matches[1]),
-        'amountCents' => $amountCents,
+        'amountVnd' => $amountVnd,
     ];
 }
 
-function sepay_webhook_amount_matches(int $transferAmountCents, mixed $paymentAmount): bool
+function sepay_webhook_amount_matches(int $transferAmountVnd, mixed $paymentAmount): bool
 {
-    if ($transferAmountCents <= 0) return false;
+    if ($transferAmountVnd <= 0) return false;
     try {
-        return $transferAmountCents === sepay_webhook_amount_cents($paymentAmount);
+        return $transferAmountVnd === sepay_webhook_amount_vnd($paymentAmount);
     } catch (InvalidArgumentException) {
         return false;
     }

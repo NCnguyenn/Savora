@@ -37,6 +37,7 @@ function controllerHarness(overrides = {}) {
   const api = {
     async get(url) {
       calls.get.push(url);
+      if (overrides.getImplementation) return overrides.getImplementation(url, calls.get.length);
       if (overrides.getError) throw new Error(overrides.getError);
       return snapshots.shift() || overrides.snapshot || {
         referenceCode: 'SVR-ABC-123', paymentMethod: 'seapay', amountVnd: 125000,
@@ -125,6 +126,29 @@ test('demo confirmation reuses the protected endpoint and refreshes the same pai
   assert.deepEqual(calls.busy, [true, false]);
 });
 
+test('demo confirmation starts a fresh status read and ignores an older pending poll', async () => {
+  const pending = {
+    referenceCode: 'SVR-ABC-123', amountVnd: 125000, paymentMethod: 'seapay',
+    paymentStatus: 'pending', paidAt: null, orderStatus: 'pending'
+  };
+  const paid = { ...pending, paymentStatus: 'paid', paidAt: '2026-08-08 12:34:56' };
+  let resolveOldPoll;
+  const oldPoll = new Promise(resolve => { resolveOldPoll = resolve; });
+  const { controller, calls } = controllerHarness({
+    getImplementation: (_url, requestNumber) => requestNumber === 1 ? oldPoll : Promise.resolve(paid)
+  });
+  const starting = controller.start();
+  await flush();
+  const simulation = controller.simulatePayment();
+  await flush();
+  const readsBeforeOldPollSettled = calls.get.length;
+  resolveOldPoll(pending);
+  await Promise.all([starting, simulation]);
+  assert.equal(readsBeforeOldPollSettled, 2);
+  assert.equal(calls.receipts.length, 1);
+  assert.equal(calls.pending.length, 0);
+});
+
 test('transient status failure preserves pending state and exposes a retry message', async () => {
   const { controller, calls, clock } = controllerHarness({ getError: 'Network unavailable' });
   await controller.start();
@@ -132,6 +156,25 @@ test('transient status failure preserves pending state and exposes a retry messa
   assert.equal(calls.status.at(-1).isError, true);
   assert.match(calls.status.at(-1).message, /Network unavailable/);
   assert.equal(clock.count(), 1);
+});
+
+test('a successful pending retry clears an obsolete polling error', async () => {
+  let requestNumber = 0;
+  const pending = {
+    referenceCode: 'SVR-ABC-123', amountVnd: 125000, paymentMethod: 'seapay',
+    paymentStatus: 'pending', paidAt: null, orderStatus: 'pending'
+  };
+  const { controller, calls, clock } = controllerHarness({
+    getImplementation: () => {
+      requestNumber += 1;
+      if (requestNumber === 1) throw new Error('Temporary network error');
+      return pending;
+    }
+  });
+  await controller.start();
+  await clock.runNext();
+  assert.equal(calls.status.at(-1).isError, false);
+  assert.match(calls.status.at(-1).message, /Đang chờ SePay/);
 });
 
 test('receipt acknowledgement only navigates to Customer history', () => {
