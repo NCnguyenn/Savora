@@ -8,6 +8,10 @@
   const reviewText = value => text(value).slice(0, 300);
   const money = value => `$${(Number(value) || 0).toFixed(2)}`;
   const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  const countFulfilledOrders = statusCounts => {
+    if (!statusCounts || typeof statusCounts !== 'object') return 0;
+    return ['delivered', 'completed'].reduce((total, status) => total + Math.max(0, Number(statusCounts[status]) || 0), 0);
+  };
   const dateLabel = value => {
     const date = new Date(value);
     return Number.isNaN(date.valueOf()) ? 'No saved date' : new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
@@ -51,7 +55,7 @@
     return dated.filter(entry => entry.key >= cutoffKey && entry.key <= latestKey).map(entry => entry.order);
   }
 
-  if (!root || !root.document) return { verifiedReviews, filterReviews, ordersInDateRange };
+  if (!root || !root.document) return { verifiedReviews, filterReviews, ordersInDateRange, countFulfilledOrders };
 
   const doc = root.document;
   const ui = () => root.SavoraRestaurantUI;
@@ -64,7 +68,7 @@
     if (serverAnalytics && serverAnalytics.kpis) {
       const kpis = serverAnalytics.kpis;
       const statusCounts = Object.fromEntries((Array.isArray(serverAnalytics.status) ? serverAnalytics.status : []).map(row => [text(row.status), Number(row.total) || 0]));
-      const completedOrders = Number(statusCounts.delivered) || 0;
+      const completedOrders = countFulfilledOrders(statusCounts);
       const orders = Number(kpis.orders) || 0;
       return {
         totalOrders: orders,
@@ -268,5 +272,5 @@
     catch (error) { say('[data-review-feedback]', error.message || 'Reviews are unavailable.'); }
   }
   initialize();
-  return { verifiedReviews, filterReviews, ordersInDateRange };
+  return { verifiedReviews, filterReviews, ordersInDateRange, countFulfilledOrders };
 }));
