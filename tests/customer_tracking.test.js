@@ -36,7 +36,8 @@ function trackingHarness(order, trackingResponse) {
     addEventListener(type, listener) { this.listeners[type] = listener; }
   };
   const schedules = [];
-  const window = { listeners: {}, clearTimeout() {}, setTimeout(_fn, delay) { schedules.push(delay); return schedules.length; }, addEventListener(type, listener) { this.listeners[type] = listener; } };
+  const scheduledTasks = [];
+  const window = { listeners: {}, clearTimeout() {}, setTimeout(fn, delay) { schedules.push(delay); scheduledTasks.push({ fn, delay }); return schedules.length; }, addEventListener(type, listener) { this.listeners[type] = listener; } };
   const calls = [];
   const posts = [];
   const cleared = [];
@@ -51,7 +52,7 @@ function trackingHarness(order, trackingResponse) {
     intentKey(scope) { return `intent-${scope}`; },
     clearIntentKey(scope) { cleared.push(scope); }
   };
-  return { document, window, api, elements, schedules, calls, posts, cleared };
+  return { document, window, api, elements, schedules, scheduledTasks, calls, posts, cleared };
 }
 
 test('displayState maps payment and delivery states for the Customer', () => {
@@ -239,6 +240,46 @@ test('receipt confirmation does not render a stale success message after pagehid
 
   assert.notEqual(harness.elements['[data-live-order-feedback]'].textContent, 'Receipt confirmed. Thank you.');
   assert.deepEqual(harness.cleared, ['customer-confirm-received-D-3']);
+  controller.stop();
+});
+
+test('receipt confirmation refreshes authoritatively after a background poll starts during its POST', async () => {
+  const postGate = deferred();
+  const order = { id: 'D-4', referenceCode: 'D-4', status: 'delivered', paymentMethod: 'cash', version: 2, assignment: {} };
+  const harness = trackingHarness(order, { route: {} });
+  let orderReads = 0;
+  harness.api.get = async url => {
+    harness.calls.push(url);
+    if (url.startsWith('api/orders.php')) { orderReads += 1; return { orders: [order] }; }
+    return { route: {} };
+  };
+  harness.api.post = async () => postGate.promise;
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+
+  const confirming = harness.elements['[data-confirm-received]'].listeners.click();
+  await harness.scheduledTasks[0].fn();
+  postGate.resolve({});
+  await confirming;
+
+  assert.equal(orderReads, 3);
+  assert.equal(harness.elements['[data-confirm-received]'].disabled, false);
+  assert.deepEqual(harness.cleared, ['customer-confirm-received-D-4']);
+  controller.stop();
+});
+
+test('receipt confirmation retains its stable key and re-enables the button on failure', async () => {
+  const order = { id: 'D-5', referenceCode: 'D-5', status: 'delivered', paymentMethod: 'cash', version: 3, assignment: {} };
+  const harness = trackingHarness(order, { route: {} });
+  harness.api.post = async () => { throw new Error('Confirmation failed.'); };
+  const controller = tracking.mount({ ...harness, autoStart: false });
+  await controller.refresh();
+
+  await harness.elements['[data-confirm-received]'].listeners.click();
+
+  assert.equal(harness.elements['[data-confirm-received]'].disabled, false);
+  assert.deepEqual(harness.cleared, []);
+  assert.equal(harness.elements['[data-live-order-feedback]'].textContent, 'Confirmation failed.');
   controller.stop();
 });
 

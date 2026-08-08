@@ -71,6 +71,7 @@
     let map = null;
     let routeLayers = null;
     let generation = 0;
+    let lifecycleGeneration = 0;
 
     const setText = (element, value) => { if (element) element.textContent = value; };
     const create = (name, text) => {
@@ -206,7 +207,8 @@
         return;
       }
       const requestGeneration = ++generation;
-      const canApply = () => !stopped && shouldPoll(documentRef.visibilityState) && requestGeneration === generation;
+      const requestLifecycle = lifecycleGeneration;
+      const canApply = () => !stopped && shouldPoll(documentRef.visibilityState) && requestLifecycle === lifecycleGeneration && requestGeneration === generation;
       try {
         const snapshot = await api.get('api/orders.php?pageSize=50');
         if (!canApply()) return;
@@ -237,8 +239,8 @@
     async function confirmReceived() {
       if (!currentOrder || currentOrder.status !== 'delivered') return;
       const request = receiptRequest(currentOrder);
-      const confirmationGeneration = generation;
-      const canApplyConfirmation = () => !stopped && shouldPoll(documentRef.visibilityState) && confirmationGeneration === generation;
+      const confirmationLifecycle = lifecycleGeneration;
+      const canApplyConfirmation = () => !stopped && shouldPoll(documentRef.visibilityState) && confirmationLifecycle === lifecycleGeneration;
       receiptButton.disabled = true;
       setText(feedback, 'Confirming receipt…');
       try {
@@ -259,10 +261,11 @@
     receiptButton.addEventListener('click', confirmReceived);
     const onVisibility = () => {
       generation += 1;
+      lifecycleGeneration += 1;
       windowRef.clearTimeout(timer);
       if (shouldPoll(documentRef.visibilityState)) refresh();
     };
-    const stop = () => { stopped = true; generation += 1; windowRef.clearTimeout(timer); };
+    const stop = () => { stopped = true; generation += 1; lifecycleGeneration += 1; windowRef.clearTimeout(timer); };
     documentRef.addEventListener('visibilitychange', onVisibility);
     windowRef.addEventListener('pagehide', stop, { once: true });
     if (options.autoStart !== false) refresh();
