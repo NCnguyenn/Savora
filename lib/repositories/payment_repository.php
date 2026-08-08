@@ -64,6 +64,23 @@ function payment_repository_target_by_reference(
     return is_array($row) ? $row : [];
 }
 
+function payment_repository_customer_checkout(mysqli $conn, int $customerUserId, string $referenceCode): array
+{
+    $statement = $conn->prepare(
+        'SELECT o.reference_code,o.status AS order_status,p.method AS payment_method,
+                p.amount AS payment_amount,p.status AS payment_status,p.paid_at,p.provider_reference
+         FROM payments p
+         JOIN orders o ON o.id=p.order_id
+         WHERE o.customer_user_id=? AND o.reference_code=?
+         LIMIT 1'
+    );
+    $statement->bind_param('is', $customerUserId, $referenceCode);
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc();
+    $statement->close();
+    return is_array($row) ? $row : [];
+}
+
 function payment_repository_by_provider_reference(mysqli $conn, string $providerReference, bool $forUpdate = false): array
 {
     $sql = "SELECT p.id AS payment_id,p.order_id,p.method,p.amount,p.status,p.provider_reference,p.version,

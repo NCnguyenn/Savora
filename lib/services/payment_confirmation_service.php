@@ -8,41 +8,6 @@ require_once __DIR__ . '/audit_service.php';
 require_once __DIR__ . '/notification_service.php';
 require_once __DIR__ . '/sepay_webhook_service.php';
 
-function payment_confirmation_seapay_config(?string $localPath = null): array
-{
-    $localPath ??= __DIR__ . '/../../config/local.php';
-    $local = [];
-    if (is_file($localPath)) {
-        try {
-            $loaded = require $localPath;
-            if (is_array($loaded)) $local = $loaded;
-        } catch (Throwable) {
-            $local = [];
-        }
-    }
-    $value = static function (string $key) use ($local): string {
-        $environmentValue = getenv($key);
-        if ($environmentValue !== false && trim((string) $environmentValue) !== '') return trim((string) $environmentValue);
-        return trim((string) ($local[$key] ?? ''));
-    };
-    return [
-        'bankBin' => $value('SEPAY_BANK_BIN'),
-        'bankAccount' => $value('SEPAY_BANK_ACCOUNT'),
-        'accountName' => $value('SEPAY_ACCOUNT_NAME'),
-    ];
-}
-
-function payment_confirmation_vietqr_url(array $config, float $amount, string $referenceCode): ?string
-{
-    $bankBin = trim((string) ($config['bankBin'] ?? ''));
-    $bankAccount = trim((string) ($config['bankAccount'] ?? ''));
-    $accountName = trim((string) ($config['accountName'] ?? ''));
-    if ($bankBin === '' || $bankAccount === '' || $accountName === '') return null;
-    return 'https://img.vietqr.io/image/' . rawurlencode($bankBin) . '-' . rawurlencode($bankAccount)
-        . '-compact2.png?amount=' . rawurlencode(number_format($amount, 2, '.', ''))
-        . '&addInfo=' . rawurlencode($referenceCode) . '&accountName=' . rawurlencode($accountName);
-}
-
 function payment_confirmation_result(bool $ok, int $status, string $message, array $data = []): array
 {
     $result = ['ok' => $ok, 'status' => $status, 'message' => $message];
